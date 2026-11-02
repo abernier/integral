@@ -10,6 +10,8 @@ The geometry and joinery follow smlibpy's
 [`examples/zigzag_chair.py`](https://github.com/abernier/smlibpy/blob/main/examples/zigzag_chair.py), the
 finished, planed-flush state.
 
+**[Open it in Buerligons](https://buerligons.io/editor/?url=https%3A%2F%2Fraw.githubusercontent.com%2Fabernier%2Fintegral%2Fmain%2Fzigzag-chair%2Fzigzag-chair.ofb&bytes=786815)** (a free classcad.ch account; then edit `Params` and recalculate).
+
 ![The chair from behind: tails through the back, the grip, the slant and the base](zigzag-chair.png)
 
 | File | What it is |
@@ -115,5 +117,5 @@ itself is right (section checked); smlibpy's volume is exact and matches its han
 - **Long feature trees.** One work plane and one slice per cut: 6 to 9 cuts a board, 6 more for each tail tool.
   A sketch-based profile would be shorter, but each vertex would need two expression-bound dimensions, and the
   docs warn that the sketch solver can flip to another branch after a large parameter change.
-- **Buerligons needs a sign-in.** `https://buerligons.io/editor/?url=<raw .ofb URL>&bytes=786815` stops at a
-  classcad.ch sign-in page before it fetches the file, so the open-by-link path is not verified here.
+- **Buerligons needs a sign-in.** The editor asks for a classcad.ch account before it fetches the file; once
+  signed in, the link opens the chair.
