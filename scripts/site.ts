@@ -8,10 +8,10 @@
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
 // for a local site those URLs are rewritten to the local servers.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { join, relative, resolve } from 'node:path'
-import { type Engine, render, run, save } from './classcad.ts'
+import { type Engine, glb, render, run, save } from './classcad.ts'
 
 export const ROOT = resolve(import.meta.dirname, '..')
 // Not named `.mdx`: @pmndrs/docs takes every file whose path contains `.md` for a page.
@@ -38,31 +38,41 @@ export async function buildPart(engine: Engine, part: string) {
   mkdirSync(out, { recursive: true })
   const ofb = await save(engine, 'OFB', join(out, `${part}.ofb`))
   const step = await save(engine, 'STP', join(out, `${part}.step`))
+  const model = await glb(engine, join(out, `${part}.glb`))
   await render(engine, join(out, `${part}.png`))
   const seconds = ((performance.now() - started) / 1000).toFixed(1)
-  console.log(`${part}: ${seconds} s, ofb ${ofb} B, step ${step} B`, JSON.stringify(returned))
+  console.log(`${part}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
 }
 
-/** Turn a README into an MDX page: its first heading becomes the title, links to the site become local ones. */
-function page(readme: string, nav: number, urls: { site: string; files: string }) {
+/**
+ * Turn a README into an MDX page: its first heading becomes the title, links to the site become local ones. A part's page also gets its source and its render as the page's image.
+ */
+function page(readme: string, nav: number, urls: { site: string; files: string }, part?: string) {
   const source = readFileSync(readme, 'utf8')
   const title = source.match(/^# (.+)$/m)?.[1] ?? 'Untitled'
+  const meta = [
+    `title: ${JSON.stringify(title)}`,
+    part && `sourcecode: ${part}/${part}.ts`,
+    part && `image: ${part}.png`,
+    `nav: ${nav}`,
+  ]
   const body = source
     .replace(/^# .+\n+/m, '')
     // A page link (a path ending in `/introduction`) goes to the site, a file link to where the files are served.
     .replaceAll(`${SITE_URL}/`, '\0')
     .replace(/\0([\w/-]*\/introduction)/g, `${urls.site}/$1`)
     .replaceAll('\0', `${urls.files}/`)
-  return `---\ntitle: ${JSON.stringify(title)}\nnav: ${nav}\n---\n\n${body}`
+  return `---\n${meta.filter(Boolean).join('\n')}\n---\n\n${body}`
 }
 
 /** Write the MDX pages. `urls` default to the published site; `dev` points them at its local servers. */
 export function writePages(urls = { site: SITE_URL, files: SITE_URL }) {
   mkdirSync(join(MDX, 'integral'), { recursive: true })
+  copyFileSync(join(ROOT, 'scripts', 'viewer.html'), join(MDX, 'viewer.html'))
   writeFileSync(join(MDX, 'integral', 'introduction.mdx'), page(join(ROOT, 'README.md'), 0, urls))
   parts().forEach((part, i) => {
     mkdirSync(join(MDX, part), { recursive: true })
-    writeFileSync(join(MDX, part, 'introduction.mdx'), page(join(ROOT, part, 'README.md'), i + 1, urls))
+    writeFileSync(join(MDX, part, 'introduction.mdx'), page(join(ROOT, part, 'README.md'), i + 1, urls, part))
   })
   return relative(ROOT, MDX)
 }

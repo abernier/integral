@@ -16,6 +16,7 @@ import type { V1T } from '@classcad/api-js'
 export type Api = { v1: V1T }
 
 const DEG = Math.PI / 180
+const CHERRY: [number, number, number] = [168, 96, 58] // smlibpy's #a8603a
 
 /**
  * The parameters a maker changes. The seat length and the back height are chosen so that the chair has smlibpy's
@@ -239,6 +240,7 @@ export default async function build(api: Api) {
       const cut = [await tails(api, part), ...(await grip(api, part))]
       body = await created(api.v1.part.boolean({ id: part, name: 'SocketsAndGrip', type: 'SUBTRACTION', target: body, tools: cut }))
     }
+    await api.v1.part.setAppearance({ target: body, color: CHERRY })
     parts[name] = part
   }
 

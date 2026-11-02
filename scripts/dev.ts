@@ -39,7 +39,8 @@ for (const file of APP_FILES) {
 
 const bin = (name: string) => join(ROOT, 'node_modules', '.bin', name)
 const children = [
-  spawn(bin('serve'), [MDX, '-p', String(filesPort), '--cors', '--no-port-switching', '--no-clipboard'], {
+  // serve.json turns clean URLs off: they would redirect viewer.html to /viewer and lose its ?src=.
+  spawn(bin('serve'), [MDX, '-c', join(ROOT, 'scripts', 'serve.json'), '-p', String(filesPort), '--cors', '--no-port-switching', '--no-clipboard'], {
     stdio: 'ignore',
   }),
   spawn(bin('next'), ['dev', '-p', String(port)], {

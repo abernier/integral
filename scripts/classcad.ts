@@ -10,6 +10,7 @@ import { writeFileSync, renameSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { connect } from '@classcad/mcp/dist/client.js'
 import { wasmOptionsFromEnv } from '@classcad/mcp/dist/engine/wasm.js'
+import { buildScene, sceneToGlb } from '@classcad/mcp/dist/viewer/scene.js'
 import { buildScriptApi } from '@classcad/script'
 import { renderSession } from '@classcad/renderer/node'
 import type { Api } from '../zigzag-chair/zigzag-chair.ts'
@@ -54,6 +55,14 @@ export async function save(engine: Engine, format: 'OFB' | 'STP', path: string) 
     throw new Error(`saving ${format} failed (maxLevel ${response.maxLevel}): ${JSON.stringify(response.messages)}`)
   }
   const data = Buffer.from(content, 'base64')
+  writeFileSync(path, data)
+  return data.length
+}
+
+/** Write the drawing as GLB (triangles with colours, for web viewers); the engine has none, the MCP packs it. */
+export async function glb(engine: Engine, path: string) {
+  const scene = buildScene(await engine.client.getTree(), await engine.client.getGraphic())
+  const data = sceneToGlb(scene)
   writeFileSync(path, data)
   return data.length
 }
