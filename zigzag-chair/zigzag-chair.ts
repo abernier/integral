@@ -1,9 +1,9 @@
 // Zigzag chair, a parametric ClassCAD assembly. `nr build` calls this module's default export with the ClassCAD
 // script API (`api.v1`, as the ClassCAD MCP's run_script gives it), on an empty drawing.
 //
-// Geometry and joinery follow smlibpy's examples/zigzag_chair.py: four cherry boards 19 mm thick, the seat, the
-// slant and the base tapered and mitred at 45 degrees with a glued cleat in each mitre's acute angle, the base's
-// sides planed flush with the slant's, the back dovetailed through the seat, a hand grip in its rear face.
+// Four cherry boards 19 mm thick, after Rietveld's 1934 Zig-Zag: the seat, the slant and the base tapered and
+// mitred at 45 degrees with a glued cleat in each mitre's acute angle, the base's sides planed flush with the
+// slant's, the back dovetailed through the seat, a hand grip in its rear face.
 // The chair faces -Y, x = 0 is its middle, the floor is z = 0.
 //
 // Every board is a large box cut down by half-spaces: work planes whose position and normal are expressions.
@@ -16,10 +16,10 @@ import type { V1T } from '@classcad/api-js'
 export type Api = { v1: V1T }
 
 const DEG = Math.PI / 180
-const CHERRY: [number, number, number] = [168, 96, 58] // smlibpy's #a8603a
+const CHERRY: [number, number, number] = [168, 96, 58] // #a8603a
 
 /**
- * The parameters a maker changes. The seat length and the back height are chosen so that the chair has smlibpy's
+ * The parameters a maker changes. The seat length and the back height are chosen so that the chair has a
  * 480 depth and 740 height (the back's rear top corner) with its 8 degree lean.
  */
 export const MASTERS = {
