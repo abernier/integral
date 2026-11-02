@@ -38,10 +38,3 @@ In the `Params` part, mm. Edit, then recalculate.
 | `SLOPE` | 1/6 | Dovetail slope |
 | `PIN`, `HALF_PIN` | 20, 20 | Pins at the rear face |
 | `GRIP`, `GRIP_HIGH`, `GRIP_DEEP`, `GRIP_BELOW` | 140, 20, 10, 20 | Grip pocket |
-
-## Build
-
-```sh
-nr build:parts  # .ofb, STEP, GLB, PNG into .docs/zigzag-chair/
-nr dev          # live: saving zigzag-chair.ts rebuilds it
-```
