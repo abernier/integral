@@ -6,7 +6,7 @@ Parametric furniture parts in [ClassCAD](https://classcad.ch), editable in [Buer
 
 </Intro>
 
-[![site](https://img.shields.io/badge/site-GitHub_Pages-555)](https://abernier.github.io/integral) [![build](https://github.com/abernier/integral/actions/workflows/pages.yml/badge.svg)](https://github.com/abernier/integral/actions/workflows/pages.yml)
+Site: https://abernier.github.io/integral
 
 ## Parts
 

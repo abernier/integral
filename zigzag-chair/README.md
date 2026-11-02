@@ -2,15 +2,21 @@
 
 <Intro>
 
-Parametric [ClassCAD](https://classcad.ch) assembly of the zigzag chair, after smlibpy's [`zigzag_chair.py`](https://github.com/abernier/smlibpy/blob/main/examples/zigzag_chair.py).
+A chair of four boards in a Z, after Rietveld's 1934 Zig-Zag: seat, slant and base mitred at 45°, the back dovetailed through the seat.
 
 </Intro>
 
-![cherry](https://img.shields.io/badge/cherry-19_mm-a8603a) ![size](https://img.shields.io/badge/size-370_×_480_×_742.6_mm-555) ![engine](https://img.shields.io/badge/engine-ClassCAD_WASM_21.2-1f6feb) ![plan](https://img.shields.io/badge/plan-free,_non--commercial-238636) [![build](https://github.com/abernier/integral/actions/workflows/pages.yml/badge.svg)](https://github.com/abernier/integral/actions/workflows/pages.yml)
+**[Open in Buerligons](https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb)** (classcad.ch sign-in) · [`.ofb`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) · [STEP](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step) · [GLB](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.glb) · [source](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts)
 
 ![Zigzag chair, from behind](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png)
 
-[![Open in Buerligons](https://img.shields.io/badge/Open_in-Buerligons-c4553e)](https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) (classcad.ch sign-in) · [`.ofb`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) · [STEP](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step) · [GLB](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.glb) · [source](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts)
+| | |
+|---|---|
+| Wood | cherry, 19 mm boards |
+| Size | 370 × 480 × 742.6 mm |
+| Joints | 45° mitres with glued cleats; 6 through dovetails |
+| Model | ClassCAD assembly, 6 parts, after smlibpy's [`zigzag_chair.py`](https://github.com/abernier/smlibpy/blob/main/examples/zigzag_chair.py) |
+| Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
 
 ## Parameters
 

@@ -51,7 +51,7 @@ export async function buildPart(engine: Engine, part: string) {
 function views(part: string, alt: string) {
   const file = (ext: string) => `${SITE_URL}/${part}/${part}.${ext}`
   const frame = (src: string, title: string, height: number) =>
-    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0 }} allow="fullscreen" />`
+    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen" />`
   return [
     '<Tabs defaultValue="3d">',
     '<TabsList>',
@@ -61,7 +61,7 @@ function views(part: string, alt: string) {
     '</TabsList>',
     `<TabsContent value="3d">${frame(`${SITE_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
-    `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" /></TabsContent>`,
+    `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     '</Tabs>',
   ].join('\n')
 }
