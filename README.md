@@ -2,11 +2,34 @@
 
 Parametric furniture parts, modeled in [ClassCAD](https://classcad.ch): each part is a
 history-based `.ofb` that opens in [Buerligons](https://buerligons.io), where its dimensions can
-be changed and the model rebuilds.
+be changed and the model rebuilds. The site is at https://abernier.github.io/integral.
 
-| Part | Folder | Files |
-|---|---|---|
-| Zigzag chair ([open in Buerligons](https://buerligons.io/editor/?url=https%3A%2F%2Fraw.githubusercontent.com%2Fabernier%2Fintegral%2Fmain%2Fzigzag-chair%2Fzigzag-chair.ofb&bytes=786815)) | [`zigzag-chair/`](zigzag-chair/) | build script, `.ofb`, STEP, renders; parameters and a comparison with smlibpy in its README |
+| Part | Files |
+|---|---|
+| [Zigzag chair](https://abernier.github.io/integral/zigzag-chair/introduction) ([open in Buerligons](https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb)) | [`.ofb`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb), [STEP](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step), [render](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png); parameters and a comparison with smlibpy on its page |
 
-The parts are built by scripts run through the ClassCAD MCP (`@classcad/mcp`), which this repo
-enables as a Claude Code plugin (`.claude/settings.json`). Each folder's README says how to rebuild it.
+A part is a folder holding a ClassCAD script (`<folder>/<folder>.js`, the body of the ClassCAD MCP's
+`run_script`) and a README. Only those are in git: the `.ofb`, STEP and render are built.
+
+## Build
+
+Node 24 and pnpm; `nr` is [antfu's ni](https://github.com/antfu-collective/ni) (`pnpm run` works as well).
+
+```sh
+pnpm install
+nr build        # every part with ClassCAD, then the site into dist/
+nr build:parts  # the parts alone, into .docs/
+nr dev          # the site on http://localhost:3000, live: a README or a part's script changes, it follows
+```
+
+The parts are built on ClassCAD's WASM engine, headless, in this process. The engine needs a key:
+
+- locally, from this machine's ClassCAD sign-in (`~/.classcad-mcp/auth.json`, made by the ClassCAD MCP's `login`);
+- in CI, from a `CLASSCAD_TOKEN` repository secret: a secret access token (`ccsk_...`) made at
+  [classcad.ch/account](https://classcad.ch/account).
+
+The site is made by [`@pmndrs/docs`](https://docs.pmnd.rs) from the READMEs, and deployed to GitHub Pages
+on every push to `main` (`.github/workflows/pages.yml`).
+
+The ClassCAD MCP (`@classcad/mcp`) is also enabled here as a Claude Code plugin (`.claude/settings.json`),
+for modeling a part interactively.

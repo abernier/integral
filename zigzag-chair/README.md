@@ -10,17 +10,18 @@ The geometry and joinery follow smlibpy's
 [`examples/zigzag_chair.py`](https://github.com/abernier/smlibpy/blob/main/examples/zigzag_chair.py), the
 finished, planed-flush state.
 
-**[Open it in Buerligons](https://buerligons.io/editor/?url=https%3A%2F%2Fraw.githubusercontent.com%2Fabernier%2Fintegral%2Fmain%2Fzigzag-chair%2Fzigzag-chair.ofb&bytes=786815)** (a free classcad.ch account; then edit `Params` and recalculate).
+**[Open it in Buerligons](https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb)** (a free classcad.ch account; then edit `Params` and recalculate).
 
-![The chair from behind: tails through the back, the grip, the slant and the base](zigzag-chair.png)
+![The chair from behind: tails through the back, the grip, the slant and the base](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png)
+
+The script is the only source in git; `nr build` makes the rest, and GitHub Pages serves it:
 
 | File | What it is |
 |---|---|
-| `zigzag-chair.js` | The build: one `run_script` body for the ClassCAD MCP |
-| `zigzag-chair.ofb` | The model with its history; opens in [Buerligons](https://buerligons.io) |
-| `zigzag-chair.step` | STEP assembly, six solids (`Seat`, `Back`, `Slant`, `Base`, `SeatCleat`, `FootCleat`) |
-| `zigzag-chair.png` | Render, default parameters |
-| `zigzag-chair-t22-5tails.png` | Render with `T = 22`, `TAILS = 5` |
+| [`zigzag-chair.js`](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.js) | The build: one `run_script` body, for the ClassCAD MCP or `nr build` |
+| [`zigzag-chair.ofb`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) | The model with its history; opens in [Buerligons](https://buerligons.io) |
+| [`zigzag-chair.step`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step) | STEP assembly, six solids (`Seat`, `Back`, `Slant`, `Base`, `SeatCleat`, `FootCleat`) |
+| [`zigzag-chair.png`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png) | Render, default parameters |
 
 ## How it is built
 
@@ -59,7 +60,8 @@ Everything else (`HEIGHT`, `DEPTH`, `RATE`, `W_BACK`, `TAIL_REAR`, `BASE_Y`, `BA
 
 ## Rebuild
 
-- From scratch: run `zigzag-chair.js` with the MCP's `run_script` on a new drawing, then `save` as OFB / STP.
+- From scratch: `nr build:parts` (this part and any other, into `.docs/`, about 9 s), or `nr build` for the whole
+  site; or run `zigzag-chair.js` with the MCP's `run_script` on a new drawing, then `save` as OFB / STP.
 - Change a parameter in an open model, from a script:
 
   ```js
@@ -80,12 +82,12 @@ Volumes in mm³, ClassCAD `calculateMassProperties` per board part against smlib
 
 | Board | ClassCAD | smlibpy | Difference |
 |---|---|---|---|
-| Seat | 2 725 472.074 | 2 725 472.074 | < 1e-6 |
+| Seat | 2 725 472.074 | 2 725 472.074 | under 1e-6 |
 | Back | 2 082 435.575 | 2 082 462.542 | -26.97 (0.0013 %) |
-| Slant | 3 865 257.798 | 3 865 257.798 | < 1e-6 |
-| Base | 2 356 487.869 | 2 356 487.869 | < 1e-8 |
-| Seat cleat | 164 539.686 | 164 539.686 | < 1e-8 |
-| Foot cleat | 150 176.501 | 150 176.501 | < 1e-8 |
+| Slant | 3 865 257.798 | 3 865 257.798 | under 1e-6 |
+| Base | 2 356 487.869 | 2 356 487.869 | under 1e-8 |
+| Seat cleat | 164 539.686 | 164 539.686 | under 1e-8 |
+| Foot cleat | 150 176.501 | 150 176.501 | under 1e-8 |
 
 With `T = 22`, `TAILS = 5`: the same picture, the back -26.7, the others within 2e-5.
 

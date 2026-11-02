@@ -1,0 +1,58 @@
+name: Build the parts and the site, deploy to GitHub Pages
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # pmndrs/docs' reusable build.yml compiles an MDX folder that is in git; ours is built first, with ClassCAD and
+  # a secret, which it can neither install nor be given. So this is the "own build job" its docs describe
+  # (https://docs.pmnd.rs/github-actions/introduction), and the deploy job is the one pmndrs/docs uses itself.
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      # The ClassCAD WASM engine, about 16 MB, downloaded on first use.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.classcad-mcp/wasm
+          key: classcad-wasm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - run: npm install -g @antfu/ni
+      - run: nr build
+        env:
+          # A ClassCAD secret access token (ccsk_...), from classcad.ch/account: it buys the engine's key.
+          CLASSCAD_TOKEN: ${{ secrets.CLASSCAD_TOKEN }}
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
