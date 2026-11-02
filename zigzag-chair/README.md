@@ -1,12 +1,14 @@
 # Zigzag chair
 
+Rietveld's 1934 Zig-Zag chair, parametric, in cherry.
+
 <Intro>
 
-A chair of four boards in a Z, after Rietveld's 1934 Zig-Zag: seat, slant and base mitred at 45°, the back dovetailed through the seat.
+Four boards in a Z: seat, slant and base mitred at 45° on glued cleats, the back dovetailed through the seat. Every dimension below is a parameter: change one in Buerligons, the chair rebuilds.
 
 </Intro>
 
-[![Open in Buerligons](https://img.shields.io/badge/Open_in-Buerligons-c4553e)](https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) [![download .ofb](https://img.shields.io/badge/download-.ofb-555)](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) [![download STEP](https://img.shields.io/badge/download-STEP-555)](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step) [![download GLB](https://img.shields.io/badge/download-GLB-555)](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.glb) [![source zigzag-chair.ts](https://img.shields.io/badge/source-zigzag--chair.ts-555?logo=github)](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts) (Buerligons: classcad.ch sign-in)
+[![Open in Buerligons](https://img.shields.io/badge/Open_in-Buerligons-c4553e)](https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) [![download .ofb](https://img.shields.io/badge/download-.ofb-1f6feb)](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) [![download STEP](https://img.shields.io/badge/download-STEP-238636)](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step) [![download GLB](https://img.shields.io/badge/download-GLB-8957e5)](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.glb) [![source zigzag-chair.ts](https://img.shields.io/badge/source-zigzag--chair.ts-24292f?logo=github)](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts)
 
 ![Zigzag chair, from behind](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png)
 

@@ -1,8 +1,10 @@
 # integral
 
+Parametric furniture parts in ClassCAD.
+
 <Intro>
 
-Parametric furniture parts in [ClassCAD](https://classcad.ch), editable in [Buerligons](https://buerligons.io).
+Each part is a [ClassCAD](https://classcad.ch) model with its history: open it in [Buerligons](https://buerligons.io), change a dimension, it rebuilds.
 
 </Intro>
 

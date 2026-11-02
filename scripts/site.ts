@@ -68,14 +68,18 @@ function views(part: string, alt: string) {
 }
 
 /**
- * Turn a README into an MDX page: its first heading becomes the title, links to the site become local ones.
+ * Turn a README into an MDX page: its first heading becomes the title, the line under it the description, links
+ * to the site become local ones.
  * A part's page also gets its source, its render as the page's image, and the render's tabs (`views`).
  */
 function page(readme: string, nav: number, urls: { site: string; files: string }, part?: string) {
   const source = readFileSync(readme, 'utf8')
   const title = source.match(/^# (.+)$/m)?.[1] ?? 'Untitled'
+  // The line under the heading: short, shown under the title; the <Intro> after it says more.
+  const description = source.match(/^# .+\n+([^<\n].*)\n/m)?.[1]
   const meta = [
     `title: ${JSON.stringify(title)}`,
+    description && `description: ${JSON.stringify(description)}`,
     part && `sourcecode: ${part}/${part}.ts`,
     part && `image: ${part}.png`,
     `nav: ${nav}`,
@@ -83,6 +87,7 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
   const render = part && `${SITE_URL}/${part}/${part}.png`
   const body = source
     .replace(/^# .+\n+/m, '')
+    .replace(description ? `${description}\n` : '', '')
     .replace(/^!\[([^\]]*)\]\((\S+)\)$/m, (image, alt, src) => (part && src === render ? views(part, alt) : image))
     // A page link (a path ending in `/introduction`) goes to the site, a file link to where the files are served.
     .replaceAll(`${SITE_URL}/`, '\0')
