@@ -8,27 +8,7 @@ Parametric [ClassCAD](https://classcad.ch) assembly of the zigzag chair, after s
 
 ![cherry](https://img.shields.io/badge/cherry-19_mm-a8603a) ![size](https://img.shields.io/badge/size-370_×_480_×_742.6_mm-555) ![engine](https://img.shields.io/badge/engine-ClassCAD_WASM_21.2-1f6feb) ![plan](https://img.shields.io/badge/plan-free,_non--commercial-238636) [![build](https://github.com/abernier/integral/actions/workflows/pages.yml/badge.svg)](https://github.com/abernier/integral/actions/workflows/pages.yml)
 
-<Tabs defaultValue="3d">
-
-<TabsList>
-<TabsTrigger value="3d">3D</TabsTrigger>
-<TabsTrigger value="buerligons">Buerligons</TabsTrigger>
-<TabsTrigger value="render">Render</TabsTrigger>
-</TabsList>
-
-<TabsContent value="3d">
-<iframe src="https://abernier.github.io/integral/viewer.html?src=zigzag-chair/zigzag-chair.glb" title="Zigzag chair, 3D" className="w-full rounded-lg" style={{ height: 480, border: 0 }} />
-</TabsContent>
-
-<TabsContent value="buerligons">
-<iframe src="https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb" title="Zigzag chair in Buerligons" className="w-full rounded-lg" style={{ height: 600, border: 0 }} allow="fullscreen" />
-</TabsContent>
-
-<TabsContent value="render">
-<img src="https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png" alt="Zigzag chair, from behind" />
-</TabsContent>
-
-</Tabs>
+![Zigzag chair, from behind](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png)
 
 [![Open in Buerligons](https://img.shields.io/badge/Open_in-Buerligons-c4553e)](https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) (classcad.ch sign-in) · [`.ofb`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) · [STEP](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step) · [GLB](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.glb) · [source](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts)
 

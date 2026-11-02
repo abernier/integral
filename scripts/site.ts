@@ -45,7 +45,30 @@ export async function buildPart(engine: Engine, part: string) {
 }
 
 /**
- * Turn a README into an MDX page: its first heading becomes the title, links to the site become local ones. A part's page also gets its source and its render as the page's image.
+ * A part's render, as the site shows it: tabs with a 3D viewer of its GLB, the part open in Buerligons, and the
+ * render itself. On GitHub the README shows the render alone (it prints iframes as text).
+ */
+function views(part: string, alt: string) {
+  const file = (ext: string) => `${SITE_URL}/${part}/${part}.${ext}`
+  const frame = (src: string, title: string, height: number) =>
+    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0 }} allow="fullscreen" />`
+  return [
+    '<Tabs defaultValue="3d">',
+    '<TabsList>',
+    '<TabsTrigger value="3d">3D</TabsTrigger>',
+    '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
+    '<TabsTrigger value="render">Render</TabsTrigger>',
+    '</TabsList>',
+    `<TabsContent value="3d">${frame(`${SITE_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
+    `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
+    `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" /></TabsContent>`,
+    '</Tabs>',
+  ].join('\n')
+}
+
+/**
+ * Turn a README into an MDX page: its first heading becomes the title, links to the site become local ones.
+ * A part's page also gets its source, its render as the page's image, and the render's tabs (`views`).
  */
 function page(readme: string, nav: number, urls: { site: string; files: string }, part?: string) {
   const source = readFileSync(readme, 'utf8')
@@ -56,8 +79,10 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
     part && `image: ${part}.png`,
     `nav: ${nav}`,
   ]
+  const render = part && `${SITE_URL}/${part}/${part}.png`
   const body = source
     .replace(/^# .+\n+/m, '')
+    .replace(/^!\[([^\]]*)\]\((\S+)\)$/m, (image, alt, src) => (part && src === render ? views(part, alt) : image))
     // A page link (a path ending in `/introduction`) goes to the site, a file link to where the files are served.
     .replaceAll(`${SITE_URL}/`, '\0')
     .replace(/\0([\w/-]*\/introduction)/g, `${urls.site}/$1`)
