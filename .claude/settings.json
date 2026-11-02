@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "classcad": {
+      "source": { "source": "github", "repo": "awv-informatik/classcad-ai" }
+    }
+  },
+  "enabledPlugins": {
+    "classcad@classcad": true
+  }
+}
