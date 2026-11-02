@@ -53,7 +53,8 @@ function views(part: string, alt: string) {
   const frame = (src: string, title: string, height: number) =>
     `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen" />`
   return [
-    '<Tabs defaultValue="3d">',
+    // syncKey: the pick is kept in localStorage, the same on every part's page.
+    '<Tabs defaultValue="3d" syncKey="part-view">',
     '<TabsList>',
     '<TabsTrigger value="3d">3D</TabsTrigger>',
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',

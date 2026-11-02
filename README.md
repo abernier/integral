@@ -6,15 +6,13 @@ Parametric furniture parts in [ClassCAD](https://classcad.ch), editable in [Buer
 
 </Intro>
 
-Site: https://abernier.github.io/integral
-
 ## Parts
 
 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-<a href="https://abernier.github.io/integral/zigzag-chair/introduction" className="block rounded-lg border border-outline-variant p-4 no-underline">
-<img src="https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png" alt="Zigzag chair" width="320" />
-<strong>Zigzag chair</strong>: cherry, 370 × 480 × 742.6 mm
-</a>
+<div>
+<a href="https://abernier.github.io/integral/zigzag-chair/introduction"><img src="https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png" alt="Zigzag chair" width="320" /></a>
+<p><strong>Zigzag chair</strong>: cherry, 370 × 480 × 742.6 mm</p>
+</div>
 </div>
 
 ## Build
