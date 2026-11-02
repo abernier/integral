@@ -1,6 +1,7 @@
 // What `build` and `dev` share: the parts, how each is built, and the MDX folder the docs site is made from.
 //
-// A part is a folder at the repository root holding `<folder>/<folder>.js`, a ClassCAD script, and a README.md.
+// A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
+// ClassCAD, and a README.md.
 // Building it writes `<folder>.ofb`, `<folder>.step` and `<folder>.png` into `.docs/<folder>/`. The MDX folder also
 // gets one page per README: the root one as `integral/introduction.mdx`, each part's as `<folder>/introduction.mdx`.
 //
@@ -8,6 +9,7 @@
 // for a local site those URLs are rewritten to the local servers.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { join, relative, resolve } from 'node:path'
 import { type Engine, render, run, save } from './classcad.ts'
 
@@ -22,13 +24,16 @@ export const HOME = '/integral/introduction'
 
 export function parts() {
   return readdirSync(ROOT, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && existsSync(join(ROOT, entry.name, `${entry.name}.js`)))
+    .filter((entry) => entry.isDirectory() && existsSync(join(ROOT, entry.name, `${entry.name}.ts`)))
     .map((entry) => entry.name)
 }
 
 export async function buildPart(engine: Engine, part: string) {
   const started = performance.now()
-  const returned = await run(engine, readFileSync(join(ROOT, part, `${part}.js`), 'utf8'))
+  // A fresh URL each time: `dev` imports a part again after its file changes.
+  const url = `${pathToFileURL(join(ROOT, part, `${part}.ts`)).href}?t=${Date.now()}`
+  const { default: build } = await import(url)
+  const returned = await run(engine, build)
   const out = join(MDX, part)
   mkdirSync(out, { recursive: true })
   const ofb = await save(engine, 'OFB', join(out, `${part}.ofb`))

@@ -9,7 +9,8 @@
   "scripts": {
     "build": "node scripts/build.ts",
     "build:parts": "node scripts/build.ts --parts-only",
-    "dev": "node scripts/dev.ts"
+    "dev": "node scripts/dev.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@classcad/mcp": "0.6.1",
@@ -20,8 +21,10 @@
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@classcad/api-js": "https://awvstatic.com/classcad/download/release/21.2.0/js/classcad-api-js-21.2.0.tgz",
     "@types/node": "^24.0.0",
-    "serve": "^14.2.4"
+    "serve": "^14.2.4",
+    "typescript": "^7.0.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -30,6 +30,7 @@ jobs:
           key: classcad-wasm-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
       - run: npm install -g @antfu/ni
+      - run: nr typecheck
       - run: nr build
         env:
           # A ClassCAD secret access token (ccsk_...), from classcad.ch/account: it buys the engine's key.

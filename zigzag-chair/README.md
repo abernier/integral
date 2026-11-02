@@ -18,7 +18,7 @@ The script is the only source in git; `nr build` makes the rest, and GitHub Page
 
 | File | What it is |
 |---|---|
-| [`zigzag-chair.js`](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.js) | The build: one `run_script` body, for the ClassCAD MCP or `nr build` |
+| [`zigzag-chair.ts`](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts) | The build: its default export makes the chair, given the ClassCAD script API |
 | [`zigzag-chair.ofb`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb) | The model with its history; opens in [Buerligons](https://buerligons.io) |
 | [`zigzag-chair.step`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step) | STEP assembly, six solids (`Seat`, `Back`, `Slant`, `Base`, `SeatCleat`, `FootCleat`) |
 | [`zigzag-chair.png`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png) | Render, default parameters |
@@ -61,7 +61,8 @@ Everything else (`HEIGHT`, `DEPTH`, `RATE`, `W_BACK`, `TAIL_REAR`, `BASE_Y`, `BA
 ## Rebuild
 
 - From scratch: `nr build:parts` (this part and any other, into `.docs/`, about 9 s), or `nr build` for the whole
-  site; or run `zigzag-chair.js` with the MCP's `run_script` on a new drawing, then `save` as OFB / STP.
+  site. The ClassCAD MCP's `run_script` takes JavaScript: to build it there, pass the body of `build` with the
+  types removed.
 - Change a parameter in an open model, from a script:
 
   ```js

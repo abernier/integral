@@ -73,7 +73,7 @@ watch(ROOT, { recursive: true }, (_event, file) => {
   const [folder, name] = file.split('/')
   if (file === 'README.md' || (name === 'README.md' && parts().includes(folder))) {
     later('pages', () => void writePages(urls))
-  } else if (parts().includes(folder) && name === `${folder}.js`) {
+  } else if (parts().includes(folder) && name === `${folder}.ts`) {
     later(folder, () => buildPart(engine, folder))
   }
 })

@@ -8,8 +8,9 @@ be changed and the model rebuilds. The site is at https://abernier.github.io/int
 |---|---|
 | [Zigzag chair](https://abernier.github.io/integral/zigzag-chair/introduction) ([open in Buerligons](https://buerligons.io/editor/?url=https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb)) | [`.ofb`](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.ofb), [STEP](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.step), [render](https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png); parameters and a comparison with smlibpy on its page |
 
-A part is a folder holding a ClassCAD script (`<folder>/<folder>.js`, the body of the ClassCAD MCP's
-`run_script`) and a README. Only those are in git: the `.ofb`, STEP and render are built.
+A part is a folder holding a TypeScript module (`<folder>/<folder>.ts`, whose default export builds the part
+given the ClassCAD script API, typed by `@classcad/api-js`) and a README. Only those are in git: the `.ofb`,
+STEP and render are built.
 
 ## Build
 
@@ -19,6 +20,7 @@ Node 24 and pnpm; `nr` is [antfu's ni](https://github.com/antfu-collective/ni) (
 pnpm install
 nr build        # every part with ClassCAD, then the site into dist/
 nr build:parts  # the parts alone, into .docs/
+nr typecheck    # tsc --noEmit, the parts against the ClassCAD API types
 nr dev          # the site on http://localhost:3000, live: a README or a part's script changes, it follows
 ```
 

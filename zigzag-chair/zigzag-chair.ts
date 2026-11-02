@@ -1,5 +1,5 @@
-// Zigzag chair, a parametric ClassCAD assembly. This file is the body of one `run_script` call on an empty
-// drawing (the ClassCAD MCP runs it as an async function with `api` in scope).
+// Zigzag chair, a parametric ClassCAD assembly. `nr build` calls this module's default export with the ClassCAD
+// script API (`api.v1`, as the ClassCAD MCP's run_script gives it), on an empty drawing.
 //
 // Geometry and joinery follow smlibpy's examples/zigzag_chair.py: four cherry boards 19 mm thick, the seat, the
 // slant and the base tapered and mitred at 45 degrees with a glued cleat in each mitre's acute angle, the base's
@@ -10,11 +10,18 @@
 // Changing a parameter moves the planes and the whole history rebuilds. The parameters live in the `Params` part
 // (assemblies hold no expressions); each board mirrors them as `Params.ExpressionSet.<name>`.
 
+import type { V1T } from '@classcad/api-js'
+
+/** The part of the ClassCAD script API this build uses. */
+export type Api = { v1: V1T }
+
 const DEG = Math.PI / 180
 
-// The parameters a maker changes. The seat length and the back height are chosen so that the chair has smlibpy's
-// 480 depth and 740 height (the back's rear top corner) with its 8 degree lean.
-const MASTERS = {
+/**
+ * The parameters a maker changes. The seat length and the back height are chosen so that the chair has smlibpy's
+ * 480 depth and 740 height (the back's rear top corner) with its 8 degree lean.
+ */
+export const MASTERS = {
   T: 19, // every board's thickness
   W_NOSE: 370, // width at the seat's nose
   W_FOOT: 330, // width at the slant's rear bottom corner: with W_NOSE, it sets the taper
@@ -80,28 +87,30 @@ const NAMES = [...Object.keys(MASTERS), ...Object.keys(DERIVED)]
 
 // Half-spaces as [name, a point on the plane, its normal], the normal pointing into the material. `@expr.X` is
 // written `$X` here for brevity.
-const TOP = (z) => [`[0, 0, ${z}]`, '[0, 0, -1]']
-const BOTTOM = (z) => [`[0, 0, ${z}]`, '[0, 0, 1]']
-const SEAT_SIDES = [
+type HalfSpace = [name: string, position: string, normal: string]
+
+const TOP = (z: string | number) => [`[0, 0, ${z}]`, '[0, 0, -1]'] as const
+const BOTTOM = (z: string | number) => [`[0, 0, ${z}]`, '[0, 0, 1]'] as const
+const SEAT_SIDES: HalfSpace[] = [
   ['SeatRight', '[$W_NOSE/2, $Y_NOSE, 0]', '[-1, -$RATE, 0]'],
   ['SeatLeft', '[-$W_NOSE/2, $Y_NOSE, 0]', '[1, -$RATE, 0]'],
 ]
-const SLANT_SIDES = [
+const SLANT_SIDES: HalfSpace[] = [
   ['SlantRight', '[$W_NOSE/2, $Y_NOSE, $SEAT_TOP]', '[-1, -$RATE_S, $RATE_S]'],
   ['SlantLeft', '[-$W_NOSE/2, $Y_NOSE, $SEAT_TOP]', '[1, -$RATE_S, $RATE_S]'],
 ]
-const BASE_SIDES = [
+const BASE_SIDES: HalfSpace[] = [
   ['BaseRight', '[$W_FOOT/2, $FOOT_Y, 0]', '[-1, $BASE_Y, $BASE_Z]'],
   ['BaseLeft', '[-$W_FOOT/2, $FOOT_Y, 0]', '[1, $BASE_Y, $BASE_Z]'],
 ]
-const BACK_FRONT = ['BackFront', '[0, $FRONT_SB, $SEAT_BOTTOM]', '[0, $CL, -$SL]']
-const BACK_REAR = ['BackRear', '[0, $REAR_SB, $SEAT_BOTTOM]', '[0, -$CL, $SL]']
-const SEAT_SLAB = [
+const BACK_FRONT: HalfSpace = ['BackFront', '[0, $FRONT_SB, $SEAT_BOTTOM]', '[0, $CL, -$SL]']
+const BACK_REAR: HalfSpace = ['BackRear', '[0, $REAR_SB, $SEAT_BOTTOM]', '[0, -$CL, $SL]']
+const SEAT_SLAB: HalfSpace[] = [
   ['SeatTop', ...TOP('$SEAT_TOP')],
   ['SeatUnderside', ...BOTTOM('$SEAT_BOTTOM')],
 ]
 
-const BOARDS = {
+const BOARDS: Record<string, HalfSpace[]> = {
   Seat: [
     ...SEAT_SLAB,
     ['SeatRearEnd', '[0, $FRONT_SB, $SEAT_BOTTOM]', '[0, -$CL, $SL]'], // on the back's front face
@@ -148,7 +157,7 @@ const BOARDS = {
 }
 
 // The first dovetail tail, square to the back, wide at its rear face; patterned TAILS times across the chair.
-const TAIL = [
+const TAIL: HalfSpace[] = [
   BACK_FRONT,
   BACK_REAR,
   ...SEAT_SLAB,
@@ -156,81 +165,91 @@ const TAIL = [
   ['TailRightFlank', '[$TAIL_X0 + $TAIL_FRONT/2, $FRONT_SB, $SEAT_BOTTOM]', '[-1, $SLOPE*$CL, -$SLOPE*$SL]'],
 ]
 
-const expr = (s) => String(s).replace(/\$/g, '@expr.')
+const expr = (s: string) => s.replace(/\$/g, '@expr.')
 const BIG = 3000
 
-async function cutBoard(part, name, planes) {
-  const corner = (await api.v1.part.workCSys({ id: part, name: `${name}Stock`, offset: [-BIG / 2, -BIG / 2, -BIG / 2] })).result
-  let body = (await api.v1.part.box({ id: part, name: `${name}Stock`, length: BIG, width: BIG, height: BIG, references: [corner] })).result
+/** The id a call created; the engine answers null when it created nothing. */
+async function created(call: Promise<{ result: number | null }>) {
+  const { result } = await call
+  if (result === null) throw new Error('ClassCAD created nothing')
+  return result
+}
+
+async function cutBoard(api: Api, part: number, name: string, planes: HalfSpace[]) {
+  const corner = await created(api.v1.part.workCSys({ id: part, name: `${name}Stock`, offset: [-BIG / 2, -BIG / 2, -BIG / 2] }))
+  let body = await created(api.v1.part.box({ id: part, name: `${name}Stock`, length: BIG, width: BIG, height: BIG, references: [corner] }))
   for (const [planeName, position, normal] of planes) {
-    const plane = (await api.v1.part.workPlane({ id: part, name: `${name}_${planeName}`, position: expr(position), normal: expr(normal) })).result
-    body = (await api.v1.part.slice({ id: part, name: `${name}_${planeName}`, targets: [body], reference: plane })).result
+    const plane = await created(api.v1.part.workPlane({ id: part, name: `${name}_${planeName}`, position: expr(position), normal: expr(normal) }))
+    body = await created(api.v1.part.slice({ id: part, name: `${name}_${planeName}`, targets: [body], reference: plane }))
   }
   return body
 }
 
-async function tails(part) {
-  const first = await cutBoard(part, 'Tail', TAIL)
-  const across = (await api.v1.part.workAxis({ id: part, name: 'Across', position: [0, 0, 0], direction: [1, 0, 0] })).result
-  return (await api.v1.part.linearPattern({
+async function tails(api: Api, part: number) {
+  const first = await cutBoard(api, part, 'Tail', TAIL)
+  const across = await created(api.v1.part.workAxis({ id: part, name: 'Across', position: [0, 0, 0], direction: [1, 0, 0] }))
+  return created(api.v1.part.linearPattern({
     id: part, name: 'Tails', targets: [first],
-    dir1: { references: [across], distance: '@expr.TAIL_PITCH', count: '@expr.TAILS', merged: 1 },
-  })).result
+    dir1: { references: [across], distance: '@expr.TAIL_PITCH', count: '@expr.TAILS', merged: true },
+  }))
 }
 
 // The grip's pocket: a box between two cylinders, sunk square into the back's rear face. The work csys turns
 // about x so that its z axis runs through the back (front face to rear face) and its y axis down the back.
-async function grip(part) {
+async function grip(api: Api, part: number) {
   const rotation = '[-(C:PI/2 + @expr.LEAN), 0, 0]'
-  const mid = (await api.v1.part.workCSys({
+  const mid = await created(api.v1.part.workCSys({
     id: part, name: 'GripMid', rotation,
     offset: expr('[-($GRIP - $GRIP_HIGH)/2, $GRIP_CY + $GRIP_HIGH/2*$SL, $GRIP_CZ + $GRIP_HIGH/2*$CL]'),
-  })).result
-  const tools = [(await api.v1.part.box({
+  }))
+  const tools = [await created(api.v1.part.box({
     id: part, name: 'GripMid', references: [mid],
     length: expr('$GRIP - $GRIP_HIGH'), width: '@expr.GRIP_HIGH', height: '@expr.GRIP_DEEP',
-  })).result]
+  }))]
   for (const [side, sign] of [['Right', ''], ['Left', '-']]) {
-    const end = (await api.v1.part.workCSys({
+    const end = await created(api.v1.part.workCSys({
       id: part, name: `GripEnd${side}`, rotation,
       offset: expr(`[${sign}($GRIP - $GRIP_HIGH)/2, $GRIP_CY, $GRIP_CZ]`),
-    })).result
-    tools.push((await api.v1.part.cylinder({
+    }))
+    tools.push(await created(api.v1.part.cylinder({
       id: part, name: `GripEnd${side}`, references: [end], diameter: '@expr.GRIP_HIGH', height: '@expr.GRIP_DEEP',
-    })).result)
+    })))
   }
   return tools
 }
 
-const asm = (await api.v1.assembly.create({ name: 'ZigzagChair' })).result
-const params = (await api.v1.assembly.partTemplate({ name: 'Params' })).result
-await api.v1.part.expression({
-  id: params,
-  toCreate: [...Object.entries(MASTERS), ...Object.entries(DERIVED)].map(([name, value]) => ({ name, value })),
-})
+/** Build the chair: a root assembly, the `Params` part, one part per board; returns their ids and volumes. */
+export default async function build(api: Api) {
+  const asm = await created(api.v1.assembly.create({ name: 'ZigzagChair' }))
+  const params = await created(api.v1.assembly.partTemplate({ name: 'Params' }))
+  await api.v1.part.expression({
+    id: params,
+    toCreate: [...Object.entries(MASTERS), ...Object.entries(DERIVED)].map(([name, value]) => ({ name, value })),
+  })
 
-const parts = {}
-for (const name of Object.keys(BOARDS)) {
-  const part = (await api.v1.assembly.partTemplate({ name })).result
-  await api.v1.part.expression({ id: part, toCreate: NAMES.map((n) => ({ name: n, value: `Params.ExpressionSet.${n}` })) })
-  let body = await cutBoard(part, name, BOARDS[name])
-  if (name === 'Seat') {
-    body = (await api.v1.part.boolean({ id: part, name: 'Dovetails', type: 'UNION', target: body, tools: [await tails(part)] })).result
+  const parts: Record<string, number> = {}
+  for (const [name, planes] of Object.entries(BOARDS)) {
+    const part = await created(api.v1.assembly.partTemplate({ name }))
+    await api.v1.part.expression({ id: part, toCreate: NAMES.map((n) => ({ name: n, value: `Params.ExpressionSet.${n}` })) })
+    let body = await cutBoard(api, part, name, planes)
+    if (name === 'Seat') {
+      body = await created(api.v1.part.boolean({ id: part, name: 'Dovetails', type: 'UNION', target: body, tools: [await tails(api, part)] }))
+    }
+    if (name === 'Back') {
+      const cut = [await tails(api, part), ...(await grip(api, part))]
+      body = await created(api.v1.part.boolean({ id: part, name: 'SocketsAndGrip', type: 'SUBTRACTION', target: body, tools: cut }))
+    }
+    parts[name] = part
   }
-  if (name === 'Back') {
-    const cut = [await tails(part), ...(await grip(part))]
-    body = (await api.v1.part.boolean({ id: part, name: 'SocketsAndGrip', type: 'SUBTRACTION', target: body, tools: cut })).result
+
+  await api.v1.assembly.setCurrentProduct({ id: asm })
+  for (const [name, part] of Object.entries(parts)) {
+    await api.v1.assembly.instance({ productId: part, ownerId: asm, name: name.toLowerCase() })
   }
-  parts[name] = part
-}
 
-await api.v1.assembly.setCurrentProduct({ id: asm })
-for (const [name, part] of Object.entries(parts)) {
-  await api.v1.assembly.instance({ productId: part, ownerId: asm, name: name.toLowerCase() })
+  const volumes: Record<string, number | undefined> = {}
+  for (const [name, part] of Object.entries(parts)) {
+    volumes[name] = (await api.v1.part.calculateMassProperties({ id: part })).result?.volume
+  }
+  return { asm, parts, volumes }
 }
-
-const volumes = {}
-for (const [name, part] of Object.entries(parts)) {
-  volumes[name] = (await api.v1.part.calculateMassProperties({ id: part })).result.volume
-}
-return { asm, parts, volumes }
