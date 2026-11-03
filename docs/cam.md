@@ -34,7 +34,7 @@ pnpm cam --force                       # every model, every file made again
 
 With `--keep`, the document stays open in Fusion: select a setup, Actions > Simulate, and watch the stock go. With a machine on the setup, Simulate with Machine shows the sheet on the ShopBot, and the tool going into anything it should not.
 
-![Fusion's Simulate with Machine on the zigzag chair's sheet: the ShopBot's gantry over the cherry sheet, the toolpaths in blue, no collision](https://abernier.github.io/integral/integral/cam/simulate.png)
+![Fusion's Simulate with Machine on the zigzag chair's sheet: the ShopBot's gantry over the cherry sheet, the toolpaths in blue, no collision](cam/simulate.png)
 
 <details>
 <summary>The ShopBot in Fusion</summary>
