@@ -41,5 +41,6 @@ nr build      # parts + site into dist/
 </Steps>
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
+- Configurator: `configurator/` (Vite + r3f + leva, the "Model" tab); a part adds `<folder>/<folder>.model.ts` (`schema`, `build`) and registers it in `configurator/src/models.ts`
 - Engine key: local ClassCAD sign-in; in CI, the `CLASSCAD_TOKEN` secret
 - Deploy: every push to `main`, GitHub Pages; every pull request, a Vercel preview (`vercel.json`, the engine key in its `CLASSCAD_TOKEN` variable)

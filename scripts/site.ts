@@ -9,9 +9,10 @@
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
 // for a local site those URLs are rewritten to the local servers, for a built site to root-relative paths.
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { join, relative, resolve } from 'node:path'
+import { build as vite } from 'vite'
 import { type Engine, glb, render, run, save } from './classcad.ts'
 
 export const ROOT = resolve(import.meta.dirname, '..')
@@ -72,9 +73,18 @@ export async function buildPart(engine: Engine, part: string) {
   console.log(`${part}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
 }
 
+/** Build the configurator (a Vite app) into the MDX folder, where the pages' iframes load it; `watch` rebuilds it as its files change. */
+export async function buildConfigurator(watch = false) {
+  await vite({
+    configFile: join(ROOT, 'configurator', 'vite.config.ts'),
+    logLevel: 'warn',
+    build: { outDir: join(MDX, 'configurator'), emptyOutDir: true, watch: watch ? {} : null },
+  })
+}
+
 /**
- * A part's render, as the site shows it: tabs with the render itself, a 3D viewer of its GLB, and the part open in
- * Buerligons. On GitHub the README shows the render alone (it prints iframes as text).
+ * A part's render, as the site shows it: tabs with the render itself, its configurator (the `configurator/` app:
+ * the part rebuilt in the browser as sliders move), and the part open in Buerligons. On GitHub the README shows the render alone (it prints iframes as text).
  */
 function views(part: string, alt: string) {
   const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
@@ -89,7 +99,7 @@ function views(part: string, alt: string) {
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '</TabsList>',
     `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
-    `<TabsContent value="3d">${frame(`${PAGES_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
+    `<TabsContent value="3d">${frame(`${PAGES_URL}/configurator/index.html?part=${part}`, `${alt}, configurator`, 600)}</TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     '</Tabs>',
   ].join('\n')
@@ -168,7 +178,6 @@ function syncReadme() {
 export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, shared: PAGES_URL }) {
   syncReadme()
   mkdirSync(MDX, { recursive: true })
-  copyFileSync(join(ROOT, 'scripts', 'viewer.html'), join(MDX, 'viewer.html'))
   mkdirSync(join(MDX, 'integral'), { recursive: true })
   writeFileSync(join(MDX, 'integral', 'introduction.mdx'), page(join(ROOT, 'README.md'), 0, urls))
   mkdirSync(join(MDX, 'things'), { recursive: true })
