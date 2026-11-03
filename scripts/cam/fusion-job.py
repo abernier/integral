@@ -343,6 +343,8 @@ def make_sheet():
     setup_input.models = parts
     setup = cam.setups.add(setup_input)
     setup.name = JOB["setup"]
+    if setup.models.count == 0:
+        raise RuntimeError(f"{JOB['setup']}: the setup has no model")
     set_parameter(setup, "job_stockMode", "'fixedbox'")
     set_parameter(setup, "job_stockFixedX", f"{(sheet.maxPoint.x - sheet.minPoint.x) * 10:.3f} mm")
     set_parameter(setup, "job_stockFixedY", f"{(sheet.maxPoint.y - sheet.minPoint.y) * 10:.3f} mm")
@@ -536,14 +538,19 @@ def make_part_setup():
     root = design.rootComponent
     base = root.features.baseFeatures.add()
     base.startEdit()
-    model = root.bRepBodies.add(turned_copy(part_body(design)), base)
+    root.bRepBodies.add(turned_copy(part_body(design)), base)
     base.finishEdit()
+    # The body as the finished base feature holds it: the one bRepBodies.add returned is dead once the edit ends (a
+    # setup given it has no model, and takes the whole design as its stock).
+    model = base.bodies.item(0)
     model.name = JOB["setup"]
 
     setup_input = cam.setups.createInput(adsk.cam.OperationTypes.MillingOperation)
     setup_input.models = [model]
     setup = cam.setups.add(setup_input)
     setup.name = JOB["setup"]
+    if setup.models.count == 0:
+        raise RuntimeError(f"{JOB['setup']}: the setup has no model")
     # The stock: the part's box, JOB["margin"] mm more on its sides, nothing above; the WCS at its top, x-min y-min.
     set_parameter(setup, "job_stockMode", "'default'")
     set_parameter(setup, "job_stockOffsetMode", "'simple'")
