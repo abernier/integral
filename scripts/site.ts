@@ -98,21 +98,20 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
 }
 
 /**
- * The root README's parts table, one row per part: its render (linking to its page), the description line under
- * its heading with a link to the page, and the badges line of its README. Taken from the parts' READMEs, so the
- * table is never edited by hand: `writePages` rewrites the `## Parts` section of README.md when a part changes.
+ * The root README's parts table, one row per part: its render (linking to its page), and the description line
+ * under its heading with a link to the page. Taken from the parts' READMEs, so the table is never edited by hand:
+ * `writePages` rewrites the `## Parts` section of README.md when a part changes.
  */
 function partsTable() {
   const rows = parts().map((part) => {
     const source = readFileSync(join(ROOT, part, 'README.md'), 'utf8')
     const title = source.match(/^# (.+)$/m)?.[1] ?? part
     const description = source.match(/^# .+\n+([^<\n].*)\n/m)?.[1] ?? ''
-    const badges = source.match(/^\[!\[.*$/m)?.[0] ?? ''
     const page = `${SITE_URL}/${part}/readme`
     const image = `<a href="${page}"><img src="${SITE_URL}/${part}/${part}.png" alt="${title}" width="160" /></a>`
-    return `| ${image} | **[${title}](${page})**: ${description} | ${badges} |`
+    return `| ${image} | **[${title}](${page})**: ${description} |`
   })
-  return ['| | Part | Files |', '|---|---|---|', ...rows].join('\n')
+  return ['| | Part |', '|---|---|', ...rows].join('\n')
 }
 
 function syncReadme() {
