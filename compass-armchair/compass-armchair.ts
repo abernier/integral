@@ -42,7 +42,6 @@ export const MASTERS = {
   ARM_BEHIND: 40, // the armrest runs on this much behind the posts, at its mid-height
   SEAT_TOP: 437, // the seat frame
   RAIL_H: 60,
-  SIDE_RAIL_H: 80, // the side rails hang lower than the cross rails, behind the boards: more glued face to resist the sway
   RAIL_T: 25,
   CANE_T: 8,
   SEAT_FRONT: -229, // the side rails, nose to back
@@ -84,7 +83,7 @@ const DERIVED = {
   U_FRONT: 'U0 - K*ARM_EDGE_FRONT',
   U_REAR: 'U0 - K*ARM_EDGE_REAR',
   SPLINE_TOP: 'U0 + SPLINE_IN_ARM',
-  Z_TENON: 'SEAT_TOP - SIDE_RAIL_H/2',
+  Z_TENON: 'SEAT_TOP - RAIL_H/2',
   LEAN: 'BACK_TILT*C:PI/180',
   SL: 'sin(LEAN)',
   CL: 'cos(LEAN)',
@@ -186,11 +185,7 @@ const railTenon = (y: string) => [
   ...slab('High', 2, '$Z_TENON - $TENON_H/2', '$Z_TENON + $TENON_H/2'),
 ]
 const RAIL_HEIGHT = slab('High', 2, '$SEAT_TOP - $RAIL_H', '$SEAT_TOP')
-const SIDE_RAIL = [
-  ...slab('Thick', 0, '$X_RAIL', '$X_BOARD'),
-  ...slab('Long', 1, '$SEAT_FRONT', '$SEAT_BACK'),
-  ...slab('High', 2, '$SEAT_TOP - $SIDE_RAIL_H', '$SEAT_TOP'),
-]
+const SIDE_RAIL = [...slab('Thick', 0, '$X_RAIL', '$X_BOARD'), ...slab('Long', 1, '$SEAT_FRONT', '$SEAT_BACK'), ...RAIL_HEIGHT]
 
 // The lowest seat tail at a cross rail's +x end, between y0 and y1: a trapezoid on the rail's face (x, z), wide at
 // the side rail's outer face; patterned SEAT_TAILS times up the rail. The side rail's pins are what they leave.
