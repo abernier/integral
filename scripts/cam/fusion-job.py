@@ -277,7 +277,7 @@ def add_rest(setup):
     """
     After the outline, Fusion's rest machining of the same contour with the narrowest tool: what a tool of the main
     one's diameter leaves (sockets narrower than it, its corners), from the stock top down to JOB["machining"]["rest"]
-    ["depth"], what that tool's flutes reach. Deeper is hand work, which `pnpm cam` reports.
+    ["depth"], what that tool's flutes reach. Deeper is left for the bench.
     """
     rest = JOB["machining"]["rest"]
     if not rest:

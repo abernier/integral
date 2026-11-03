@@ -30,7 +30,7 @@ export type MachiningOptions = {
   sheet?: [number, number]
   /** Space between two parts on a sheet, at least the sheet's tool diameter + SPACING_OVER_TOOL. */
   spacing?: number
-  /** Space kept free along the sheet's edges. */
+  /** Space kept free along the sheet's edges: the outline's lead-in stays on the sheet. */
   frame?: number
   /** Stock around a part in a setup of its own (a wedge), on its sides. */
   margin?: number
@@ -46,7 +46,7 @@ export const MACHINING_DEFAULTS = {
   material: 'hardwood',
   sheet: [2440, 1220] as [number, number],
   spacing: 12,
-  frame: 10,
+  frame: 20,
   margin: 5,
   overcut: 0.3,
   reach: 1,

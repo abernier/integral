@@ -2,6 +2,12 @@
   "version": 1,
   "defaults": { "material": "teak" },
   "parts": [
+    { "part": "FrontRailTenonLeft", "grain": 90, "note": "a loose tenon: its grain across the joint, along its 35 mm, not its 40 mm side" },
+    { "part": "FrontRailTenonRight", "grain": 90, "note": "a loose tenon: its grain across the joint, along its 35 mm, not its 40 mm side" },
+    { "part": "RearRailTenonLeft", "grain": 90, "note": "a loose tenon: its grain across the joint, along its 35 mm, not its 40 mm side" },
+    { "part": "RearRailTenonRight", "grain": 90, "note": "a loose tenon: its grain across the joint, along its 35 mm, not its 40 mm side" },
+    { "part": "ArmTenonLeft", "grain": 90, "note": "a loose tenon: its grain across the joint, along its 30 mm, not its 76 mm side" },
+    { "part": "ArmTenonRight", "grain": 90, "note": "a loose tenon: its grain across the joint, along its 30 mm, not its 76 mm side" },
     { "part": "SeatCane", "skip": true, "note": "woven cane on its frame, not milled" },
     { "part": "BackCane", "skip": true, "note": "woven cane on its frame, not milled" }
   ]

@@ -25,7 +25,9 @@ pnpm cam --force                       # every model, every file made again
 
 One small Python step per MCP call ([`fusion-job.py`](fusion-job.py)): import the STEP into a new unsaved document; each part's thickness (across its largest planar face, to 0.1 mm); per material and thickness, an Arrange feature per sheet (what does not fit goes on the next); per sheet a setup, its toolpaths, the posts; per wedge setup the same; the document closed unsaved (also on Ctrl-C; `--keep` leaves it open). Files already there: nothing done (`--force` makes them all again, the old ones removed first; with `--only`, only the sheets of those parts, under the same names).
 
-No file, reported: a part without a planar face, a thickness no tool cuts through, a part larger than the sheet. Reported as hand work (run output, `cam.json` `handWork`): where the rest pass stops short of the bottom, depth and box.
+No file, reported: a part without a planar face, a thickness no tool cuts through, a part larger than the sheet.
+
+The files cut 2.5D, from the top only: vertical walls, inside corners at the tool's radius. Bevels, sloped walls, square corners, and what the rest pass leaves below its depth are hand work, listed on each model's page; check them with `pnpm cam <model> --only <part> --keep` and Fusion's Simulate.
 
 ## Parameters
 
@@ -38,7 +40,7 @@ Strongest first: CLI flag, manifest `defaults`, the default here. Same inputs an
 | post | `shopbot` | `--post` | the Fusion library post whose vendor or description contains it, the shortest such (ShopBot OpenSBP) |
 | sheet | `[2440, 1220]` | `--sheet 2440x1220` | the stock board, mm |
 | spacing | 12 | `--spacing` | between two parts on a sheet; per sheet at least its tool's diameter + 4, so the outline passes between them |
-| frame | 10 | | kept free along the sheet's edges |
+| frame | 20 | | kept free along the sheet's edges, the outline's lead-in within it |
 | material | `hardwood` | | a material of [`materials.json`](materials.json): its grain, its tool preset |
 | tool | the narrowest of `tools.json` whose flutes reach `thickness + overcut + reach` | `--tool <number>` | the cutter, per sheet |
 | reach | 1 | | flute length to spare when choosing the tool |
@@ -46,9 +48,9 @@ Strongest first: CLI flag, manifest `defaults`, the default here. Same inputs an
 | tabs | `{ count: 4, width: 6, height: 3 }` | | rectangular, per contour; `height`: the wood a tab leaves (Fusion is given `height + overcut`, from the cut's bottom); `false`: none |
 | margin | 5 | | stock around a part in its own (wedge) setup |
 
-Fixed: parts laid largest planar face down (manifest `flip`: up), part-in-part off; stock = the sheet, its bottom on the parts', its material Fusion's library one (`materials.json` `stock`); WCS at the sheet's top, x-min y-min corner; a 2D pocket on the pockets Fusion recognises (holes the tool fits in, any corner radius), to size, with Fusion's finishing pass on the walls; a 2D contour outside each part's silhouette, through; then the same contour with Fusion's rest machining (what a tool of the main one's diameter leaves) and the narrowest tool, down to its flutes less `reach`, in its own file; feeds, speeds, stepdown, stepover from the tool's preset for the material, in even passes; all else Fusion's defaults.
+Fixed: parts laid largest planar face down (manifest `flip`: up), part-in-part off; stock = the sheet, its bottom on the parts', its material Fusion's library one (`materials.json` `stock`); WCS at the sheet's top, x-min y-min corner; a 2D pocket on the pockets Fusion recognises (holes the tool fits in), to size, inside corners at the tool's radius, with Fusion's finishing pass on the walls; a 2D contour outside each part's silhouette, through; then the same contour with Fusion's rest machining (what a tool of the main one's diameter leaves) and the narrowest tool, down to its flutes less `reach`, in its own file; feeds, speeds, stepdown, stepover from the tool's preset for the material, in even passes; all else Fusion's defaults.
 
-Grain: a material with grain (`materials.json`) keeps each part's grain along its length, the sheet's x: Fusion's Arrange is given each part's rotation (from its zero direction to its longest side, as Fusion's smallest box around it finds it) and may only turn it 180°. Fusion's own grain direction (the envelope's) needs the Manufacturing Extension, so it is not used. Manifest `grain`: degrees more, per part. A material without grain: any rotation.
+Grain: a material with grain (`materials.json`) keeps each part's grain along its length, the sheet's x: Fusion's Arrange is given each part's rotation (from its zero direction to its longest side, as Fusion's smallest box around it finds it) and may only turn it 180°. Fusion's own grain direction (the envelope's) needs the Manufacturing Extension, so it is not used. Manifest `grain`: degrees more, per part: a near-square part (the zigzag's Back) or a loose tenon whose longest side runs along its joint needs it, so its grain crosses its joint. A material without grain: any rotation.
 
 ## Tools
 
@@ -58,7 +60,7 @@ Grain: a material with grain (`materials.json`) keeps each part's grain along it
 2. Edit the tools and their presets.
 3. Right-click the library, Export, over `tools.json` (JSON).
 
-CMT 191 upcut spirals, 2 flutes. Preset `Hardwood`: Onsrud/Amana hardwood chip loads at ShopBot's 12000-18000 rpm; ramp feed = feed / 2, stepdown 1 x Ø (10 at most), stepover 0.4 Ø. **Adjust by the chips and burn marks.** Presets `Plywood` and `MDF`: the same values, unsourced defaults.
+CMT 191 upcut spirals, 2 flutes. Preset `Hardwood`: Onsrud/Amana hardwood chip loads at ShopBot's 12000-18000 rpm; stepdown 1 x Ø (10 at most), stepover 0.4 Ø. The post writes one feed per operation (`MS`): ramps and lead-ins run at the cutting feed, whatever the preset's ramp feed. **Adjust by the chips and burn marks.** Presets `Plywood` and `MDF`: the same values, unsourced defaults.
 
 | # | Ø x flutes x overall, mm | shank | rpm | feed mm/min | plunge mm/min | stepdown | stepover |
 |---|---|---|---|---|---|---|---|
@@ -103,13 +105,13 @@ CMT 191 upcut spirals, 2 flutes. Preset `Hardwood`: Onsrud/Amana hardwood chip l
 
 ## The record: `cam.json`
 
-Per file: its sha256; for a sheet, its material, thickness, number, parts, their grain turn, where they lie (`partsBox` and per part `boxes`, mm from the corner), size, spacing, frame; for a wedge setup, its turn, depth, margin; the tool and every value given to Fusion; for a `_rest` file, its tool, depth and `handWork` (part, depth range, box); the deepest cut; the post and its version; the Fusion version; the sha256 of the inputs (STEP, manifest, `tools.json`, `materials.json`, `fusion-job.py`, `machining.ts`, `cam.ts`).
+Per file: its sha256; for a sheet, its material, thickness, number, parts, their grain turn, where they lie (`partsBox` and per part `boxes`, mm from the corner), size, spacing, frame; for a wedge setup, its turn, depth, margin; the tool and every value given to Fusion; for a `_rest` file, its tool and depth; the deepest cut; the post and its version; the Fusion version; the sha256 of the inputs (STEP, manifest, `tools.json`, `materials.json`, `fusion-job.py`, `machining.ts`, `cam.ts`).
 
 ## In the workshop
 
 - A sheet is one stock board clamped on the ShopBot, by default 2440 x 1220 mm, of one material and thickness, its grain along its length (x).
 - One `.sbp` per sheet: every part of that material and thickness, nested by Fusion. `<model>_<material>_<thickness>mm_<n>.sbp`: `n` is the next sheet when one is full.
-- Then, if there is one, `…_rest.sbp` on the same sheet, same zero, after changing to its tool (the narrowest): the sockets and corners the first tool was too wide for. Below its depth, by hand (the run lists where).
+- Then, if there is one, `…_rest.sbp` on the same sheet, same zero, after changing to its tool (the narrowest): the sockets and corners the first tool was too wide for. Below its depth, by hand (the model's page lists it).
 - Zero: the top of the sheet, at its front-left corner (x-min, y-min).
 - Parts stay held by tabs, 3 mm of wood: cut them free, sand the stubs.
 - A wedge file (`<Part>_<setup>.sbp`) is a second pass on a part already cut from its sheet, laid on its wedge; its zero: the top of the part as it lies on the wedge, 5 mm (`margin`) out from the front-left corner of its box.

@@ -49,11 +49,17 @@ pnpm cam zigzag-chair --force
 
 Or ask an agent: "make the ShopBot files of the zigzag chair" (skill `cam`). Prerequisites, parameters, tools: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam). Files and the run's record (`cam.json`: every value used, Fusion version, input hashes) in `.docs/zigzag-chair/cam/`, out of git. Simulate before cutting.
 
-Cherry (manifest `material`): each part's grain along its length. Files per sheet, nested by Fusion; in the workshop: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam#in-the-workshop).
+Cherry (manifest `material`): each part's grain along its length, but the Back's: near square and wider than high, it is turned (`grain: 90`) so its grain runs up its height, across its tails. Files per sheet, nested by Fusion; in the workshop: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam#in-the-workshop).
 
 | File | Tool | What |
 |---|---|---|
 | `zigzag-chair_cherry_19mm_1.sbp` | 6 mm | one 2440 x 1220 x 19 mm cherry sheet: Seat, Back, Slant, Base; outlines with 4 tabs each, the Back's grip pocket |
 | `Seat_wedge8.sbp` | 6 mm | second pass on the cut Seat, on an 8° wedge under its rear: only the tails and rear end (`cut: squared`), 22 mm deep, no tabs |
 
-Cleats: sawn, not milled. The 6 mm is the narrowest tool: no rest file, no hand work. All other values are the defaults. Manifest: [cam.config.json](https://github.com/abernier/integral/blob/main/zigzag-chair/cam.config.json).
+Cleats: sawn, not milled. The 6 mm is the narrowest tool: no rest file. All other values are the defaults.
+
+By hand (the files cut square, from the top):
+
+- the mitres, the Seat's nose, the Slant's two ends, the Base's foot, and the Base's planed sides: saw or plane to the line;
+- the Back's bottom edge, 8° to its faces, and its tails' flanks, 1 in 6 through the board, left at their widest: pare to the line;
+- the inside corners at the tool's radius, 3 mm: the roots of the Back's tails and of the Seat's sockets: chisel square. Manifest: [cam.config.json](https://github.com/abernier/integral/blob/main/zigzag-chair/cam.config.json).

@@ -13,15 +13,16 @@ Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the
 
 1. `pnpm cam --list-tools`. No answer: Fusion is closed, or its MCP server is off (Preferences > General > API > Fusion MCP Server); ask the user to fix it, that is theirs.
 2. `pnpm cam <model> --force` (no model: every model). `--only <Part>` for some parts, `--keep` to leave the document open in Fusion.
-3. Read the output: `no file for:` lists parts without a file (not a sheet part, no tool reaching, larger than the sheet); `by hand` lists what the rest pass leaves below its depth (part, depth, box); `nothing to cut for Pockets` is normal on a sheet without pockets. Report all three.
+3. Read the output: `no file for:` lists parts without a file (not a sheet part, no tool reaching, larger than the sheet); `nothing to cut for Pockets` is normal on a sheet without pockets. Report both.
 
 ## Check, before saying a file is good
 
-- `.docs/<model>/cam/cam.json`: per file, its parts, material, thickness, tool, values, `handWork`.
+- `.docs/<model>/cam/cam.json`: per file, its parts, material, thickness, tool, values.
 - Each sheet `.sbp`: lowest Z = -(thickness + overcut); moves within the sheet; tabs (wood left = tab height); nothing below the tool's flute length (the run checks it). A `_rest.sbp`: the narrowest tool, no deeper than its flutes less `reach`.
-- Grain: in `cam.json` `boxes`, each part of a material with grain is longer along x than y (unless the manifest turns it).
+- Grain: in `cam.json` `boxes`, each part of a material with grain is longer along x than y (unless the manifest turns it). The grain must cross every joint edge (tails, fingers, a loose tenon's length): a near-square part or a tenon needs a manifest `grain`.
 - A part whose pockets are missing may lie the wrong face up: `"flip": true` in the manifest, rerun.
 - Anything on a wedge: open it with `--keep`, screenshot it (`fusion_mcp_read` screenshot), look at it.
+- The files cut 2.5D from the top only: bevels, sloped walls, square corners and what lies below the rest pass are hand work, listed on the model page. Check them with `pnpm cam <model> --only <part> --keep` and Fusion's Simulate; keep the page's list in step.
 - Say what was not simulated. Never claim a file is safe to cut.
 
 ## In the workshop
@@ -30,7 +31,7 @@ How to explain the files to someone at the machine, in plain words:
 
 - A sheet is one stock board clamped on the ShopBot, by default 2440 x 1220 mm, of one thickness.
 - One `.sbp` per sheet, with every part of that material and thickness nested by Fusion, grain along the sheet: `<model>_<material>_<thickness>mm_<n>.sbp`, `n` the next sheet when one is full.
-- Then its `_rest.sbp`, if any, same sheet and zero, with the narrowest tool: what the first was too wide for. Deeper than it reaches: by hand, where the run says.
+- Then its `_rest.sbp`, if any, same sheet and zero, with the narrowest tool: what the first was too wide for. Deeper than it reaches: by hand, as the model page lists.
 - Zero: the top of the sheet at its front-left corner.
 - Parts stay held by tabs: cut them free, sand the stubs.
 - A wedge file (`<Part>_<setup>.sbp`) is a second pass on a part already cut from its sheet, laid on its wedge; its zero is the top of the part as it lies there, 5 mm out from the front-left corner of its box.

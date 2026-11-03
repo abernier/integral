@@ -210,8 +210,6 @@ const inputs = Object.fromEntries(
 const failed: string[] = []
 /** Parts with no file: not a sheet part, no tool reaching through, larger than a sheet. */
 const unmade: string[] = []
-/** What no tool reached: per file, where, for the bench. */
-const handWork: string[] = []
 let fusionVersion = ''
 try {
   const started = performance.now()
@@ -272,7 +270,7 @@ try {
         const posted = await postFile(name, name, tool)
         if (!posted) throw new Error(`no toolpath with tool #${tool.number}`)
         console.log(`${name}: ${seconds(began)} s, post ${posted.post}, ${shown(join(out, `${name}.sbp`))}`)
-        await postRest(name, tool, given, thickness, sheet.boxes)
+        await postRest(name, tool, given)
         record.files[`${name}.sbp`] = {
           sha256: sha256(join(out, `${name}.sbp`)),
           material,
@@ -320,7 +318,7 @@ try {
       const posted = await postFile(name, name, tool)
       if (!posted) throw new Error(`no toolpath with tool #${tool.number}`)
       console.log(`${name}: ${seconds(began)} s, post ${posted.post}, ${shown(join(out, `${name}.sbp`))}`)
-      await postRest(name, tool, given, lies.height, { [part]: [] })
+      await postRest(name, tool, given)
       record.files[`${name}.sbp`] = {
         sha256: sha256(join(out, `${name}.sbp`)),
         part,
@@ -349,7 +347,6 @@ try {
   if (fusionVersion) writeFileSync(RECORD, `${JSON.stringify(record, null, 2)}\n`)
 }
 if (unmade.length) console.log(`cam: no file for:\n  ${unmade.join('\n  ')}`)
-if (handWork.length) console.log(`cam: deeper than the narrowest tool reaches, by hand (mm from the sheet's zero):\n  ${handWork.join('\n  ')}`)
 if (failed.length) {
   console.error(`cam: ${failed.length} failed:\n  ${failed.join('\n  ')}`)
   process.exit(1)
@@ -365,18 +362,16 @@ function values(tool: Tool, machining: Machining, given: ReturnType<typeof machi
 
 /**
  * The rest pass of setup `name`, if Fusion found any rest, to its own file `<name>_rest.sbp` (its own tool: Fusion for
- * Personal Use posts no tool change), recorded, and what it leaves for the bench reported.
+ * Personal Use posts no tool change), recorded.
  */
-async function postRest(name: string, tool: Tool, given: ReturnType<typeof machiningJob>, thickness: number, boxes: Record<string, number[]>) {
+async function postRest(name: string, tool: Tool, given: ReturnType<typeof machiningJob>) {
   const rest = given.rest
   const narrow = rest && tools.find((t) => t.number === rest.tool)
   if (!rest || !narrow) return
   const file = `${name}_rest`
   const posted = await postFile(name, file, narrow)
   if (!posted) return
-  const byHand = leftForHand(join(out, `${file}.sbp`), rest, thickness, boxes, narrow.diameter / 2)
-  for (const at of byHand) handWork.push(`${file}: ${at.part}, ${at.depth.join(' to ')} mm deep, within [${at.within.join(', ')}]`)
-  console.log(`${file}: what tool #${tool.number} leaves, tool #${narrow.number} down to ${rest.depth} mm${byHand.length ? `, ${byHand.length} places by hand below` : ''}, ${shown(join(out, `${file}.sbp`))}`)
+  console.log(`${file}: what tool #${tool.number} leaves, tool #${narrow.number} down to ${rest.depth} mm, ${shown(join(out, `${file}.sbp`))}`)
   record.files[`${file}.sbp`] = {
     sha256: sha256(join(out, `${file}.sbp`)),
     after: `${name}.sbp`,
@@ -384,53 +379,10 @@ async function postRest(name: string, tool: Tool, given: ReturnType<typeof machi
     toolNumber: narrow.number,
     restAfterDiameter: tool.diameter,
     depth: rest.depth,
-    handWork: byHand,
     ...posted,
     fusion: fusionVersion,
     inputs,
   }
-}
-
-/**
- * Where the rest pass stopped short of the wood's bottom: the places it cut (its passes below the top, merged when
- * they overlap, `radius` around the tool's centre), from its bottom down through the wood, each with the part it lies
- * by. None when it went through.
- */
-function leftForHand(file: string, rest: { depth: number; through: boolean }, thickness: number, boxes: Record<string, number[]>, radius: number) {
-  if (rest.through) return []
-  const passes: number[][] = []
-  let at = [0, 0, 0]
-  let pass: number[] | undefined
-  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
-    const move = /^(?:[MJ]3|[MJ]2|[MJ]Z|CG)\s*,(.*)$/.exec(line)
-    if (!move) continue
-    const fields = move[1].split(',').map((f) => f.trim())
-    const command = line.slice(0, 2)
-    const value = (i: number, current: number) => (fields[i] !== undefined && fields[i] !== '' ? Number(fields[i]) : current)
-    if (command === 'CG') at = [value(1, at[0]), value(2, at[1]), at[2]]
-    else if (command[1] === 'Z') at = [at[0], at[1], value(0, at[2])]
-    else at = [value(0, at[0]), value(1, at[1]), command[1] === '3' ? value(2, at[2]) : at[2]]
-    if (at[2] < 0) {
-      pass = pass ? [Math.min(pass[0], at[0]), Math.min(pass[1], at[1]), Math.max(pass[2], at[0]), Math.max(pass[3], at[1])] : [at[0], at[1], at[0], at[1]]
-    } else if (pass) {
-      passes.push(pass)
-      pass = undefined
-    }
-  }
-  if (pass) passes.push(pass)
-  const merged: number[][] = []
-  for (const [x0, y0, x1, y1] of passes) {
-    const box = [x0 - radius, y0 - radius, x1 + radius, y1 + radius]
-    const overlapping = merged.find((m) => box[0] <= m[2] && box[2] >= m[0] && box[1] <= m[3] && box[3] >= m[1])
-    if (overlapping) overlapping.splice(0, 4, Math.min(overlapping[0], box[0]), Math.min(overlapping[1], box[1]), Math.max(overlapping[2], box[2]), Math.max(overlapping[3], box[3]))
-    else merged.push(box)
-  }
-  const near = (box: number[]) => {
-    const [cx, cy] = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2]
-    const distance = (b: number[]) => Math.hypot(Math.max(b[0] - cx, 0, cx - b[2]), Math.max(b[1] - cy, 0, cy - b[3]))
-    return Object.entries(boxes).sort(([, a], [, b]) => distance(a) - distance(b))[0]?.[0] ?? '?'
-  }
-  return merged.map((box) => ({ part: near(box), depth: [rest.depth, thickness], within: box.map((v) => +v.toFixed(1)) }))
 }
 
 /** Wait while Fusion generates the setup's toolpaths, asking every 2 s; 10 minutes at most. */
