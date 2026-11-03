@@ -36,8 +36,7 @@ In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole c
 | `ARM_TOP`, `ARM_FRONT` | 645, −235 | Armrest top, nose |
 | `ARM_NOSE_H`, `ARM_BACK_Y`, `ARM_BACK_H` | 60, 280, 95 | Armrest height, nose and back |
 | `ARM_BEHIND` | 40 | Armrest behind the back |
-| `SEAT_TOP`, `RAIL_H`, `RAIL_T`, `CANE_T` | 437, 60, 25, 8 | Seat frame |
-| `SIDE_RAIL_H` | 80 | Side rails' height, below the seat top |
+| `SEAT_TOP`, `RAIL_H`, `RAIL_T`, `CANE_T` | 437, 80, 25, 8 | Seat frame |
 | `SEAT_FRONT`, `SEAT_BACK` | −229, 240 | Side rails |
 | `FRONT_RAIL_T`, `REAR_RAIL_T` | 30, 40 | Cross rails |
 | `TENON_LEN`, `TENON_T`, `TENON_H`, `TENON_Y`, `TENON_IN_RAIL` | 20, 10, 40, 55, 15 | Side rail tenons |
