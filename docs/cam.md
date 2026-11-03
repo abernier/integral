@@ -45,11 +45,15 @@ It is Autodesk's generic 3-axis router, made into the workshop's ShopBot PRSalph
 
 - travel X 2500, Y 1250, Z 150 mm; spindle 6000 to 18000 rpm;
 - the table stretched along X to 2540 x 1300 mm, with a 19 mm spoilboard on it;
-- the sheet centred on the spoilboard: the table's attach point at `[-809, -57, 19.3]`.
+- the table's attach point at `[0, 0, 19.3]`, the spoilboard's top centre.
+
+Every setup the script makes is laid on the table by its stock's bottom centre (Part Position > Stock box point), so every sheet lands centred on the spoilboard, whatever the model.
 
 The 0.3 above the spoilboard is the cut's overcut (`deepest` in `cam.json` is the thickness plus 0.3): the planned pass below the sheet cuts air, and a deeper one hits the spoilboard and shows as a collision. Change one, change the other.
 
-The machine is a `.mch` file in Fusion's machine library (`~/Library/Application Support/Autodesk/CAM360/machines/` on macOS), and its 3D model is a Fusion document in the cloud, which the `.mch` names. Fusion places the sheet in the document's coordinates, so the attach point holds for Z-up documents only: set Preferences > General > Default modeling orientation to Z up.
+Fusion for Personal Use simulates no tool change on the machine: for a sheet with a rest pass, select its operations but Rest, then Simulate with Machine.
+
+The machine is a `.mch` file in Fusion's machine library (`~/Library/Application Support/Autodesk/CAM360/machines/` on macOS), and its 3D model is a Fusion document in the cloud, which the `.mch` names. The machine is Z up, and so must the documents be: Preferences > General > Default modeling orientation, Z up.
 
 </details>
 
