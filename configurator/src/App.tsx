@@ -62,6 +62,7 @@ export function App() {
       <Leva titleBar={{ title: part }} />
       {model && <Configurator model={model} />}
       {error && !model && <Message>{error}</Message>}
+      {!error && !model && <Message color="#555">Loading…</Message>}
     </>
   )
 }
@@ -141,6 +142,8 @@ function Configurator({ model }: { model: Model }) {
         </Bounds>
         <OrbitControls makeDefault />
       </Canvas>
+      {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
+      {!shape && !error && <Message color="#555">Building the model…</Message>}
       {error && <Message>{error}</Message>}
       {toast && <Message color="#111" bottom={error ? 64 : 16}>{toast}</Message>}
     </>
