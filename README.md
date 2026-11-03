@@ -1,10 +1,10 @@
 # integral
 
-Parametric furniture parts in ClassCAD.
+Tangible objects, made by integrating technologies.
 
 <Intro>
 
-Each part is a [ClassCAD](https://classcad.ch) model with its history: open it in [Buerligons](https://buerligons.io), change a dimension, it rebuilds.
+Real objects, designed and made with whatever tools fit: CAD, code, machines.
 
 </Intro>
 
