@@ -7,7 +7,7 @@
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things").
 //
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
-// for a local site those URLs are rewritten to the local servers.
+// for a local site those URLs are rewritten to the local servers, for a Vercel preview to its own URL.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
@@ -19,8 +19,10 @@ export const ROOT = resolve(import.meta.dirname, '..')
 export const MDX = join(ROOT, '.docs')
 export const DIST = join(ROOT, 'dist')
 
-/** Where GitHub Pages serves the site. */
-export const SITE_URL = process.env.SITE_URL ?? 'https://abernier.github.io/integral'
+/** Where GitHub Pages serves the site: the READMEs link pages and files by this URL. */
+const PAGES_URL = 'https://abernier.github.io/integral'
+/** Where this build is served: GitHub Pages, or on Vercel the preview deployment's own URL, at its root. */
+export const SITE_URL = process.env.SITE_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : PAGES_URL)
 export const HOME = '/integral/introduction'
 
 /** A part's page, under "Things" in the sidebar. */
@@ -53,7 +55,7 @@ export async function buildPart(engine: Engine, part: string) {
  * render itself. On GitHub the README shows the render alone (it prints iframes as text).
  */
 function views(part: string, alt: string) {
-  const file = (ext: string) => `${SITE_URL}/${part}/${part}.${ext}`
+  const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
   const frame = (src: string, title: string, height: number) =>
     `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen" />`
   return [
@@ -64,7 +66,7 @@ function views(part: string, alt: string) {
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '<TabsTrigger value="render">Render</TabsTrigger>',
     '</TabsList>',
-    `<TabsContent value="3d">${frame(`${SITE_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
+    `<TabsContent value="3d">${frame(`${PAGES_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     '</Tabs>',
@@ -88,7 +90,7 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
     part && `image: ../${part}/${part}.png`,
     `nav: ${nav}`,
   ]
-  const render = part && `${SITE_URL}/${part}/${part}.png`
+  const render = part && `${PAGES_URL}/${part}/${part}.png`
   const body = source
     .replace(/^# .+\n+/m, '')
     .replace(description ? `${description}\n` : '', '')
@@ -96,9 +98,9 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
   // A page link goes to the site, any other link to the site's files to where the files are served.
   let linked = body
   for (const path of [HOME, ...parts().map((p) => `/${partPage(p)}`)]) {
-    linked = linked.replaceAll(`${SITE_URL}${path}`, `${urls.site}${path}`)
+    linked = linked.replaceAll(`${PAGES_URL}${path}`, `${urls.site}${path}`)
   }
-  linked = linked.replaceAll(`${SITE_URL}/`, `${urls.files}/`)
+  linked = linked.replaceAll(`${PAGES_URL}/`, `${urls.files}/`)
   return `---\n${meta.filter(Boolean).join('\n')}\n---\n\n${linked}`
 }
 
@@ -112,8 +114,8 @@ function partsTable() {
     const source = readFileSync(join(ROOT, part, 'README.md'), 'utf8')
     const title = source.match(/^# (.+)$/m)?.[1] ?? part
     const description = source.match(/^# .+\n+([^<\n].*)\n/m)?.[1] ?? ''
-    const page = `${SITE_URL}/${partPage(part)}`
-    const image = `<a href="${page}"><img src="${SITE_URL}/${part}/${part}.png" alt="${title}" width="72" /></a>`
+    const page = `${PAGES_URL}/${partPage(part)}`
+    const image = `<a href="${page}"><img src="${PAGES_URL}/${part}/${part}.png" alt="${title}" width="72" /></a>`
     return `| ${image} | **[${title}](${page})**: ${description} |`
   })
   return ['| | Part |', '|---|---|', ...rows].join('\n')
