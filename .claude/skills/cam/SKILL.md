@@ -12,7 +12,7 @@ Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the
 ## Run
 
 1. `pnpm cam --list-tools`. An answer means Fusion and its MCP server are up. The agent reaches the same server as the `fusion` MCP of `.mcp.json` (its `fusion_mcp_*` tools). No answer: Fusion is closed, its MCP server is off, or a dialog is open; [FUSION.md](FUSION.md) says which you can fix.
-2. `pnpm cam <model> --force`, with `--keep` when anything is to be simulated, `--only <Part>` for some parts (into `cam/only/`). Long runs go in the background.
+2. `pnpm cam <model> --force`, for the model the user named; none named, ask which (checking and simulating go model by model). `pnpm cam --force` with no model remakes every model: only after a change shared by all (`tools.json`, `materials.json`, `machining.ts`, `fusion-job.py`, `cam.ts`). Then, with `--keep` when anything is to be simulated, `--only <Part>` for some parts (into `cam/only/`). Long runs go in the background.
 3. Read the whole output. `no file for:` lists parts without a file; `nothing to cut for Pockets` is normal on a sheet without pockets; `toolpaths with warnings` are Fusion's own. Report each as it is.
 
 Done when every part of the model has a file or is named in `no file for:`.
