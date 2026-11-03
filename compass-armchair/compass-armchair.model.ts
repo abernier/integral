@@ -5,11 +5,11 @@
 // ClassCAD part. The chair is modelled as in CAD, z up, facing -Y with x = 0 its middle; `build` turns it into
 // three's y up at the very end (x, y, z -> x, z, -y), so it faces +z and stands on y = 0, in mm.
 //
-// `schema` is a leva schema (`{ NAME: { value, min, max, step } }`) with one entry per master. The ranges keep every
-// joint valid (a tenon in its mortise, a tail in its socket): `build` does not throw for any combination of values
-// inside them, W and BOW included (a shallow bow on a wide chair is a long, flat arc, which the span must reach).
-// Checked on the all-min and all-max corners, W max x BOW min, and 600 random in-range combinations. Values outside
-// the ranges are not guaranteed.
+// `schema` is the masters (compass-armchair.masters.ts), one Control per master. Their ranges keep every joint
+// valid (a tenon in its mortise, a tail in its socket): `build` does not throw for any combination of values inside
+// them, W and BOW included (a shallow bow on a wide chair is a long, flat arc, which the span must reach). Checked on
+// the all-min and all-max corners, W max x BOW min, and 600 random in-range combinations. Values outside the ranges
+// are not guaranteed.
 
 import * as THREE from 'three'
 import {
@@ -26,125 +26,17 @@ import {
   type Part,
   type Sketch,
 } from '@classcad/smlibwasm'
+import type { Control } from '../configurator/src/models.ts'
+import { MASTERS } from './compass-armchair.masters.ts'
 
 const TEAK = '#9b6a3c'
 const CANE_COLOR = '#e6d2a0'
 
-/** The parameters a maker changes, in mm (angles in degrees): the ClassCAD part's MASTERS. */
-export const MASTERS = {
-  W: 480, // outside width over the side boards
-  LEG_T: 30, // the side boards' thickness, across the chair
-  FRONT_FOOT_FRONT: -181, // the front leg's foot on the floor, front edge to back edge
-  FRONT_FOOT_BACK: -139,
-  REAR_FOOT_FRONT: 139,
-  REAR_FOOT_BACK: 181,
-  NOTCH_Z: 400, // where the two boards of a side part, on the seam y = 0
-  ARM_EDGE_FRONT: -70, // the boards' outer edges where they meet the armrest
-  ARM_EDGE_REAR: 70,
-  SPLINE_W: 20, // the loose tenon on the seam: across, thick, from this height up, on into the armrest
-  SPLINE_T: 16,
-  SPLINE_Z: 457,
-  SPLINE_IN_ARM: 40,
-  ARM_TOP: 645, // the armrest: its level top, its nose
-  ARM_FRONT: -235,
-  ARM_NOSE_H: 60, // its height at the nose and at y = ARM_BACK_Y: the underside slopes
-  ARM_BACK_Y: 280,
-  ARM_BACK_H: 95,
-  ARM_BEHIND: 40, // the armrest runs on this much behind the posts, at its mid-height
-  SEAT_TOP: 437, // the seat frame
-  RAIL_H: 60,
-  RAIL_T: 25,
-  CANE_T: 8,
-  SEAT_FRONT: -229, // the side rails, nose to back
-  SEAT_BACK: 240,
-  FRONT_RAIL_T: 30,
-  REAR_RAIL_T: 40,
-  TENON_LEN: 20, // a side rail's loose tenon: into the board, thick, high, at y = -+TENON_Y, into the rail
-  TENON_T: 10,
-  TENON_H: 40,
-  TENON_Y: 55,
-  TENON_IN_RAIL: 15,
-  BACK_TILT: 15, // the back's lean, degrees
-  POST_W: 30, // a post: across, deep
-  POST_D: 40,
-  POST_Y_AT_ARM: 260, // the posts' axis at the armrest's top
-  BOW: 10, // the back's arc bows this much between the posts; its rails are that much less deep than the posts
-  LOW_RAIL_BOTTOM: 65, // the back rails, along the posts from seat height; the posts end flush with them
-  LOW_RAIL_TOP: 100,
-  HIGH_RAIL_BOTTOM: 330,
-  HIGH_RAIL_TOP: 365,
-  ARM_TENON: 12, // a post's loose tenon into its armrest: thick, deep into each, wood left above and below it
-  ARM_TENON_DEPTH: 15,
-  ARM_TENON_MARGIN: 8,
-  SLOPE: 1 / 6, // dovetail slope
-  SEAT_TAILS: 2, // tails per seat corner
-  SEAT_PIN_EDGE: 6, // the pins at the side rail's outside: at the rail's edges, between tails
-  SEAT_PIN_MID: 6,
-  BACK_TAIL_SHOULDER: 12, // the back rail's shoulders either side of its tail
-}
+/** The configurator's controls: every master with its default, range, step and meaning. */
+export const schema: Record<keyof typeof MASTERS, Control> = MASTERS
 
-type Masters = typeof MASTERS
-
-// [min, max, step] of each master. Tight enough that the joinery stays valid at every corner of the box.
-const RANGES: Record<keyof Masters, [number, number, number]> = {
-  W: [440, 520, 1],
-  LEG_T: [26, 36, 1],
-  FRONT_FOOT_FRONT: [-200, -165, 1],
-  FRONT_FOOT_BACK: [-155, -125, 1],
-  REAR_FOOT_FRONT: [125, 155, 1],
-  REAR_FOOT_BACK: [165, 200, 1],
-  NOTCH_Z: [380, 420, 1],
-  ARM_EDGE_FRONT: [-85, -55, 1],
-  ARM_EDGE_REAR: [55, 85, 1],
-  SPLINE_W: [16, 24, 1],
-  SPLINE_T: [14, 18, 1],
-  SPLINE_Z: [450, 465, 1],
-  SPLINE_IN_ARM: [30, 50, 1],
-  ARM_TOP: [630, 660, 1],
-  ARM_FRONT: [-245, -225, 1],
-  ARM_NOSE_H: [50, 70, 1],
-  ARM_BACK_Y: [270, 290, 1],
-  ARM_BACK_H: [85, 105, 1],
-  ARM_BEHIND: [30, 50, 1],
-  SEAT_TOP: [425, 450, 1],
-  RAIL_H: [55, 65, 1],
-  RAIL_T: [22, 28, 1],
-  CANE_T: [6, 10, 0.5],
-  SEAT_FRONT: [-240, -220, 1],
-  SEAT_BACK: [230, 250, 1],
-  FRONT_RAIL_T: [26, 34, 1],
-  REAR_RAIL_T: [36, 44, 1],
-  TENON_LEN: [16, 24, 1],
-  TENON_T: [8, 12, 1],
-  TENON_H: [34, 44, 1],
-  TENON_Y: [50, 60, 1],
-  TENON_IN_RAIL: [12, 18, 1],
-  BACK_TILT: [10, 20, 0.5],
-  POST_W: [26, 34, 1],
-  POST_D: [36, 44, 1],
-  POST_Y_AT_ARM: [250, 270, 1],
-  BOW: [6, 14, 0.5],
-  LOW_RAIL_BOTTOM: [60, 70, 1],
-  LOW_RAIL_TOP: [95, 105, 1],
-  HIGH_RAIL_BOTTOM: [325, 335, 1],
-  HIGH_RAIL_TOP: [360, 370, 1],
-  ARM_TENON: [10, 14, 0.5],
-  ARM_TENON_DEPTH: [12, 18, 1],
-  ARM_TENON_MARGIN: [6, 10, 0.5],
-  SLOPE: [0.12, 0.2, 0.005],
-  SEAT_TAILS: [1, 2, 1],
-  SEAT_PIN_EDGE: [5, 7, 0.5],
-  SEAT_PIN_MID: [5, 7, 0.5],
-  BACK_TAIL_SHOULDER: [10, 14, 0.5],
-}
-
-/** The leva schema: every master with its default and range. */
-export const schema = Object.fromEntries(
-  Object.entries(MASTERS).map(([name, value]) => {
-    const [min, max, step] = RANGES[name as keyof Masters]
-    return [name, { value, min, max, step }]
-  }),
-)
+/** The masters' values, by name. */
+type Masters = { [K in keyof typeof MASTERS]: number }
 
 /** The masters and everything derived from them: the model's dimensions. */
 type Dims = ReturnType<typeof derive>
@@ -208,6 +100,7 @@ function derive(p: Masters) {
 }
 
 type Point = [number, number]
+type Span = [number, number] // [z0, z1]: a rail's extent along the posts, in the back's frame
 type Named = { part: Part; name: string }
 
 /** The armrest's lower face: a straight slope from the nose to the back. */
@@ -246,13 +139,13 @@ function trapezoid(xEnd: number, xBase: number, middle: number, end: number, bas
 /** The tails at the +x end of a cross rail between y0 and y1: trapezoids on its face (x, z), through its
  * thickness, wide at the side rail's outer face; the side rail's pins are what they leave of it. */
 function seatTails(d: Dims, y0: number, y1: number): Part {
-  let sketch: Sketch | undefined
+  const sketches: Sketch[] = []
   for (let i = 0; i < d.SEAT_TAILS; i++) {
     const z = d.SEAT_TOP - d.RAIL_H + d.SEAT_PIN_EDGE + d.SEAT_TAIL_END / 2 + i * (d.SEAT_TAIL_END + d.SEAT_PIN_MID)
-    const tail = Polygon(...trapezoid(d.X_BOARD, d.X_RAIL, z, d.SEAT_TAIL_END, d.SEAT_TAIL_BASE))
-    sketch = sketch ? sketch.fuse(tail) : tail
+    sketches.push(Polygon(...trapezoid(d.X_BOARD, d.X_RAIL, z, d.SEAT_TAIL_END, d.SEAT_TAIL_BASE)))
   }
-  const tails = sketch!.on(Plane.XZ).extrude(y1 - y0)
+  // SEAT_TAILS is at least 1, so there is always a first tail to fuse the others onto.
+  const tails = sketches.reduce((a, b) => a.fuse(b)).on(Plane.XZ).extrude(y1 - y0)
   return tails.translate(0, y0 - tails.bbox().min.y, 0)
 }
 
@@ -273,7 +166,7 @@ function armTenon(d: Dims): Part {
 }
 
 /** In the back's frame: the +x post, its ends cut into sockets by the rails' tails, the tenon's mortise. */
-function backPost(d: Dims, rails: Point[]): Part {
+function backPost(d: Dims, rails: Span[]): Part {
   const post = Box(d.POST_W, d.POST_D, rails[1][1] - rails[0][0], { align: [Align.MIN, Align.CENTER, Align.MIN] })
   return post
     .translate(d.X_POST, 0, rails[0][0])
@@ -283,7 +176,7 @@ function backPost(d: Dims, rails: Point[]): Part {
 
 /** The back's rails and cane panel, in the back's own frame: arcs between the posts' inner faces, the rails' ends
  * cut into tails through the posts. */
-function backFrame(d: Dims, rails: Point[]): Named[] {
+function backFrame(d: Dims, rails: Span[]): Named[] {
   const members: Named[] = []
   for (const [z0, z1] of rails) {
     const rail = arcBand(d, d.R_OUT, d.R_IN).extrude(z1 - z0).translate(0, 0, z0)
@@ -297,7 +190,7 @@ function backFrame(d: Dims, rails: Point[]): Named[] {
 
 /** The chair's 24 bodies, in CAD coordinates (z up, facing -Y). */
 function model(d: Dims): Named[] {
-  const rails: Point[] = [
+  const rails: Span[] = [
     [d.LOW_RAIL_BOTTOM, d.LOW_RAIL_TOP],
     [d.HIGH_RAIL_BOTTOM, d.HIGH_RAIL_TOP],
   ]
@@ -388,19 +281,32 @@ function model(d: Dims): Named[] {
 function toGeometryData(part: Part) {
   const meshes = faceMeshes(part)
   const triangles = meshes.reduce((sum, m) => sum + m.triangles.length, 0)
+  const hasNormals = meshes.every((m) => m.normals)
   const position = new Float32Array(triangles * 3)
-  const normal = new Float32Array(triangles * 3)
+  // Without normals from the kernel, the caller computes them from the triangles.
+  const normal = hasNormals ? new Float32Array(triangles * 3) : undefined
   let at = 0
   for (const m of meshes) {
+    const { vertices, normals } = m
+    // `triangles` indexes `vertices` (one entry per vertex, shared between triangles); `normals` holds one normal
+    // per triangle corner, so it is read in order, by a corner counter.
+    let corner = 0
     for (const index of m.triangles) {
-      const [x, y, z] = [m.vertices[index * 3], m.vertices[index * 3 + 1], m.vertices[index * 3 + 2]]
-      position.set([x, z, -y], at)
-      if (m.normals) normal.set([m.normals[index * 3], m.normals[index * 3 + 2], -m.normals[index * 3 + 1]], at)
+      const v = index * 3
+      position[at] = vertices[v]
+      position[at + 1] = vertices[v + 2]
+      position[at + 2] = -vertices[v + 1]
+      if (normal && normals) {
+        const c = corner * 3
+        normal[at] = normals[c]
+        normal[at + 1] = normals[c + 2]
+        normal[at + 2] = -normals[c + 1]
+      }
+      corner++
       at += 3
     }
   }
-  // Without normals from the kernel, the caller computes them from the triangles.
-  return { position, normal, hasNormals: meshes.every((m) => m.normals) }
+  return { position, normal }
 }
 
 /**
@@ -410,17 +316,17 @@ function toGeometryData(part: Part) {
  * @param values The masters to change, keyed by the names in `schema`; a missing key takes its default.
  */
 export async function build(values: Record<string, number> = {}): Promise<THREE.Object3D> {
-  const p = { ...MASTERS }
-  for (const name of Object.keys(p) as (keyof Masters)[]) p[name] = values[name] ?? p[name]
+  const p = {} as Masters
+  for (const name of Object.keys(MASTERS) as (keyof Masters)[]) p[name] = values[name] ?? MASTERS[name].value
   const d = derive(p)
   // The kernel's bodies are freed once their triangles are copied out; only plain arrays leave the scope.
   const bodies = scope(() => model(d).map(({ part, name }) => ({ name, ...toGeometryData(part) })))
   const chair = new THREE.Group()
   chair.name = 'compass armchair'
-  for (const { name, position, normal, hasNormals } of bodies) {
+  for (const { name, position, normal } of bodies) {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3))
-    if (hasNormals) geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3))
+    if (normal) geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3))
     else geometry.computeVertexNormals()
     const color = name.includes('cane') ? CANE_COLOR : TEAK
     const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, roughness: 0.7 }))

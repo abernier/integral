@@ -16,62 +16,10 @@
 
 import { type Api, created, nameSolids } from '../scripts/part.ts'
 import type { CamConfig } from '../scripts/cam/config.ts'
+import { MASTERS } from './compass-armchair.masters.ts'
 
 const TEAK: [number, number, number] = [155, 106, 60] // #9b6a3c
 const CANE: [number, number, number] = [230, 210, 160] // #e6d2a0
-
-/** The parameters a maker changes, in mm (angles in degrees). */
-export const MASTERS = {
-  W: 480, // outside width over the side boards
-  LEG_T: 30, // the side boards' thickness, across the chair
-  FRONT_FOOT_FRONT: -181, // the front leg's foot on the floor, front edge to back edge
-  FRONT_FOOT_BACK: -139,
-  REAR_FOOT_FRONT: 139,
-  REAR_FOOT_BACK: 181,
-  NOTCH_Z: 400, // where the two boards of a side part, on the seam y = 0
-  ARM_EDGE_FRONT: -70, // the boards' outer edges where they meet the armrest
-  ARM_EDGE_REAR: 70,
-  SPLINE_W: 20, // the loose tenon on the seam: across, thick, from this height up, on into the armrest
-  SPLINE_T: 16,
-  SPLINE_Z: 457,
-  SPLINE_IN_ARM: 40,
-  ARM_TOP: 645, // the armrest: its level top, its nose
-  ARM_FRONT: -235,
-  ARM_NOSE_H: 60, // its height at the nose and at y = ARM_BACK_Y: the underside slopes
-  ARM_BACK_Y: 280,
-  ARM_BACK_H: 95,
-  ARM_BEHIND: 40, // the armrest runs on this much behind the posts, at its mid-height
-  SEAT_TOP: 437, // the seat frame
-  RAIL_H: 60,
-  RAIL_T: 25,
-  CANE_T: 8,
-  SEAT_FRONT: -229, // the side rails, nose to back
-  SEAT_BACK: 240,
-  FRONT_RAIL_T: 30,
-  REAR_RAIL_T: 40,
-  TENON_LEN: 20, // a side rail's loose tenon: into the board, thick, high, at y = -+TENON_Y, into the rail
-  TENON_T: 10,
-  TENON_H: 40,
-  TENON_Y: 55,
-  TENON_IN_RAIL: 15,
-  BACK_TILT: 15, // the back's lean, degrees
-  POST_W: 30, // a post: across, deep
-  POST_D: 40,
-  POST_Y_AT_ARM: 260, // the posts' axis at the armrest's top
-  BOW: 10, // the back's arc bows this much behind the posts, between them
-  LOW_RAIL_BOTTOM: 65, // the back rails, along the posts from seat height; the posts end flush with them
-  LOW_RAIL_TOP: 100,
-  HIGH_RAIL_BOTTOM: 330,
-  HIGH_RAIL_TOP: 365,
-  ARM_TENON: 12, // a post's loose tenon into its armrest: thick, deep into each, wood left above and below it
-  ARM_TENON_DEPTH: 15,
-  ARM_TENON_MARGIN: 8,
-  SLOPE: 1 / 6, // dovetail slope
-  SEAT_TAILS: 2, // tails per seat corner
-  SEAT_PIN_EDGE: 6, // the pins at the side rail's outside: at the rail's edges, between tails
-  SEAT_PIN_MID: 6,
-  BACK_TAIL_SHOULDER: 12, // the back rail's shoulders either side of its tail
-}
 
 /** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. */
 export const CAM = {
@@ -375,7 +323,10 @@ export default async function build(api: Api) {
   const part = await created(api.v1.part.create({ name: 'CompassArmchair' }))
   await api.v1.part.expression({
     id: part,
-    toCreate: [...Object.entries(MASTERS), ...Object.entries(DERIVED)].map(([name, value]) => ({ name, value })),
+    toCreate: [
+      ...Object.entries(MASTERS).map(([name, { value }]) => ({ name, value })),
+      ...Object.entries(DERIVED).map(([name, value]) => ({ name, value })),
+    ],
   })
 
   const boards: Record<string, number> = {}

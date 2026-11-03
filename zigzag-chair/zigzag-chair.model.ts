@@ -9,47 +9,17 @@
 //
 // Not ported: the Python's `check` and `assembly_order` (volume, contact and assembly assertions).
 
-import { Align, Box, Plane, Polygon, Slot, scope, type Part, type Sketch } from '@classcad/smlibwasm'
+import { Align, Box, Plane, Polygon, Slot, scope, type Part } from '@classcad/smlibwasm'
 import * as THREE from 'three'
+import { MASTERS } from './zigzag-chair.masters.ts'
 
 const DEG = Math.PI / 180
 
 /** A point of a board's side view, (y, z). */
 type Point = [number, number]
 
-/** The leva schema of one parameter. */
-interface Control {
-  value: number
-  min: number
-  max: number
-  step: number
-}
-
-/**
- * The parameters a maker changes, as a leva schema: mm, and degrees for the lean. Defaults are the MASTERS of
- * zigzag-chair.ts; the seat length and the back height are chosen so that the chair has a 480 depth and 740
- * height with its 8 degree lean.
- */
-export const schema = {
-  T: { value: 19, min: 12, max: 30, step: 0.5 }, // every board's thickness
-  W_NOSE: { value: 370, min: 300, max: 500, step: 1 }, // width at the seat's nose
-  W_FOOT: { value: 330, min: 260, max: 460, step: 1 }, // width at the slant's rear bottom corner
-  W_BASE_FRONT: { value: 300, min: 220, max: 420, step: 1 }, // the base's top face at its front edge
-  SEAT_TOP: { value: 430, min: 380, max: 500, step: 1 }, // height of the seat's top face
-  SEAT_LEN: { value: 480 - 310 * Math.tan(8 * DEG), min: 350, max: 520, step: 1 }, // nose to the back's rear face
-  BACK_H: { value: 310 / Math.cos(8 * DEG), min: 200, max: 450, step: 1 }, // the back above the seat
-  BACK_LEAN: { value: 8, min: 0, max: 20, step: 0.5 }, // the back's lean from the vertical, degrees
-  BASE_LENGTH: { value: 418, min: 330, max: 500, step: 1 }, // the base's underside
-  CLEAT: { value: 30, min: 15, max: 50, step: 1 }, // a cleat's legs
-  TAILS: { value: 6, min: 2, max: 8, step: 1 }, // dovetail count
-  SLOPE: { value: 1 / 6, min: 0.1, max: 0.25, step: 0.01 }, // dovetail slope, 1 in 6
-  PIN: { value: 20, min: 10, max: 30, step: 1 }, // a pin, at the back's rear face
-  HALF_PIN: { value: 20, min: 10, max: 30, step: 1 }, // the half pins at the back's edges
-  GRIP: { value: 140, min: 80, max: 200, step: 1 }, // hand grip length, round ends included
-  GRIP_HIGH: { value: 20, min: 10, max: 40, step: 1 },
-  GRIP_DEEP: { value: 10, min: 4, max: 14, step: 0.5 },
-  GRIP_BELOW: { value: 20, min: 10, max: 60, step: 1 }, // from the back's top edge to the grip, along the rear face
-} satisfies Record<string, Control>
+/** The parameters a maker changes, as a leva schema: the MASTERS of zigzag-chair.masters.ts, shared with ClassCAD. */
+export const schema = MASTERS
 
 type Values = { [K in keyof typeof schema]: number }
 
@@ -162,13 +132,13 @@ export async function build(values: Record<string, number>): Promise<THREE.Objec
   /** The seat's tails: trapezoids square to the back, wide at its rear face, as prisms along the back, cut to the
    * seat's thickness. The back's pins are what they leave of the joint. */
   const tails = () => {
-    let sketch: Sketch | null = null
-    for (let i = 0; i < TAILS; i++) {
+    const tailAt = (i: number) => {
       const x = -W_BACK / 2 + HALF_PIN + TAIL_REAR / 2 + i * (TAIL_REAR + PIN)
-      const tail = Polygon([x - TAIL_FRONT / 2, 0], [x + TAIL_FRONT / 2, 0], [x + TAIL_REAR / 2, T], [x - TAIL_REAR / 2, T])
-      sketch = sketch === null ? tail : sketch.fuse(tail)
+      return Polygon([x - TAIL_FRONT / 2, 0], [x + TAIL_FRONT / 2, 0], [x + TAIL_REAR / 2, T], [x - TAIL_REAR / 2, T])
     }
-    const prisms = sketch!.on(backPlane(0, -T)).extrude(4 * T)
+    // TAILS is at least 2 (see MASTERS), so the array is never empty.
+    const sketch = Array.from({ length: TAILS }, (_, i) => tailAt(i)).reduce((a, b) => a.fuse(b))
+    const prisms = sketch.on(backPlane(0, -T)).extrude(4 * T)
     const slab = Box(BIG, BIG, T, { align: [Align.CENTER, Align.CENTER, Align.MIN] }).translate(0, 0, SEAT_BOTTOM)
     return prisms.intersect(slab)
   }

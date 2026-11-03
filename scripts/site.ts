@@ -82,6 +82,7 @@ export async function buildPart(engine: Engine, part: string) {
 /**
  * Build the configurator (a Vite app) into the MDX folder, where the pages' iframes load it; `watch` rebuilds it as
  * its files change. Resolves once the (first) build is done, so that what follows can serve its files.
+ * @param watch true keeps vite watching and rebuilds the app on every change, instead of building once.
  */
 export async function buildConfigurator(watch = false) {
   const result = await vite({
@@ -90,7 +91,8 @@ export async function buildConfigurator(watch = false) {
     // Absolute for the site: Vercel's clean URLs redirect configurator/index.html to /configurator, where relative
     // URLs would resolve one level up. `dev` serves with clean URLs off, so the file's relative base stays.
     ...(watch ? {} : { base: `${BASE_PATH}/configurator/` }),
-    build: { outDir: join(MDX, 'configurator'), emptyOutDir: true, watch: watch ? {} : null },
+    // In watch mode the folder is being served: a rebuild must not empty it (stale hashed chunks are harmless in dev).
+    build: { outDir: join(MDX, 'configurator'), emptyOutDir: !watch, watch: watch ? {} : null },
   })
   if (!watch) return
   // In watch mode vite returns as soon as the watcher exists, before the first build ran: wait for its end.

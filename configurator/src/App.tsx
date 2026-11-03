@@ -5,24 +5,13 @@ import { Bounds, Grid, OrbitControls } from '@react-three/drei'
 import { button, Leva, useControls } from 'leva'
 import { Mesh, type Object3D } from 'three'
 import { type Model, models } from './models.ts'
+import { changedParams, withQueryValues } from './App.query.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
 const DEBOUNCE_MS = 200
 
 const query = new URLSearchParams(location.search)
 const part = query.get('part') ?? ''
-
-/** The schema with the query string's values as initial values: known keys only, numeric, clamped to min/max. */
-function withQueryValues(schema: Model['schema']) {
-  return Object.fromEntries(
-    Object.entries(schema).map(([name, control]) => {
-      const raw = query.get(name)
-      const fromQuery = raw === null || raw.trim() === '' ? NaN : Number(raw)
-      if (!Number.isFinite(fromQuery)) return [name, control]
-      return [name, { ...control, value: Math.min(control.max, Math.max(control.min, fromQuery)) }]
-    }),
-  )
-}
 
 /** Copies text to the clipboard; the textarea route is for iframes and non-secure contexts. Never throws. */
 async function copyText(text: string) {
@@ -75,17 +64,15 @@ function Configurator({ model }: { model: Model }) {
   const [toast, setToast] = useState<string>()
   const [values, set, get] = useControls(() => ({
     'Copy link': button(async () => {
-      // Only the values that differ from the schema defaults, to keep the link short.
-      const params = new URLSearchParams({ part })
       const current = get as unknown as (name: string) => number
-      for (const [name, control] of Object.entries(model.schema)) {
-        if (current(name) !== control.value) params.set(name, String(current(name)))
-      }
+      const values = Object.fromEntries(Object.keys(model.schema).map((name) => [name, current(name)]))
+      const params = changedParams(model.schema, values, part)
       const copied = await copyText(`${location.origin}${location.pathname}?${params}`)
       setToast(copied ? 'Link copied' : 'Could not copy the link')
     }),
     Reset: button(() => set(Object.fromEntries(Object.entries(model.schema).map(([name, control]) => [name, control.value])))),
-    ...withQueryValues(model.schema),
+    // The schema entries go through as they are: leva shows each control's `hint` on hover.
+    ...withQueryValues(model.schema, query),
   }))
   const numbers = values as unknown as Record<string, number>
   useEffect(() => {
