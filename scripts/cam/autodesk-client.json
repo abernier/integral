@@ -1,0 +1,10 @@
+{
+  "client_id": "https://abernier.github.io/integral/autodesk-client.json",
+  "client_name": "integral cam (abernier/integral)",
+  "client_uri": "https://github.com/abernier/integral",
+  "redirect_uris": ["http://localhost:8976/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "scope": "mcp:read mcp:write offline_access"
+}

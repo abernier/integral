@@ -6,10 +6,9 @@
 // Kept in ~/.config/integral/autodesk.json (mode 600): the registered client, the tokens, the PKCE verifier.
 // AUTODESK_TOKEN, when set, is used as the bearer token as it is (for CI): no sign-in, no refresh, nothing kept.
 //
-// UNVERIFIED: Autodesk documents OAuth 2.1 browser sign-in, scopes `mcp:read mcp:write offline_access`, and that
-// Claude Code registers with a client ID metadata document while Codex and VS Code "need no manual registration"
-// (so dynamic client registration is likely). None of it could be reached from where this was written.
-// AUTODESK_CLIENT_METADATA_URL lets you use a client ID metadata document instead, if registration is refused.
+// Autodesk's authorization server refuses dynamic client registration and takes a client ID metadata document
+// instead: the client id is the document's URL. Ours is autodesk-client.json, published with the site;
+// AUTODESK_CLIENT_METADATA_URL points to another one (its redirect URI must match AUTODESK_CALLBACK_PORT).
 
 import { execFile } from 'node:child_process'
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -23,6 +22,8 @@ export const TOKEN_FILE = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), '.
 const PORT = Number(process.env.AUTODESK_CALLBACK_PORT ?? 8976)
 const REDIRECT = `http://localhost:${PORT}/callback`
 export const SCOPES = 'mcp:read mcp:write offline_access'
+const CLIENT_METADATA_URL =
+  process.env.AUTODESK_CLIENT_METADATA_URL ?? 'https://abernier.github.io/integral/autodesk-client.json'
 
 type Stored = { client?: OAuthClientInformationMixed; tokens?: OAuthTokens; verifier?: string }
 
@@ -64,7 +65,7 @@ export function autodeskAuth() {
         scope: SCOPES,
       }
     },
-    clientMetadataUrl: process.env.AUTODESK_CLIENT_METADATA_URL,
+    clientMetadataUrl: CLIENT_METADATA_URL,
     clientInformation: () => read().client,
     saveClientInformation: (client) => write({ client }),
     tokens: () => (fixed ? { access_token: fixed, token_type: 'Bearer' } : read().tokens),
