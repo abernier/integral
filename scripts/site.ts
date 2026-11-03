@@ -75,10 +75,11 @@ function views(part: string, alt: string) {
 
 /**
  * Turn a README into an MDX page: its first heading becomes the title, the line under it the description, links
- * to the site become local ones.
+ * to the site become local ones, and "Edit this page" opens the README on GitHub.
  * A part's page also gets its source, its render as the page's image, and the render's tabs (`views`).
  */
 function page(readme: string, nav: number, urls: { site: string; files: string }, part?: string) {
+  const edit = `https://github.com/abernier/integral/edit/main/${part ? `${part}/` : ''}README.md`
   const source = readFileSync(readme, 'utf8')
   const title = source.match(/^# (.+)$/m)?.[1] ?? 'Untitled'
   // The line under the heading: short, shown under the title; the <Intro> after it says more.
@@ -88,6 +89,7 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
     description && `description: ${JSON.stringify(description)}`,
     part && `sourcecode: ${part}/${part}.ts`,
     part && `image: ../${part}/${part}.png`,
+    `edit: ${edit}`,
     `nav: ${nav}`,
   ]
   const render = part && `${PAGES_URL}/${part}/${part}.png`
@@ -157,8 +159,11 @@ export function docsEnv(overrides: Record<string, string> = {}) {
     MDX_BASEURL: SITE_URL,
     NEXT_PUBLIC_URL: SITE_URL,
     SOURCECODE_BASEURL: 'https://github.com/abernier/integral/tree/main',
-    // Off: the link is the page's path under this base, and the pages do not sit at their READMEs' paths.
+    // No base: the pages do not sit at their READMEs' paths, so each page gives its own `edit` URL.
     EDIT_BASEURL: '',
+    // Not a pmndrs library: no "Sponsor Poimandres" card, no menu of the pmndrs libraries.
+    SPONSOR_CARD: 'false',
+    LIBS_MENU: 'false',
     GITHUB: 'https://github.com/abernier/integral',
     ...overrides,
   }
