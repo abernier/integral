@@ -30,7 +30,8 @@ export const HOME = '/integral/introduction'
 
 /**
  * Where a page's links point: `site` for its pages, `files` for the built files, `shared` for a file another site
- * fetches (Buerligons' `?url=`), which must be absolute.
+ * fetches (Buerligons' `?url=`), which must be absolute: GitHub Pages, even from a Vercel preview, whose sign-in
+ * Buerligons cannot pass (a preview's Buerligons link opens main's model, not the pull request's).
  * Built, pages and files are root-relative, so that they load from whichever host serves the build: a Vercel
  * preview answers on its deployment URL and its branch URL, and its sign-in cookie holds for one host only.
  */
@@ -148,7 +149,7 @@ function syncReadme() {
 }
 
 /** Write the MDX pages. `urls` default to the built site; `dev` points them at its local servers. */
-export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, shared: SITE_URL }) {
+export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, shared: PAGES_URL }) {
   syncReadme()
   mkdirSync(MDX, { recursive: true })
   copyFileSync(join(ROOT, 'scripts', 'viewer.html'), join(MDX, 'viewer.html'))
