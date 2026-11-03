@@ -12,7 +12,7 @@ Real objects, designed and made with whatever tools fit: CAD, code, machines.
 
 | | Part |
 |---|---|
-| <a href="https://abernier.github.io/integral/zigzag-chair/readme"><img src="https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png" alt="Zigzag chair" width="160" /></a> | **[Zigzag chair](https://abernier.github.io/integral/zigzag-chair/readme)**: Rietveld's 1934 Zig-Zag chair, parametric, in cherry. |
+| <a href="https://abernier.github.io/integral/zigzag-chair/readme"><img src="https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png" alt="Zigzag chair" width="72" /></a> | **[Zigzag chair](https://abernier.github.io/integral/zigzag-chair/readme)**: Rietveld's 1934 Zig-Zag chair, parametric, in cherry. |
 
 ## Build
 

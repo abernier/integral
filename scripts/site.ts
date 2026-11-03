@@ -108,7 +108,7 @@ function partsTable() {
     const title = source.match(/^# (.+)$/m)?.[1] ?? part
     const description = source.match(/^# .+\n+([^<\n].*)\n/m)?.[1] ?? ''
     const page = `${SITE_URL}/${part}/readme`
-    const image = `<a href="${page}"><img src="${SITE_URL}/${part}/${part}.png" alt="${title}" width="160" /></a>`
+    const image = `<a href="${page}"><img src="${SITE_URL}/${part}/${part}.png" alt="${title}" width="72" /></a>`
     return `| ${image} | **[${title}](${page})**: ${description} |`
   })
   return ['| | Part |', '|---|---|', ...rows].join('\n')
