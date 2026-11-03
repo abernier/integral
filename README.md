@@ -41,5 +41,6 @@ nr build      # parts + site into dist/
 </Steps>
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
+- DXF: each part's boards are derived from its STEP into `.docs/<folder>/dxf/` (`scripts/dxf.ts`, smlibpy's `machiningSetup`, from the fork's `machining-1` release)
 - Engine key: local ClassCAD sign-in; in CI, the `CLASSCAD_TOKEN` secret
 - Deploy: every push to `main`, GitHub Pages; every pull request, a Vercel preview (`vercel.json`, the engine key in its `CLASSCAD_TOKEN` variable)

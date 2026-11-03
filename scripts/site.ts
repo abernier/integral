@@ -13,6 +13,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { pathToFileURL } from 'node:url'
 import { join, relative, resolve } from 'node:path'
 import { type Engine, glb, render, run, save } from './classcad.ts'
+import { buildDxf } from './dxf.ts'
 
 export const ROOT = resolve(import.meta.dirname, '..')
 // Not named `.mdx`: @pmndrs/docs takes every file whose path contains `.md` for a page.
@@ -68,8 +69,9 @@ export async function buildPart(engine: Engine, part: string) {
   const step = await save(engine, 'STP', join(out, `${part}.step`))
   const model = await glb(engine, join(out, `${part}.glb`))
   await render(engine, join(out, `${part}.png`))
+  const dxf = buildDxf(join(out, `${part}.step`), join(out, 'dxf'))
   const seconds = ((performance.now() - started) / 1000).toFixed(1)
-  console.log(`${part}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
+  console.log(`${part}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B, ${dxf} dxf`, JSON.stringify(returned))
 }
 
 /**

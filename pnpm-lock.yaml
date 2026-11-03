@@ -20,6 +20,9 @@ importers:
       '@classcad/skill':
         specifier: 0.0.8
         version: 0.0.8
+      '@classcad/smlibwasm':
+        specifier: https://github.com/abernier/smlibpy/releases/download/machining-1/classcad-smlibwasm-0.6.3-machining.1.tgz
+        version: https://github.com/abernier/smlibpy/releases/download/machining-1/classcad-smlibwasm-0.6.3-machining.1.tgz
       '@pmndrs/docs':
         specifier: 4.26.0
         version: 4.26.0
@@ -137,6 +140,11 @@ packages:
 
   '@classcad/skill@0.0.8':
     resolution: {integrity: sha512-RwsXaoAdTV4420cQ4c+w2iuKBli7NmfKihwrCXAcRKsZxAZ9ewvOHYaQ+gvDdpZZHwZzLrO+TYKPty02jwnZcA==}
+
+  '@classcad/smlibwasm@https://github.com/abernier/smlibpy/releases/download/machining-1/classcad-smlibwasm-0.6.3-machining.1.tgz':
+    resolution: {integrity: sha512-R9fvSprgGGfoaQkHbTTu205o8WA0hBdK63OxJSfzcjl54elMM+KVnhv5GCgMq10FC4x0A0sroDy5ODYWZbWcEA==, tarball: https://github.com/abernier/smlibpy/releases/download/machining-1/classcad-smlibwasm-0.6.3-machining.1.tgz}
+    version: 0.6.3-machining.1
+    engines: {node: '>=22.18'}
 
   '@codemirror/autocomplete@6.20.4':
     resolution: {integrity: sha512-yF8RhOf2SXlg00+qtupzLhrglcas61boqaONiNcbPIebHCpJocpqTBA6dyrtUrQO47hqyTdeob/3XnYilT7TaQ==}
@@ -3479,6 +3487,8 @@ snapshots:
       - utf-8-validate
 
   '@classcad/skill@0.0.8': {}
+
+  '@classcad/smlibwasm@https://github.com/abernier/smlibpy/releases/download/machining-1/classcad-smlibwasm-0.6.3-machining.1.tgz': {}
 
   '@codemirror/autocomplete@6.20.4':
     dependencies:

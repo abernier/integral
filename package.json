@@ -17,6 +17,7 @@
     "@classcad/renderer": "0.1.0",
     "@classcad/script": "0.2.0",
     "@classcad/skill": "0.0.8",
+    "@classcad/smlibwasm": "https://github.com/abernier/smlibpy/releases/download/machining-1/classcad-smlibwasm-0.6.3-machining.1.tgz",
     "@pmndrs/docs": "4.26.0",
     "sharp": "^0.34.5"
   },
