@@ -92,7 +92,7 @@ export async function buildConfigurator(watch = false) {
 function views(part: string, alt: string) {
   const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
   const frame = (src: string, title: string, height: number) =>
-    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen" />`
+    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen; clipboard-write" />`
   return [
     // syncKey: the pick is kept in localStorage, the same on every part's page.
     '<Tabs defaultValue="render" syncKey="part-view">',
