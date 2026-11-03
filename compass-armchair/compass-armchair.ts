@@ -57,7 +57,7 @@ export const MASTERS = {
   POST_W: 30, // a post: across, deep
   POST_D: 40,
   POST_Y_AT_ARM: 260, // the posts' axis at the armrest's top
-  BOW: 10, // the back's arc bows this much between the posts
+  BOW: 10, // the back's arc bows this much behind the posts, between them
   LOW_RAIL_BOTTOM: 65, // the back rails, along the posts from seat height; the posts end flush with them
   LOW_RAIL_TOP: 100,
   HIGH_RAIL_BOTTOM: 330,
@@ -69,7 +69,7 @@ export const MASTERS = {
   SEAT_TAILS: 2, // tails per seat corner
   SEAT_PIN_EDGE: 6, // the pins at the side rail's outside: at the rail's edges, between tails
   SEAT_PIN_MID: 6,
-  BACK_TAIL_SHOULDER: 2, // the back rail's shoulder behind its tail
+  BACK_TAIL_SHOULDER: 12, // the back rail's shoulders either side of its tail
 }
 
 // Everything else, derived. The armrest's underside is z = U0 - K y.
@@ -89,9 +89,12 @@ const DERIVED = {
   CL: 'cos(LEAN)',
   TL: 'SL/CL',
   POST_Y: 'POST_Y_AT_ARM - (ARM_TOP - SEAT_TOP)*TL', // the posts' axis at seat height
-  RAIL_D: 'POST_D - BOW', // the back rails' depth: the bow hides within the posts'
-  R_BACK: '(X_POST*X_POST + BOW*BOW)/(2*BOW) + RAIL_D/2', // the arc's middle line
-  ARC_Y: 'POST_D/2 - (R_BACK + RAIL_D/2)', // its centre, in the back's frame
+  // The back rails' faces, two arcs about one centre: flush with the posts' faces at their inner face, the rear one
+  // BOW behind them in the middle.
+  R_OUT: '(X_POST*X_POST + BOW*BOW)/(2*BOW)',
+  ARC_Y: 'POST_D/2 + BOW - R_OUT', // the centre, in the back's frame
+  R_IN: 'sqrt(X_POST*X_POST + (ARC_Y + POST_D/2)*(ARC_Y + POST_D/2))',
+  R_BACK: '(R_OUT + R_IN)/2', // the arc's middle line, the cane's
   // Where the posts' rear face crosses the armrest's underside, in the side view; the armrest's square rear end.
   POST_REAR_0: 'POST_Y - SEAT_TOP*TL + POST_D/2/CL',
   MEET_Y: '(POST_REAR_0 + TL*U0)/(1 + TL*K)',
@@ -108,7 +111,7 @@ const DERIVED = {
   REAR_RAIL_Y: 'SEAT_BACK - REAR_RAIL_T',
   CANE_FRONT: 'SEAT_FRONT + FRONT_RAIL_T',
   // The back's tail, on a rail's end, centred on the post's axis: at the post's inner face, at its outer face.
-  BACK_TAIL_BASE: '2*(POST_D/2 - BOW - BACK_TAIL_SHOULDER)',
+  BACK_TAIL_BASE: 'POST_D - 2*BACK_TAIL_SHOULDER',
   BACK_TAIL_END: 'BACK_TAIL_BASE + 2*POST_W*SLOPE',
 }
 
@@ -261,8 +264,8 @@ async function seatTails(api: Api, part: number, name: string, planes: HalfSpace
   }))
 }
 
-/** A band of the back's arc, `thick` deep about its middle line, from z0 to z1 in the back's frame. */
-async function arc(api: Api, part: number, name: string, thick: string, [z0, z1]: readonly [string, string]) {
+/** A band of the back's arc, between radii `outer` and `inner`, from z0 to z1 in the back's frame. */
+async function arc(api: Api, part: number, name: string, outer: string, inner: string, [z0, z1]: readonly [string, string]) {
   const cylinder = async (side: string, radius: string, from: string, height: string) => {
     const base = await created(api.v1.part.workCSys({
       id: part, name: `${name}${side}`, rotation: '[-@expr.LEAN, 0, 0]',
@@ -270,10 +273,10 @@ async function arc(api: Api, part: number, name: string, thick: string, [z0, z1]
     }))
     return created(api.v1.part.cylinder({ id: part, name: `${name}${side}`, references: [base], diameter: expr(`2*(${radius})`), height: expr(height) }))
   }
-  const outer = await cylinder('Outer', `$R_BACK + ${thick}/2`, z0, `${z1} - ${z0}`)
+  const outside = await cylinder('Outer', outer, z0, `${z1} - ${z0}`)
   // Taller than the outer one, so that no two faces of the subtraction lie on one plane.
-  const inner = await cylinder('Inner', `$R_BACK - ${thick}/2`, `${z0} - 1`, `${z1} - ${z0} + 2`)
-  const band = await created(api.v1.part.boolean({ id: part, name, type: 'SUBTRACTION', target: outer, tools: [inner] }))
+  const inside = await cylinder('Inner', inner, `${z0} - 1`, `${z1} - ${z0} + 2`)
+  const band = await created(api.v1.part.boolean({ id: part, name, type: 'SUBTRACTION', target: outside, tools: [inside] }))
   return cut(api, part, name, band, tilt(BETWEEN_POSTS))
 }
 
@@ -330,7 +333,7 @@ const crossRailBuilder = (y: readonly [string, string]): Builder => async (api, 
   ])
 
 const backRailBuilder = (z: readonly [string, string]): Builder => async (api, part) =>
-  union(api, part, 'Tails', await arc(api, part, 'Rail', '$RAIL_D', z), [
+  union(api, part, 'Tails', await arc(api, part, 'Rail', '$R_OUT', '$R_IN', z), [
     await board(api, part, 'TailLeft', tilt(backTail(z))),
     await board(api, part, 'TailRight', mirror(tilt(backTail(z)))),
   ])
@@ -343,7 +346,7 @@ const BOARDS: Record<string, Builder> = {
   SeatCane: (api, part) => board(api, part, 'Cane', SEAT_CANE),
   LowBackRail: backRailBuilder(BACK_RAILS[0]),
   HighBackRail: backRailBuilder(BACK_RAILS[1]),
-  BackCane: (api, part) => arc(api, part, 'Cane', '$CANE_T', ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM']),
+  BackCane: (api, part) => arc(api, part, 'Cane', '$R_BACK + $CANE_T/2', '$R_BACK - $CANE_T/2', ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM']),
 }
 
 /**

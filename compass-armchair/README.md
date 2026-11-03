@@ -42,10 +42,10 @@ In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole c
 | `TENON_LEN`, `TENON_T`, `TENON_H`, `TENON_Y`, `TENON_IN_RAIL` | 20, 10, 40, 55, 15 | Side rail tenons |
 | `BACK_TILT` | 15 | Back lean, degrees |
 | `POST_W`, `POST_D`, `POST_Y_AT_ARM` | 30, 40, 260 | Posts |
-| `BOW` | 10 | Back's arc, between the posts |
+| `BOW` | 10 | Back's arc, behind the posts between them |
 | `LOW_RAIL_BOTTOM`, `LOW_RAIL_TOP` | 65, 100 | Lower back rail, along the posts |
 | `HIGH_RAIL_BOTTOM`, `HIGH_RAIL_TOP` | 330, 365 | Upper back rail |
 | `ARM_TENON`, `ARM_TENON_DEPTH`, `ARM_TENON_MARGIN` | 12, 15, 8 | Post tenons |
 | `SEAT_TAILS` | 2 | Dovetails per seat corner |
 | `SLOPE` | 1/6 | Dovetail slope |
-| `SEAT_PIN_EDGE`, `SEAT_PIN_MID`, `BACK_TAIL_SHOULDER` | 6, 6, 2 | Pins, shoulder |
+| `SEAT_PIN_EDGE`, `SEAT_PIN_MID`, `BACK_TAIL_SHOULDER` | 6, 6, 12 | Pins, shoulder |
