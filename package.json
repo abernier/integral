@@ -10,7 +10,6 @@
     "build": "node scripts/build.ts",
     "build:parts": "node scripts/build.ts --parts-only",
     "cam": "node scripts/cam.ts",
-    "cam:all": "node scripts/cam.ts --force",
     "dev": "node scripts/dev.ts",
     "typecheck": "tsc --noEmit"
   },

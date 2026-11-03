@@ -19,7 +19,7 @@ pnpm cam --list-tools                          # what Fusion's MCP server offers
 pnpm cam zigzag-chair --dry-run                # the plan, nothing sent
 pnpm cam zigzag-chair
 pnpm cam zigzag-chair --only Seat --force --template integral-19mm-6mm --post shopbot --margin 5
-pnpm cam:all                                   # every model, every file made again (pnpm cam --force)
+pnpm cam --force                               # every model, every file made again
 ```
 
 A board that does not lie flat cuts as deep as its box is tall: a file that cuts deeper than `--max-depth` (25 mm, what the template's tool reaches) is removed and the board reported, to be turned with `wcs.rotate` in the manifest.
