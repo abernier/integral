@@ -3,8 +3,8 @@
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
 // ClassCAD, and a README.md.
 // Building it writes `<folder>.ofb`, `<folder>.step` and `<folder>.png` into `.docs/<folder>/`. The MDX folder also
-// gets one page per README, at the README's own path (`README.md`, `<folder>/README.md`): @pmndrs/docs makes a
-// page's "Edit this page" link from its path, so it then opens the README on GitHub.
+// gets one page per README, where the sidebar wants it: the root one as `integral/introduction.mdx`, each part's
+// as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things").
 //
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
 // for a local site those URLs are rewritten to the local servers.
@@ -21,7 +21,10 @@ export const DIST = join(ROOT, 'dist')
 
 /** Where GitHub Pages serves the site. */
 export const SITE_URL = process.env.SITE_URL ?? 'https://abernier.github.io/integral'
-export const HOME = '/readme'
+export const HOME = '/integral/introduction'
+
+/** A part's page, under "Things" in the sidebar. */
+const partPage = (part: string) => `things/${part}`
 
 export function parts() {
   return readdirSync(ROOT, { withFileTypes: true })
@@ -82,7 +85,7 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
     `title: ${JSON.stringify(title)}`,
     description && `description: ${JSON.stringify(description)}`,
     part && `sourcecode: ${part}/${part}.ts`,
-    part && `image: ${part}.png`,
+    part && `image: ../${part}/${part}.png`,
     `nav: ${nav}`,
   ]
   const render = part && `${SITE_URL}/${part}/${part}.png`
@@ -90,11 +93,13 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
     .replace(/^# .+\n+/m, '')
     .replace(description ? `${description}\n` : '', '')
     .replace(/^!\[([^\]]*)\]\((\S+)\)$/m, (image, alt, src) => (part && src === render ? views(part, alt) : image))
-    // A page link (a path ending in `readme`) goes to the site, a file link to where the files are served.
-    .replaceAll(`${SITE_URL}/`, '\0')
-    .replace(/\0([\w/-]*readme)\b/g, `${urls.site}/$1`)
-    .replaceAll('\0', `${urls.files}/`)
-  return `---\n${meta.filter(Boolean).join('\n')}\n---\n\n${body}`
+  // A page link goes to the site, any other link to the site's files to where the files are served.
+  let linked = body
+  for (const path of [HOME, ...parts().map((p) => `/${partPage(p)}`)]) {
+    linked = linked.replaceAll(`${SITE_URL}${path}`, `${urls.site}${path}`)
+  }
+  linked = linked.replaceAll(`${SITE_URL}/`, `${urls.files}/`)
+  return `---\n${meta.filter(Boolean).join('\n')}\n---\n\n${linked}`
 }
 
 /**
@@ -107,7 +112,7 @@ function partsTable() {
     const source = readFileSync(join(ROOT, part, 'README.md'), 'utf8')
     const title = source.match(/^# (.+)$/m)?.[1] ?? part
     const description = source.match(/^# .+\n+([^<\n].*)\n/m)?.[1] ?? ''
-    const page = `${SITE_URL}/${part}/readme`
+    const page = `${SITE_URL}/${partPage(part)}`
     const image = `<a href="${page}"><img src="${SITE_URL}/${part}/${part}.png" alt="${title}" width="72" /></a>`
     return `| ${image} | **[${title}](${page})**: ${description} |`
   })
@@ -129,10 +134,11 @@ export function writePages(urls = { site: SITE_URL, files: SITE_URL }) {
   syncReadme()
   mkdirSync(MDX, { recursive: true })
   copyFileSync(join(ROOT, 'scripts', 'viewer.html'), join(MDX, 'viewer.html'))
-  writeFileSync(join(MDX, 'README.md'), page(join(ROOT, 'README.md'), 0, urls))
+  mkdirSync(join(MDX, 'integral'), { recursive: true })
+  writeFileSync(join(MDX, 'integral', 'introduction.mdx'), page(join(ROOT, 'README.md'), 0, urls))
+  mkdirSync(join(MDX, 'things'), { recursive: true })
   parts().forEach((part, i) => {
-    mkdirSync(join(MDX, part), { recursive: true })
-    writeFileSync(join(MDX, part, 'README.md'), page(join(ROOT, part, 'README.md'), i + 1, urls, part))
+    writeFileSync(join(MDX, `${partPage(part)}.mdx`), page(join(ROOT, part, 'README.md'), i + 1, urls, part))
   })
   return relative(ROOT, MDX)
 }
@@ -149,7 +155,8 @@ export function docsEnv(overrides: Record<string, string> = {}) {
     MDX_BASEURL: SITE_URL,
     NEXT_PUBLIC_URL: SITE_URL,
     SOURCECODE_BASEURL: 'https://github.com/abernier/integral/tree/main',
-    EDIT_BASEURL: 'https://github.com/abernier/integral/edit/main',
+    // Off: the link is the page's path under this base, and the pages do not sit at their READMEs' paths.
+    EDIT_BASEURL: '',
     GITHUB: 'https://github.com/abernier/integral',
     ...overrides,
   }
