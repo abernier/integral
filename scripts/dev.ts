@@ -23,7 +23,8 @@ const freePort = () =>
 
 const port = Number(process.env.PORT ?? 3000)
 const filesPort = await freePort()
-const urls = { site: `http://localhost:${port}`, files: `http://localhost:${filesPort}` }
+const files = `http://localhost:${filesPort}`
+const urls = { site: `http://localhost:${port}`, files, shared: files }
 
 const engine = await openEngine()
 for (const part of parts()) await buildPart(engine, part)
