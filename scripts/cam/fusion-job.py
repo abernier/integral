@@ -3,25 +3,26 @@
 # run by Fusion's Python with the Fusion API. Fusion calls `run`; a raised exception comes back as the tool's error,
 # so nothing here catches one unless it means to go on.
 #
-# Each call does one small step, so that no call holds Fusion long; the toolpaths are generated between calls.
+# Each call does one small step, so that no call holds Fusion long; the toolpaths are generated between calls. The
+# machining values (tool, feeds, stepdowns, tabs, ...) all come from `pnpm cam`, in JOB["machining"]: this script
+# only applies them.
 #
 # JOB["op"]:
 #   "import":   import the STEP JOB["step"] into a new design document, name its bodies after the STEP's solids
-#               (matched by their boxes, JOB["solids"]), tag the document with JOB["tag"]; return the bodies
-#   "setup":    for body JOB["body"], make setup JOB["setup"] ("<Body>_<setup>"; the board turned by JOB["rotate"], degrees), with the
-#               stock and the WCS, apply the template JOB["template"] and start generating its toolpaths; with
-#               JOB["cut"] == "squared", only the faces the turn squares (JOB["reference"]: the first setup's turn)
+#               (matched by their boxes, JOB["solids"]), tag the document with JOB["tag"]; return the bodies and
+#               Fusion's version
+#   "orient":   how body JOB["body"] lies in setup JOB["setup"] (turned by JOB["rotate"], degrees; null: laid flat on
+#               its largest face), how high it stands, the faces a tool from the top cannot reach (read-only)
+#   "setup":    for body JOB["body"], make setup JOB["setup"] ("<Body>_<setup>"; the board turned by JOB["rotate"]),
+#               with the stock and the WCS, its operations (a 2D pocket on the recognised pockets, a 2D contour
+#               around the outside, through), and start generating their toolpaths; with JOB["cut"] == "squared",
+#               only a contour on the faces the turn squares (JOB["reference"]: the first setup's turn)
 #   "status":   how far the toolpaths of setup JOB["setup"] are (read-only)
 #   "post":     post setup JOB["setup"] with the library post matching JOB["post"] to JOB["folder"]/JOB["file"]
 #   "close":    close the tagged document, without saving
 #
 # Every op prints its result as one line `INTEGRAL_RESULT <json>`.
 
-import json
-import math
-
-import adsk.cam
-import adsk.core
 import adsk.fusion
 
 app = adsk.core.Application.get()
@@ -100,7 +101,7 @@ def import_step():
         body.name = name
         named.append(name)
     cam_of(document)
-    done({"document": document.name, "bodies": named})
+    done({"document": document.name, "bodies": named, "fusion": app.version})
 
 
 def find_body(design, name):
@@ -123,16 +124,25 @@ def rotation(angles, centre):
     return matrix
 
 
+def box_centre(body):
+    b = body.boundingBox
+    return adsk.core.Point3D.create((b.minPoint.x + b.maxPoint.x) / 2, (b.minPoint.y + b.maxPoint.y) / 2, (b.minPoint.z + b.maxPoint.z) / 2)
+
+
+def laid(body, angles):
+    """A free copy of the body (not in the document) turned by angles about its box centre: to measure, not to cut."""
+    temporary = adsk.fusion.TemporaryBRepManager.get()
+    copy = temporary.copy(body)
+    if any(angles):
+        temporary.transform(copy, rotation(angles, box_centre(body)))
+    return copy
+
+
 def turned(design, body):
     """The body, or a copy of it turned by JOB["rotate"] (x, then y, then z, degrees) about its box centre."""
     if not any(JOB["rotate"]):
         return body
-    b = body.boundingBox
-    centre = adsk.core.Point3D.create((b.minPoint.x + b.maxPoint.x) / 2, (b.minPoint.y + b.maxPoint.y) / 2, (b.minPoint.z + b.maxPoint.z) / 2)
-    matrix = rotation(JOB["rotate"], centre)
-    temporary = adsk.fusion.TemporaryBRepManager.get()
-    copy = temporary.copy(body)
-    temporary.transform(copy, matrix)
+    copy = laid(body, JOB["rotate"])
     root = design.rootComponent
     # A parametric design takes a free body only inside a base feature.
     base = root.features.baseFeatures.add()
@@ -143,33 +153,6 @@ def turned(design, body):
     return added
 
 
-def find_template():
-    """The template named JOB["template"]: the repo's copy when sent (JOB["templateXml"]), else searched through the
-    local, cloud and hub template libraries."""
-    if JOB.get("templateXml"):
-        return adsk.cam.CAMTemplate.createFromXML(JOB["templateXml"])
-    library = adsk.cam.CAMManager.get().libraryManager.templateLibrary
-    seen = []
-    for location in [adsk.cam.LibraryLocations.LocalLibraryLocation, adsk.cam.LibraryLocations.CloudLibraryLocation, adsk.cam.LibraryLocations.HubLibraryLocation]:
-        folders = [library.urlByLocation(location)]
-        while folders:
-            folder = folders.pop()
-            try:
-                templates = library.childTemplates(folder) or []
-                folders.extend(library.childFolderURLs(folder) or [])
-            except RuntimeError:
-                # A location this account does not have ("Given URL does not point to an existing folder").
-                continue
-            for template in templates:
-                seen.append(template.name)
-                if template.name == JOB["template"]:
-                    return template
-    raise RuntimeError(
-        f'no CAM template "{JOB["template"]}" in the local, cloud or hub template library (found: {", ".join(seen) or "none"}); '
-        "make it in Fusion's Manufacture workspace, see scripts/cam/README.md"
-    )
-
-
 def set_parameter(owner, name, expression):
     parameter = owner.parameters.itemByName(name)
     if not parameter:
@@ -177,8 +160,10 @@ def set_parameter(owner, name, expression):
     parameter.expression = expression
 
 
-# A face stands upright when its normal is level within 0.05 degrees.
+# A face stands upright when its normal is level within 0.05 degrees; it faces up (or down) when its normal is
+# vertical within as much.
 UPRIGHT = math.sin(math.radians(0.05))
+LEVEL = math.cos(math.radians(0.05))
 
 
 def plane_normal(face):
@@ -189,26 +174,148 @@ def plane_normal(face):
     return normal
 
 
+def moved(normal, turned_by, to):
+    """A normal of the body turned by turned_by, as it is when the body is turned by to instead."""
+    origin = adsk.core.Point3D.create(0, 0, 0)
+    back = rotation(turned_by, origin)
+    back.invert()
+    back.transformBy(rotation(to, origin))
+    other = normal.copy()
+    other.transformBy(back)
+    return other
+
+
 def squared_faces(body):
     """
     The planar faces this setup squares: upright on the body turned by JOB["rotate"], but not in the board's first setup
     (turned by JOB["reference"]), e.g. the walls of the zigzag seat's dovetails, which lean 8 degrees as it lies flat.
     """
-    origin = adsk.core.Point3D.create(0, 0, 0)
-    # From this setup's frame back to the first setup's: undo this turn, then turn as the first setup does.
-    back = rotation(JOB["rotate"], origin)
-    back.invert()
-    back.transformBy(rotation(JOB["reference"], origin))
     faces = []
     for face in body.faces:
         normal = plane_normal(face)
         if normal is None or abs(normal.z) >= UPRIGHT:
             continue
-        before = normal.copy()
-        before.transformBy(back)
-        if abs(before.z) >= UPRIGHT:
+        if abs(moved(normal, JOB["rotate"], JOB["reference"]).z) >= UPRIGHT:
             faces.append(face)
     return faces
+
+
+def lay_flat_angles(normal):
+    """
+    The turn [x, y, 0] (degrees) that points normal straight down: about x, it comes into the xz plane, pointing
+    down; about y, onto -z.
+    """
+    about_x = math.atan2(-normal.y, -normal.z)
+    in_plane = math.hypot(normal.y, normal.z)
+    about_y = math.atan2(normal.x, in_plane)
+    # Whole numbers stay whole (0, 90, 180): a board already flat is not turned by a rounding error.
+    return [round(math.degrees(about_x), 9) + 0.0, round(math.degrees(about_y), 9) + 0.0, 0.0]
+
+
+def height_mm(body):
+    b = body.boundingBox
+    return (b.maxPoint.z - b.minPoint.z) * 10
+
+
+def face_normals(face):
+    """The face's normals: one for a plane; for a curved face, at a 5 x 5 grid over its parameters (those on the face)."""
+    normal = plane_normal(face)
+    if normal is not None:
+        return [normal]
+    evaluator = face.evaluator
+    extent = evaluator.parametricRange()
+    low, high = extent.minPoint, extent.maxPoint
+    grid = [adsk.core.Point2D.create(low.x + (high.x - low.x) * i / 4, low.y + (high.y - low.y) * j / 4) for i in range(5) for j in range(5)]
+    on_face = [point for point in grid if evaluator.isParameterOnFace(point)]
+    normals = []
+    for point in on_face:
+        _found, normal = evaluator.getNormalAtParameter(point)
+        normals.append(normal)
+    if not normals:
+        _found, normal = evaluator.getNormalAtPoint(face.pointOnFace)
+        normals.append(normal)
+    return normals
+
+
+def unreachable(body):
+    """
+    The faces of the body, as it lies, that a tool coming down along z cannot cut as a 2.5D shape: not upright (a
+    wall), not facing up (a floor, the top), not the face it lies on. As [(face, kind)], kind "facing down", "sloped
+    <degrees from upright>" or "curved".
+    """
+    bottom = body.boundingBox.minPoint.z
+    faces = []
+    for face in body.faces:
+        normals = face_normals(face)
+        if all(abs(n.z) < UPRIGHT for n in normals) or all(n.z > LEVEL for n in normals):
+            continue
+        if all(n.z < -LEVEL for n in normals) and face.boundingBox.maxPoint.z - bottom < 1e-4:
+            continue
+        if plane_normal(face) is None:
+            kind = "curved"
+        elif normals[0].z < -LEVEL:
+            kind = "facing down"
+        else:
+            kind = f"sloped {round(math.degrees(math.asin(min(1, abs(normals[0].z)))))} deg"
+        faces.append((face, kind))
+    return faces
+
+
+def where(face, body):
+    """Where a face is along the length of the body as it lies: "at an end" or "in the middle"."""
+    b = body.boundingBox
+    f = face.boundingBox
+    axis = "x" if b.maxPoint.x - b.minPoint.x >= b.maxPoint.y - b.minPoint.y else "y"
+    low, high = getattr(b.minPoint, axis), getattr(b.maxPoint, axis)
+    at = ((getattr(f.minPoint, axis) + getattr(f.maxPoint, axis)) / 2 - low) / (high - low)
+    return "at an end" if at < 0.2 or at > 0.8 else "in the middle"
+
+
+def lay_flat(body):
+    """
+    The turn laying the body on its largest planar face, that face down: the tool comes from the opposite face. Of
+    faces as large (a plain board's two sides), the turn leaving the body lowest, then with the fewest faces out of
+    reach, then the face already looking down.
+    """
+    planar = [(face.area, face) for face in body.faces if plane_normal(face) is not None]
+    if not planar:
+        raise RuntimeError(f"{JOB['body']} has no planar face to lie on")
+    largest = max(area for area, _face in planar)
+    candidates = []
+    for area, face in planar:
+        if area < largest * 0.999:
+            continue
+        normal = plane_normal(face)
+        angles = lay_flat_angles(normal)
+        copy = laid(body, angles)
+        candidates.append((round(height_mm(copy), 3), len(unreachable(copy)), normal.z, angles))
+    return min(candidates)[3]
+
+
+def orient():
+    """
+    How the body lies in this setup (JOB["rotate"], else laid flat), how high it stands, and what a setup from the top
+    cannot cut: the faces out of reach (less those squared by the board's other setups, JOB["others"]), or for a
+    setup that cuts its squared faces only, how deep they go.
+    """
+    design = design_of(tagged_document())
+    body = find_body(design, JOB["body"])
+    angles = JOB["rotate"] if JOB["rotate"] is not None else lay_flat(body)
+    copy = laid(body, angles)
+    result = {"rotate": angles, "height": round(height_mm(copy), 3)}
+    if JOB["cut"] == "squared":
+        faces = squared_faces(copy)
+        top = copy.boundingBox.maxPoint.z
+        result["squaredDepth"] = round((top - min(v.geometry.z for f in faces for v in f.vertices)) * 10, 3) if faces else None
+    else:
+        out = []
+        for face, kind in unreachable(copy):
+            normal = plane_normal(face)
+            squared = normal is not None and any(abs(moved(normal, angles, other).z) < UPRIGHT for other in JOB["others"])
+            if not squared:
+                out.append(f"{kind} {where(face, copy)}")
+        result["unreachable"] = {kind: out.count(kind) for kind in sorted(set(out))}
+    done(result)
 
 
 def bottom_chains(faces):
@@ -253,11 +360,79 @@ def bottom_chains(faces):
     return chains
 
 
-def cut_squared_only(setup, body):
+def add_operation(setup, strategy, name, tool):
+    """An operation with the tool and its preset, the feeds and the stepdowns of JOB["machining"]."""
+    machining = JOB["machining"]
+    operation_input = setup.operations.createInput(strategy)
+    operation_input.tool = tool
+    operation_input.toolPreset = tool.presets.item(0)
+    operation_input.displayName = name
+    operation = setup.operations.add(operation_input)
+    set_parameter(operation, "tool_spindleSpeed", f"{machining['spindleSpeed']} rpm")
+    set_parameter(operation, "tool_feedCutting", f"{machining['feedCutting']} mm/min")
+    set_parameter(operation, "tool_feedPlunge", f"{machining['feedPlunge']} mm/min")
+    set_parameter(operation, "tool_feedRamp", f"{machining['feedRamp']} mm/min")
+    set_parameter(operation, "tool_coolant", "'disabled'")  # a router has none
+    set_parameter(operation, "doMultipleDepths", "true")
+    set_parameter(operation, "maximumStepdown", f"{machining['stepdown']} mm")
+    set_parameter(operation, "useEvenStepdowns", "true")
+    return operation
+
+
+def add_pockets(setup, tool):
+    """A 2D pocket on the pockets Fusion recognises in the setup's model, holes the tool fits in included."""
+    machining = JOB["machining"]
+    operation = add_operation(setup, "pocket2d", "Pockets", tool)
+    set_parameter(operation, "maximumStepover", f"{machining['stepover']} mm")
+    # Wood left on the walls and the floor, for a finishing pass; none: cut to size.
+    set_parameter(operation, "useStockToLeave", "true" if machining["pocketStockToLeave"] else "false")
+    if machining["pocketStockToLeave"]:
+        set_parameter(operation, "stockToLeave", f"{machining['pocketStockToLeave']} mm")
+    value = adsk.cam.CadContours2dParameterValue.cast(operation.parameters.itemByName("pockets").value)
+    selections = value.getCurveSelections()
+    selections.clear()
+    recognised = selections.createNewPocketRecognitionSelection()
+    recognised.isSetupModelSelected = True
+    recognised.areHolesIncluded = True
+    # The API's lengths are in cm.
+    recognised.minimumHoleDiameter = machining["minimumHoleDiameter"] / 10
+    recognised.minimumCornerRadius = machining["cornerRadius"][0] / 10
+    recognised.maximumCornerRadius = machining["cornerRadius"][1] / 10
+    value.applyCurveSelections(selections)
+
+
+def add_outline(setup, tool):
+    """A 2D contour around the outside of the setup's model, through: JOB["machining"]["overcut"] below the stock
+    bottom, with its tabs (none when "tabs" is null)."""
+    machining = JOB["machining"]
+    operation = add_operation(setup, "contour2d", "Outline", tool)
+    value = adsk.cam.CadContours2dParameterValue.cast(operation.parameters.itemByName("contours").value)
+    selections = value.getCurveSelections()
+    selections.clear()
+    silhouette = selections.createNewSilhouetteSelection()
+    silhouette.isSetupModelSelected = True
+    silhouette.loopType = adsk.cam.LoopTypes.OnlyOutsideLoops
+    silhouette.sideType = adsk.cam.SideTypes.AlwaysOutsideSideType
+    value.applyCurveSelections(selections)
+    set_parameter(operation, "bottomHeight_mode", "'from stock bottom'")
+    set_parameter(operation, "bottomHeight_offset", f"{-machining['overcut']} mm")
+    set_parameter(operation, "compensation", "'left'")
+    set_parameter(operation, "useStockToLeave", "false")  # through, to size
+    tabs = machining["tabs"]
+    set_parameter(operation, "group_tabs", "true" if tabs else "false")  # the Tabs checkbox
+    if tabs:
+        set_parameter(operation, "tabShape", "'rectangular'")
+        set_parameter(operation, "tabPositioning", "'tabCount'")
+        set_parameter(operation, "tabsPerContour", f"{tabs['count']}")
+        set_parameter(operation, "tabWidth", f"{tabs['width']} mm")
+        set_parameter(operation, "tabHeight", f"{tabs['height']} mm")
+
+
+def cut_squared_only(setup, body, tool):
     """
-    Make the setup cut only the faces it squares (JOB["cut"] == "squared"): its 2D contours along their bottom edges,
-    on the waste side, from the stock top to 0.3 mm below their lowest point, in stepdowns, without tabs; its other
-    operations (the pockets, cut in the first setup already) deleted.
+    Make the setup cut only the faces it squares (JOB["cut"] == "squared"): a 2D contour along their bottom edges, on
+    the waste side, from the stock top to JOB["machining"]["overcut"] below their lowest point, in stepdowns, without
+    tabs. The rest of the board is cut in its first setup.
     """
     faces = squared_faces(body)
     if not faces:
@@ -269,33 +444,26 @@ def cut_squared_only(setup, body):
     # The stock has nothing above the board: its top is the board's highest point.
     top = max(vertex.geometry.z for vertex in body.vertices)
     bottom = min(vertex.geometry.z for face in faces for vertex in face.vertices)
-    depth = (top - bottom) * 10 + 0.3  # mm
+    depth = (top - bottom) * 10 + JOB["machining"]["overcut"]  # mm
 
-    operations = [setup.allOperations.item(i) for i in range(setup.allOperations.count)]
-    contours = [operation for operation in operations if operation.strategy == "contour2d"]
-    if not contours:
-        raise RuntimeError(f'{JOB["setup"]}: the template "{JOB["template"]}" has no 2D contour to cut the squared faces with')
-    for operation in operations:
-        if operation.strategy != "contour2d":
-            operation.deleteMe()
-    for operation in contours:
-        value = operation.parameters.itemByName("contours").value
-        selections = value.getCurveSelections()
-        selections.clear()
-        for edges, closed in chains:
-            # Fusion puts the tool outside the higher of the faces along the first edge: on the waste side, off the
-            # squared face. isOpen keeps an open chain open (false closes it with more edges).
-            selection = selections.createNewChainSelection()
-            selection.inputGeometry = edges
-            selection.isOpen = not closed
-        value.applyCurveSelections(selections)
-        set_parameter(operation, "topHeight_mode", "'from stock top'")
-        set_parameter(operation, "topHeight_offset", "0 mm")
-        set_parameter(operation, "bottomHeight_mode", "'from stock top'")
-        set_parameter(operation, "bottomHeight_offset", f"{-depth:.3f} mm")
-        set_parameter(operation, "doMultipleDepths", "true")
-        set_parameter(operation, "maximumStepdown", "6 mm")
-        set_parameter(operation, "group_tabs", "false")  # the Tabs checkbox
+    operation = add_operation(setup, "contour2d", "Outline", tool)
+    value = adsk.cam.CadContours2dParameterValue.cast(operation.parameters.itemByName("contours").value)
+    selections = value.getCurveSelections()
+    selections.clear()
+    for edges, closed in chains:
+        # Fusion puts the tool outside the higher of the faces along the first edge: on the waste side, off the
+        # squared face. isOpen keeps an open chain open (false closes it with more edges).
+        selection = selections.createNewChainSelection()
+        selection.inputGeometry = edges
+        selection.isOpen = not closed
+    value.applyCurveSelections(selections)
+    set_parameter(operation, "compensation", "'left'")
+    set_parameter(operation, "useStockToLeave", "false")  # to size
+    set_parameter(operation, "topHeight_mode", "'from stock top'")
+    set_parameter(operation, "topHeight_offset", "0 mm")
+    set_parameter(operation, "bottomHeight_mode", "'from stock top'")
+    set_parameter(operation, "bottomHeight_offset", f"{-depth:.3f} mm")
+    set_parameter(operation, "group_tabs", "false")  # the Tabs checkbox
     return {"faces": len(faces), "chains": [len(edges) for edges, _closed in chains], "depth": round(depth, 2)}
 
 
@@ -310,7 +478,8 @@ def make_setup():
     document = tagged_document()
     design = design_of(document)
     cam = cam_of(document)
-    template = find_template()  # first: a missing template should fail before the document changes
+    # First: a tool Fusion cannot read should fail before the document changes.
+    tool = adsk.cam.Tool.createFromJson(JOB["machining"]["tool"])
     model = turned(design, find_body(design, JOB["body"]))
 
     setup_input = cam.setups.createInput(adsk.cam.OperationTypes.MillingOperation)
@@ -326,12 +495,12 @@ def make_setup():
     set_parameter(setup, "wcs_origin_mode", "'stockPoint'")
     set_parameter(setup, "wcs_origin_boxPoint", "'top 1'")
 
-    from_template = adsk.cam.CreateFromCAMTemplateInput.create()
-    from_template.camTemplate = template
-    operations = setup.createFromCAMTemplate2(from_template)
-    if not operations:
-        raise RuntimeError(f'the template "{JOB["template"]}" made no operations')
-    squared = cut_squared_only(setup, model) if JOB["cut"] == "squared" else None
+    squared = None
+    if JOB["cut"] == "squared":
+        squared = cut_squared_only(setup, model, tool)
+    else:
+        add_pockets(setup, tool)
+        add_outline(setup, tool)
     # Started here, generated while Fusion is idle between calls: "status" says when it is done.
     cam.generateToolpath(setup)
     done({"setup": setup.name, "operations": [operation.name for operation in setup.allOperations], "squared": squared})
@@ -341,7 +510,7 @@ def status():
     setup = find_setup(cam_of(tagged_document()))
     operations = [setup.allOperations.item(i) for i in range(setup.allOperations.count)]
     generating = [operation.name for operation in operations if operation.isGenerating]
-    # An operation whose geometry the template finds nothing for on this board (e.g. pockets on a board without any)
+    # An operation that finds nothing to cut on this board (e.g. pockets on a board without any)
     # ends with no toolpath and a warning ("Generated toolpath is empty"), not an error: it is skipped, not failed.
     failed = [f"{operation.name}: {operation.error or 'no toolpath'}" for operation in operations if not operation.isGenerating and (operation.hasError or (not operation.hasToolpath and not operation.hasWarning))]
     empty = [operation.name for operation in operations if not operation.isGenerating and not operation.hasError and not operation.hasToolpath and operation.hasWarning]
@@ -371,7 +540,7 @@ def post():
     open_in_editor = program_input.parameters.itemByName("nc_program_openInEditor")
     if open_in_editor:
         open_in_editor.value.value = False
-    # The operations with a toolpath only: those the template found nothing for on this board are left out.
+    # The operations with a toolpath only: those that found nothing to cut on this board are left out.
     operations = [setup.allOperations.item(i) for i in range(setup.allOperations.count)]
     with_toolpath = [operation for operation in operations if operation.hasToolpath]
     if not with_toolpath:
@@ -381,7 +550,7 @@ def post():
     program.postConfiguration = configuration
     if not program.postProcess(adsk.cam.NCProgramPostProcessOptions.create()):
         raise RuntimeError(f"posting {setup.name} with {configuration.description} failed")
-    done({"setup": setup.name, "post": f"{configuration.vendor} {configuration.description}"})
+    done({"setup": setup.name, "post": f"{configuration.vendor} {configuration.description}", "postVersion": configuration.version})
 
 
 def close():
@@ -391,5 +560,5 @@ def close():
 
 
 def run(_context: str):
-    ops = {"import": import_step, "setup": make_setup, "status": status, "post": post, "close": close}
+    ops = {"import": import_step, "orient": orient, "setup": make_setup, "status": status, "post": post, "close": close}
     ops[JOB["op"]]()

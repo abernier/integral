@@ -40,3 +40,21 @@ In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole c
 | `SLOPE` | 1/6 | Dovetail slope |
 | `PIN`, `HALF_PIN` | 20, 20 | Pins at the rear face |
 | `GRIP`, `GRIP_HIGH`, `GRIP_DEEP`, `GRIP_BELOW` | 140, 20, 10, 20 | Grip pocket |
+
+## ShopBot files
+
+```sh
+pnpm cam zigzag-chair --force
+```
+
+Or ask an agent: "make the ShopBot files of the zigzag chair" (skill `cam`). Prerequisites, parameters, tools: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam). Files and the run's record (`cam.json`: every value used, Fusion version, input hashes) in `.docs/zigzag-chair/cam/`, out of git. Simulate before cutting.
+
+| File | Tool | How the board lies |
+|---|---|---|
+| `Seat_main.sbp` | 6 mm | flat; outline and tails, 4 tabs |
+| `Seat_wedge8.sbp` | 6 mm | on an 8° wedge under its rear; only the tails and rear end (`cut: squared`), 22 mm deep, no tabs |
+| `Back_main.sbp` | 6 mm | turned −82° about x, rear face up |
+| `Slant_main.sbp` | 6 mm | turned 45° about x, front face up |
+| `Base_main.sbp` | 6 mm | flat |
+
+Cleats: sawn, not milled. Model values: margin 5 mm, post `shopbot`; the rest are the defaults. Manifest: [cam.config.json](https://github.com/abernier/integral/blob/main/zigzag-chair/cam.config.json).

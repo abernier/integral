@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "parts": [
+    { "body": "SeatCane", "skip": true, "note": "woven cane on its frame, not milled" },
+    { "body": "BackCane", "skip": true, "note": "woven cane on its frame, not milled" }
+  ]
+}

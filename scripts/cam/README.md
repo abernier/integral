@@ -1,16 +1,18 @@
 # CAM: ShopBot files from Fusion, from the command line
 
-`pnpm cam <model>` makes a ShopBot OpenSBP file (`.sbp`) for every board of a model, with Fusion's CAM in the Fusion desktop app running on this machine, driven through its local MCP server: no clicks. The files land in `.docs/<model>/cam/<Board>_<setup>.sbp`, out of git.
+`pnpm cam <model>` makes a ShopBot OpenSBP file (`.sbp`) for every board of a model with Fusion's CAM, driven through Fusion's local MCP server: no clicks. Files: `.docs/<model>/cam/<Board>_<setup>.sbp`, out of git, with a record of the run, `cam.json`.
 
-**Simulate every `.sbp` before cutting** (Fusion's simulation of the setup, ShopBot's Previewer), air-cut it on a ShopBot first, and check the units, the zero and the tool against the machine.
+**Simulate every `.sbp` before cutting** (Fusion, ShopBot Previewer), air-cut it first, check units, zero and tool against the machine.
 
-## Once
+## Prerequisites
 
-1. **Fusion**, installed and running on this Mac, signed in.
-2. **Its MCP server**: Preferences > General > API, *Fusion MCP Server* on. It listens on `http://127.0.0.1:27182/mcp`, no sign-in (`FUSION_MCP_URL` to point elsewhere). `pnpm cam --list-tools` checks it answers.
-3. **The CAM template**: `integral-19mm-6mm` is in the repo, [`templates/integral-19mm-6mm.f3dhsm-template`](templates/integral-19mm-6mm.f3dhsm-template), and is sent to Fusion with every run: nothing to do. Its values (6 mm 2-flute flat end mill, 18000 rpm, 2500 mm/min, plunge 800, stepdown 6 mm; pockets on recognised pockets; outside contour 0.3 mm through with 4 tabs of 6 x 3 mm) are defaults to check against your wood and machine. To change it or make another: in Fusion's Manufacture workspace, on any 19 mm board, a setup with the operations you want, for instance a 6 mm flat end mill, a 2D pocket for the pockets, then a 2D contour through, with tabs or an onion skin of 0.3 mm (stepdowns, feeds and speeds for your wood and machine). Right-click the setup, *Create template*, save it in your template library, export it (right-click it in the template library, *Export*) as `templates/<name>.f3dhsm-template` and commit it. A name with no file in `templates/` is looked up in your Fusion template libraries (local, cloud, hub).
-
-It runs on this machine only: no CI.
+- [ ] Fusion desktop (macOS or Windows), signed in. Fusion for Personal Use is enough (it posts ShopBot OpenSBP; its rapids run at the cutting feed, as the `.sbp` header says). Tested: 2706.1.17 (Help > About, or `app.version`; each run records it in `cam.json`).
+- [ ] Preferences > General > API > *Fusion MCP Server (runs locally on this device)* on, port 27182 (else set `FUSION_MCP_URL`). Check: `pnpm cam --list-tools`.
+- [ ] No command dialog open in Fusion while a run makes its setups. Documents already open are not touched.
+- [ ] Node 24+, pnpm, `pnpm install`.
+- [ ] The model's STEP, `.docs/<model>/<model>.step`: `nr build:parts` (ClassCAD sign-in, see the root README), or `--step`.
+- [ ] The tools of [`tools.json`](tools.json) match the cutters on your ShopBot (only the 6 mm one is checked; the 8 and 12 mm presets are defaults to check).
+- Nothing else: no Autodesk cloud, APS or sign-in for the script itself, no CI (Fusion runs on this machine).
 
 ## Run
 
@@ -18,62 +20,97 @@ It runs on this machine only: no CI.
 pnpm cam --list-tools                          # what Fusion's MCP server offers
 pnpm cam zigzag-chair --dry-run                # the plan, nothing sent
 pnpm cam zigzag-chair
-pnpm cam zigzag-chair --only Seat --force --template integral-19mm-6mm --post shopbot --margin 5
+pnpm cam zigzag-chair --only Seat --force --keep   # then Simulate the setups in Fusion
 pnpm cam --force                               # every model, every file made again
 ```
 
-A board that does not lie flat cuts as deep as its box is tall: a file that cuts deeper than `--max-depth` (25 mm, what the template's tool reaches) is removed and the board reported, to be turned with `wcs.rotate` in the manifest.
+Per board and setup, one small Python step per call ([`fusion-job.py`](fusion-job.py)): the STEP imported into a new unsaved document (bodies named by their boxes); how the board lies, how high, the faces out of reach; the tool chosen; a milling setup with its operations; toolpaths waited for; posted to `.docs/<model>/cam/`; the document closed unsaved (also on Ctrl-C; `--keep` leaves it open). A file already there is kept (`--force` makes it again).
 
-Each step is a Python script ([`fusion-job.py`](fusion-job.py)) run in Fusion by the server's `fusion_mcp_execute` tool, one small step per call:
+A board no tool reaches through fails, with no file. A file that does not cut its whole board is reported: `not reachable from the top: N faces (kind, where)`.
 
-1. the model's STEP (`.docs/<model>/<model>.step`, from `nr build:parts`; or `--step`) imported into a new, unsaved design document, its bodies named after the STEP's solids (Fusion calls them Body1, Body2, …; they are matched by their boxes);
-2. for each board and setup: a milling setup on the board (box stock, `--margin` mm on its sides, nothing above; WCS at the stock's top, x-min y-min corner), the template, its toolpaths started;
-3. the toolpaths waited for, between calls, while Fusion is idle;
-4. an NC program posted with the Fusion library post whose vendor or description contains `--post` (`shopbot`: ShopBot OpenSBP), straight into `.docs/<model>/cam/`;
-5. the imported document closed without saving, also on Ctrl-C (`--keep` leaves it open to simulate its setups in Fusion: Manufacture workspace, right-click a setup, *Simulate*). Documents open before are not touched.
+## Parameters
 
-A file already there is skipped (`--force` makes it again).
+Every value the job uses. Strongest first: CLI flag, `parts[]`, `defaults`, the default here. The `.sbp` is set by these, the inputs hashed in `cam.json` and the Fusion version: the same give the same bytes.
 
-## The manifest: setups, wedges
+| Parameter | Default | Manifest | CLI | What it does |
+|---|---|---|---|---|
+| STEP | `.docs/<model>/<model>.step` | | `--step` | the boards' shapes |
+| boards | all of the STEP | `parts[].skip` | `--only A,B` | which boards get files |
+| post | `shopbot` | `defaults.post` | `--post` | the Fusion library post whose vendor or description contains it, the shortest such (ShopBot OpenSBP) |
+| tool | the narrowest of `tools.json` whose flute length reaches `height + overcut + reach`; of two as narrow, the shorter | `defaults.tool`, `parts[].tool` | `--tool` | the cutter; a named tool that does not reach fails the board |
+| reach | 1 mm | `defaults.reach`, `parts[].reach` | | flute length to spare when choosing the tool |
+| margin | 5 mm | `defaults.margin`, `parts[].margin` | `--margin` | stock around the board's box, on its sides; none above |
+| WCS | | | | the model's axes as the board lies, origin at the stock's top, x-min y-min corner |
+| lie | laid flat | `setups[].wcs.rotate` | | without listed setups: the board turned so its largest planar face lies down (tool from the opposite face); faces as large: the lowest turn, then the fewest faces out of reach, then the face already down. Listed setups: `wcs.rotate`, else as modelled |
+| rotate | | `setups[].wcs.rotate` | | `[x, y, z]` degrees, in that order, about the board's box centre |
+| cut | pockets and outline | `setups[].cut` | | `"squared"`: only the faces this setup squares, see below |
+| spindle speed, feeds | the tool's preset | | | rpm; cutting, plunge and ramp (= plunge) feeds, mm/min |
+| stepdown | the tool's preset | `defaults.stepdown`, `parts[].stepdown` | | deepest pass, even passes, mm |
+| stepover | the tool's preset | `defaults.stepover`, `parts[].stepover` | | widest step across a pocket, mm |
+| pockets | | | | 2D pocket on the pockets Fusion recognises in the setup's model, holes included |
+| min pocket hole diameter | tool diameter + 0.5 mm | | | smaller holes are not pocketed |
+| pocket corner radius | 0 to 1000 mm | | | any corner is pocketed |
+| pocketStockToLeave | 0.5 mm | `defaults.pocketStockToLeave`, `parts[].pocketStockToLeave` | | wood left on pocket walls and floors for a finishing pass; 0: cut to size |
+| outline | | | | 2D contour on the setup model's outside silhouette, outside, from the stock top through, multiple depths, cut to size |
+| overcut | 0.3 mm | `defaults.overcut`, `parts[].overcut` | | how far the outline goes below the stock bottom (and a squared contour below its faces) |
+| tabs | 4 per contour, 6 mm wide, 3 mm high, rectangular | `defaults.tabs`, `parts[].tabs` (`{ count, width, height }`, in part; `false`: none) | | holding tabs on the outline |
+| coolant | off | | | |
+| all else | Fusion's defaults for a 2D pocket, a 2D contour | | | e.g. heights (clearance 15 mm above the stock top), lead-in/out; fixed by the Fusion version |
 
-Fusion's setup takes the board as it lies in the model, the tool along the model's z. A board that is not flat in the model, or one that also needs a setup on a wedge (the zigzag seat's dovetails, square to a back leaning 8°), needs its setups listed in the model's manifest:
+## Tools
 
-- `.docs/<model>/<model>.cam.json`, generated by the build from the model (not yet: a later change), read first;
-- else `<model>/cam.config.json`, by hand (the zigzag chair has one).
+[`tools.json`](tools.json): the tool, as Fusion's tool JSON is built from it ([`machining.ts`](machining.ts)), and its preset. Flat end mills. **Defaults: check them against your cutters, wood and machine.**
+
+| id | Ø mm | flutes | flute length mm | tool # | rpm | cutting mm/min | plunge/ramp mm/min | stepdown mm | stepover mm |
+|---|---|---|---|---|---|---|---|---|---|
+| `flat-6-2f` | 6 | 2 | 25 | 1 | 18000 | 2500 | 800 | 6 | 2.4 |
+| `flat-8-2f` | 8 | 2 | 35 | 2 | 18000 | 3000 | 900 | 8 | 3.2 |
+| `flat-12-2f` | 12 | 2 | 50 | 3 | 16000 | 3500 | 1000 | 10 | 4.8 |
+
+Ramp angle 2 degrees for all.
+
+## The record: `cam.json`
+
+Beside the files, per file: its sha256, the values above as resolved (tool, feeds, stepdown, stepover, tabs, overcut, margin, rotation, cut, …), the faces out of reach, the post (vendor, description, version), the Fusion version, and the sha256 of the inputs (STEP, manifest, `tools.json`, `fusion-job.py`, `machining.ts`, `cam.ts`).
+
+## The manifest: setups, wedges, values
+
+- `.docs/<model>/<model>.cam.json`, generated by the build (not yet), read first;
+- else `<model>/cam.config.json`, by hand.
 
 ```json
 {
   "version": 1,
-  "defaults": { "template": "integral-19mm-6mm", "post": "shopbot", "margin": 5 },
+  "defaults": { "post": "shopbot", "margin": 5, "tabs": { "count": 4 } },
   "parts": [
     {
       "body": "Seat",
       "thickness": 19,
-      "grain": "x",
-      "template": "integral-19mm-6mm",
-      "skip": false,
-      "visibleFaces": ["top"],
-      "note": "for the maker",
+      "tool": "flat-6-2f",
       "setups": [
         { "name": "main" },
         { "name": "wedge8", "wedge": 8, "wcs": { "rotate": [8, 0, 0] }, "cut": "squared" }
       ]
-    }
+    },
+    { "body": "SeatCleat", "skip": true, "note": "the table saw" }
   ]
 }
 ```
 
 | Key | |
 |---|---|
-| `body` | the STEP body's name, as the build names it |
-| `thickness`, `grain`, `visibleFaces`, `note` | optional, for the maker and later uses (holding tabs on hidden faces); not used yet |
-| `template` | this board's template, instead of the default |
-| `skip` | no CAM for this board |
+| `defaults` | `post` and the machining values (`tool`, `margin`, `overcut`, `reach`, `stepdown`, `stepover`, `pocketStockToLeave`, `tabs`), for every board |
+| `parts[].body` | the STEP body's name |
+| `parts[].<machining value>` | for this board |
+| `parts[].skip` | no file for this board |
+| `parts[].thickness`, `grain`, `visibleFaces`, `note` | for the maker; not used yet |
 | `setups[].name` | the file's suffix: `<Board>_<name>.sbp` |
-| `setups[].wcs.rotate` | `[x, y, z]` degrees, about the board's box centre, in that order: how the board lies on the machine |
-| `setups[].wedge` | the wedge's angle under the board, for the maker (the wedge is not modelled) |
-| `setups[].cut` | `"squared"`: this setup cuts only the faces it squares, see below; none: all the template finds |
+| `setups[].wcs.rotate` | how the board lies, see Parameters |
+| `setups[].wedge` | the wedge's angle under the board, for the maker |
+| `setups[].cut` | `"squared"` or none |
 
-A setup with `"cut": "squared"` (never the first one) cuts only the planar faces upright as the board lies in it (normal level within 0.05°) that are not upright as it lies in the board's first setup, which cuts the rest. On the zigzag seat's `wedge8`: the dovetail tails' flanks and ends, and the rear between them, which lean 8° flat. The template is applied, then its 2D contours are given those faces' bottom edges as their geometry (chains, open where they do not close), cut on the waste side, from the stock top to 0.3 mm below the faces' lowest point, in stepdowns of 6 mm at most, without tabs; its other operations (pockets, cut in the first setup) are deleted. No such face is an error.
+Unknown keys are errors.
 
-A board missing from the manifest gets one setup, `main`, as it lies. The zigzag chair's angles follow its planes (the back leans 8°, the slant 45°), but their signs are not checked: look at each setup in Fusion before posting it.
+`"cut": "squared"` (never the first setup): one 2D contour along the bottom edges of the planar faces upright in this setup (normal level within 0.05 degrees) but not in the board's first setup, on the waste side, from the stock top to `overcut` below their lowest point, without tabs. The tool is chosen for that depth. No such face is an error. The zigzag seat's `wedge8` cuts its tails' flanks and ends, square to the back leaning 8 degrees.
+
+Faces a squared setup cuts are not reported out of reach in the board's other setups. The zigzag chair's angles' signs are not checked: look at each setup in Fusion before posting.

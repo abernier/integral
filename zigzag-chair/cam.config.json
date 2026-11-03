@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "defaults": { "template": "integral-19mm-6mm", "post": "shopbot", "margin": 5 },
+  "defaults": { "post": "shopbot", "margin": 5 },
   "parts": [
     {
       "body": "Seat",

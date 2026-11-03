@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "id": "flat-6-2f",
+      "description": "6mm 2F flat end mill (integral)",
+      "number": 1,
+      "diameter": 6,
+      "flutes": 2,
+      "fluteLength": 25,
+      "bodyLength": 30,
+      "overallLength": 50,
+      "guid": "7c1d2e44-5b3a-4f6e-8d21-9a0b4c6e2f10",
+      "preset": {
+        "name": "Wood / plywood",
+        "description": "integral default for 19 mm plywood on the ShopBot (check before cutting)",
+        "guid": "3f6a8b52-0c1e-4b0e-9a57-6d1c2a7e19a1",
+        "spindleSpeed": 18000,
+        "feedCutting": 2500,
+        "feedPlunge": 800,
+        "rampAngle": 2,
+        "stepdown": 6,
+        "stepover": 2.4
+      }
+    },
+    {
+      "id": "flat-8-2f",
+      "description": "8mm 2F flat end mill, 35 mm flutes (integral)",
+      "number": 2,
+      "diameter": 8,
+      "flutes": 2,
+      "fluteLength": 35,
+      "bodyLength": 40,
+      "overallLength": 70,
+      "guid": "b2e7c9a1-4d3f-4a8e-9c61-2f5d8e0b7a34",
+      "preset": {
+        "name": "Wood / hardwood",
+        "description": "integral default for solid wood on the ShopBot (check before cutting)",
+        "guid": "c4a1f0d2-8e6b-4b37-a5d9-1e3c7f2b6a58",
+        "spindleSpeed": 18000,
+        "feedCutting": 3000,
+        "feedPlunge": 900,
+        "rampAngle": 2,
+        "stepdown": 8,
+        "stepover": 3.2
+      }
+    },
+    {
+      "id": "flat-12-2f",
+      "description": "12mm 2F flat end mill, 50 mm flutes (integral)",
+      "number": 3,
+      "diameter": 12,
+      "flutes": 2,
+      "fluteLength": 50,
+      "bodyLength": 55,
+      "overallLength": 90,
+      "guid": "e9d3b6f4-1a2c-4e85-b7f0-6c8a2d4e1b97",
+      "preset": {
+        "name": "Wood / hardwood",
+        "description": "integral default for solid wood on the ShopBot (check before cutting)",
+        "guid": "f1b8e2c7-3d5a-4c96-8e0f-9a7d4b2c6e13",
+        "spindleSpeed": 16000,
+        "feedCutting": 3500,
+        "feedPlunge": 1000,
+        "rampAngle": 2,
+        "stepdown": 10,
+        "stepover": 4.8
+      }
+    }
+  ]
+}
