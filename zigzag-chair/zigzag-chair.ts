@@ -11,6 +11,7 @@
 // the parameters, and every board is a named body in it, so changing one rebuilds them all.
 
 import { type Api, created, nameSolids } from '../scripts/part.ts'
+import type { CamConfig } from '../scripts/cam/config.ts'
 
 const DEG = Math.PI / 180
 const CHERRY: [number, number, number] = [168, 96, 58] // #a8603a
@@ -39,6 +40,21 @@ export const MASTERS = {
   GRIP_DEEP: 10,
   GRIP_BELOW: 20, // from the back's top edge to the grip, along the rear face
 }
+
+/** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. */
+export const CAM = {
+  defaults: { post: 'shopbot', material: 'cherry' },
+  parts: {
+    // The tails are square to the back, which leans: once cut on its sheet, the seat goes on a wedge of the back's
+    // lean, turned as much about x, and the tool comes along the tails' walls; it cuts only those.
+    Seat: { setups: [{ name: `wedge${MASTERS.BACK_LEAN}`, wedge: MASTERS.BACK_LEAN, rotate: [MASTERS.BACK_LEAN, 0, 0], cut: 'squared' }] },
+    // Near square, wider than high: its grain runs up its height, across its tails, not along its longest side.
+    Back: { grain: 90 },
+    // The triangular cleats: the table saw.
+    SeatCleat: { skip: true },
+    FootCleat: { skip: true },
+  },
+} satisfies CamConfig
 
 // Everything else, derived. The slant is fixed at 45 degrees, both mitres bisect it (22.5 degrees).
 const DERIVED = {

@@ -2,7 +2,7 @@
 // (`scripts/cam/tools.json`, Fusion's own JSON, edited in Fusion), and the values sent with it to Fusion
 // (fusion-job.py applies them and has none of its own).
 //
-// The values are, from the strongest: the CLI's, the model's manifest's (`defaults`), these defaults.
+// The values are, from the strongest: the CLI's, the model's CAM config's (`defaults`, cam/config.ts), these defaults.
 //
 // The tool: the one numbered `tool`, else the narrowest of the library that reaches the cut (the sheet's thickness and
 // `overcut` below it): its flutes `reach` more, its stickout `nutClearance` more. Feeds, speeds, stepdown and stepover are the tool's
@@ -23,7 +23,7 @@ export type Material = { grain: boolean; preset: string; stock?: string; note?: 
 /** Holding tabs on the outline: how many per contour, how wide, and how much wood they leave (mm). */
 export type Tabs = { count: number; width: number; height: number }
 
-/** The values a manifest's `defaults` or the CLI may set. Lengths in mm. */
+/** The values a model's CAM config `defaults` or the CLI may set. Lengths in mm. */
 export type MachiningOptions = {
   /** A tool's number in tools.json for every sheet, instead of the one chosen by thickness. */
   tool?: number
@@ -70,11 +70,8 @@ const MINIMUM_GRIP = 20
 /** Pockets of any corner radius (mm). */
 const CORNER_RADIUS = [0, 1000]
 
-export const MACHINING_KEYS = ['tool', 'material', 'sheet', 'spacing', 'frame', 'margin', 'overcut', 'reach', 'nutClearance', 'tabs'] as const
-const TAB_KEYS = ['count', 'width', 'height'] as const
-
-/** The problems with a manifest's (or the CLI's) machining values, as messages; none when they are right. */
-export function machiningProblems(options: Record<string, unknown>) {
+/** The problems with a CAM config's (or the CLI's) machining values, as messages; none when they are right. */
+export function machiningProblems(options: MachiningOptions) {
   const problems: string[] = []
   const positive = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0
   if (options.margin !== undefined && !positive(options.margin)) problems.push('margin must be a number of mm above 0')
@@ -83,17 +80,13 @@ export function machiningProblems(options: Record<string, unknown>) {
     if (value !== undefined && !(typeof value === 'number' && Number.isFinite(value) && value >= 0)) problems.push(`${key} must be a number of mm, 0 or more`)
   }
   const sheet = options.sheet
-  if (sheet !== undefined && !(Array.isArray(sheet) && sheet.length === 2 && sheet.every(positive))) problems.push('sheet must be [length, width] in mm')
+  if (sheet !== undefined && !(sheet.length === 2 && sheet.every(positive))) problems.push('sheet must be [length, width] in mm')
   if (options.tool !== undefined && !Number.isInteger(options.tool)) problems.push('tool must be a tool number of scripts/cam/tools.json')
-  if (options.material !== undefined && !(options.material as string in loadMaterials())) problems.push(`material must be one of scripts/cam/materials.json (${Object.keys(loadMaterials()).join(', ')})`)
+  if (options.material !== undefined && !(options.material in loadMaterials())) problems.push(`material must be one of scripts/cam/materials.json (${Object.keys(loadMaterials()).join(', ')})`)
   const tabs = options.tabs
-  if (tabs !== undefined && tabs !== false) {
-    if (typeof tabs !== 'object' || tabs === null) problems.push('tabs must be { count, width, height } or false')
-    else {
-      for (const [key, value] of Object.entries(tabs)) {
-        if (!(TAB_KEYS as readonly string[]).includes(key)) problems.push(`tabs.${key}: unknown (count, width, height)`)
-        else if (!positive(value) || (key === 'count' && !Number.isInteger(value))) problems.push(`tabs.${key} must be a ${key === 'count' ? 'whole number' : 'number of mm'} above 0`)
-      }
+  if (tabs) {
+    for (const [key, value] of Object.entries(tabs)) {
+      if (!positive(value) || (key === 'count' && !Number.isInteger(value))) problems.push(`tabs.${key} must be a ${key === 'count' ? 'whole number' : 'number of mm'} above 0`)
     }
   }
   return problems

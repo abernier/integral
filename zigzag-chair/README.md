@@ -47,7 +47,7 @@ In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole c
 pnpm cam zigzag-chair --force
 ```
 
-How it works, in the workshop: [CAM](https://abernier.github.io/integral/integral/cam). What is cut how, per part (skips, grain, the Seat's wedge pass): [cam.config.json](https://github.com/abernier/integral/blob/main/zigzag-chair/cam.config.json). The files and what each holds: `.docs/zigzag-chair/cam/cam.json`, out of git.
+How it works, in the workshop: [CAM](https://abernier.github.io/integral/integral/cam). What is cut how, per part (skips, grain, the Seat's wedge pass): `CAM` in [zigzag-chair.ts](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts). The files and what each holds: `.docs/zigzag-chair/cam/cam.json`, out of git.
 
 By hand (the files cut square, from the top):
 

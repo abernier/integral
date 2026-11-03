@@ -166,8 +166,8 @@ def arrange():
     for name in JOB["parts"]:
         component = feature_input.arrangeComponents.add(find_part(design, name))
         # Arrange lays a part largest planar face up; flipped, that face lies on the sheet and the tool comes from the
-        # other, where pockets open (their openings make it the smaller). A part in JOB["flip"] (manifest `flip`) is
-        # left largest face up.
+        # other, where pockets open (their openings make it the smaller). A part in JOB["flip"] (its `flip` in the
+        # model's `CAM` config) is left largest face up.
         component.isDirectionFlipped = name not in JOB["flip"]
         if name in JOB["grain"]:
             # The angle from the zero direction to the long axis, counterclockwise seen from the face that ends up
@@ -383,7 +383,7 @@ def set_stock_material(setup):
     setup.stockMaterial = found[0]
 
 
-# The separate setup of one part on a wedge (manifest `setups`): what Arrange cannot do.
+# The separate setup of one part on a wedge (a part's `setups` in the model's `CAM` config): what Arrange cannot do.
 
 # A face stands upright when its normal is level within 0.05 degrees.
 UPRIGHT = math.sin(math.radians(0.05))

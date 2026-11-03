@@ -5,8 +5,8 @@
 // document. Its parts are grouped by material and thickness (what Fusion's Arrange does not do); each group is laid flat
 // and nested by Fusion's Arrange on as many sheets as it takes; each sheet gets a milling setup (the sheet as stock,
 // the narrowest tool of scripts/cam/tools.json that cuts through it, a 2D pocket, a 2D contour with tabs, the rest
-// with the narrowest tool), posted to `.docs/<model>/cam/<model>_<material>_<thickness>mm_<n>.sbp`. A part with setups of its own in the manifest (a wedge, see
-// cam/manifest.ts) gets one more file per setup, `<Part>_<setup>.sbp`. Then the document is closed, unsaved (`--keep`
+// with the narrowest tool), posted to `.docs/<model>/cam/<model>_<material>_<thickness>mm_<n>.sbp`. A part with setups of its own in the model's
+// `CAM` config (a wedge, see cam/config.ts) gets one more file per setup, `<Part>_<setup>.sbp`. Then the document is closed, unsaved (`--keep`
 // leaves it open, to simulate the setups in Fusion). Files already there are kept (`--force` makes them again).
 //
 //   pnpm cam zigzag-chair [--sheet 2440x1220] [--tool 2] [--only Seat,Back]
@@ -38,7 +38,7 @@ import {
   type MachiningOptions,
   type Tool,
 } from './cam/machining.ts'
-import { loadManifest, manifestPaths, stepParts, type Setup } from './cam/manifest.ts'
+import { configFile, loadConfig, stepParts } from './cam/config.ts'
 
 const ROOT = join(import.meta.dirname, '..')
 const DOCS = join(ROOT, '.docs') // site.ts' MDX: where the build writes each model's files
@@ -108,7 +108,9 @@ if (!existsSync(join(ROOT, model, `${model}.ts`))) fail(`no model ${model} (no $
 
 const step = resolve(flags.step ?? join(DOCS, model, `${model}.step`))
 if (!existsSync(step)) fail(`no STEP at ${shown(step)}: run \`nr build:parts\` first, or pass --step`)
-const { manifest, from } = loadManifest(manifestPaths(ROOT, DOCS, model))
+const source = configFile(ROOT, model)
+const config = await loadConfig(source).catch((error: Error) => fail(error.message))
+const partConfigs = config.parts ?? {}
 const { library, tools } = loadTools()
 const materials = loadMaterials()
 const sheetFlag = flags.sheet?.split('x').map(Number)
@@ -119,30 +121,30 @@ const cli: MachiningOptions = {
 }
 const cliProblems = machiningProblems(cli)
 if (cliProblems.length) fail(`--tool/--sheet/--spacing: ${cliProblems.join('; ')}`)
-const options = resolveMachining(cli, manifest.defaults)
+const options = resolveMachining(cli, config.defaults)
 if (options.tool !== undefined && !tools.some((t) => t.number === options.tool)) fail(`no tool #${options.tool} in scripts/cam/tools.json (${tools.map((t) => t.number).join(', ')})`)
-const post = flags.post ?? manifest.defaults?.post ?? 'shopbot'
+const post = flags.post ?? config.defaults?.post ?? 'shopbot'
 const only = flags.only?.split(',').map((s) => s.trim())
 const out = join(DOCS, model, 'cam')
 
 const parts = stepParts(step)
 if (!parts.length) fail(`${shown(step)} is not an assembly (no NEXT_ASSEMBLY_USAGE_OCCURRENCE): rebuild it with \`nr build:parts\``)
-for (const entry of manifest.parts) if (!parts.includes(entry.part)) fail(`${from ? shown(from) : 'manifest'}: no part ${entry.part} in ${shown(step)}`)
+for (const name of Object.keys(partConfigs)) if (!parts.includes(name)) fail(`${shown(source)}: CAM.parts: no part ${name} in ${shown(step)}`)
 for (const name of only ?? []) if (!parts.includes(name)) fail(`--only: no part ${name} in ${shown(step)} (${parts.join(', ')})`)
-const entryOf = (name: string) => manifest.parts.find((entry) => entry.part === name)
+const entryOf = (name: string) => partConfigs[name]
 const skipped = parts.filter((name) => entryOf(name)?.skip)
 const selected = parts.filter((name) => (!only || only.includes(name)) && !entryOf(name)?.skip)
-/** The parts the manifest lays the other face up (`flip`). */
+/** The parts the config lays the other face up (`flip`). */
 const flip = selected.filter((name) => entryOf(name)?.flip)
-/** Each part's material: the manifest's for it, else the run's. */
+/** Each part's material: the config's for it, else the run's. */
 const materialOf = (name: string) => entryOf(name)?.material ?? options.material
 /** The parts kept with their grain along x, turned this many degrees more: those of a material with grain. */
 const grain = Object.fromEntries(selected.filter((name) => materials[materialOf(name)].grain).map((name) => [name, entryOf(name)?.grain ?? 0]))
 /** The parts' setups of their own (a wedge): one file each, beside the sheets. */
 const ownSetups = selected.flatMap((part) => (entryOf(part)?.setups ?? []).map((setup) => ({ part, setup })))
 
-console.log(`cam: ${model}, ${selected.length} parts from ${shown(step)}, manifest ${from ? shown(from) : '(none)'}`)
-if (skipped.length) console.log(`cam: skipping ${skipped.map((name) => `${name} (${entryOf(name)?.note ?? 'skip in manifest'})`).join(', ')}`)
+console.log(`cam: ${model}, ${selected.length} parts from ${shown(step)}, ${config.parts || config.defaults ? `CAM config from ${shown(source)}` : 'no CAM config'}`)
+if (skipped.length) console.log(`cam: skipping ${skipped.join(', ')}`)
 
 const there = existsSync(out) ? readdirSync(out).filter((file) => file.endsWith('.sbp')) : []
 if (there.length && !flags.force) {
@@ -202,9 +204,10 @@ type CamRecord = { version: 2; files: Record<string, unknown> }
 // With --only, the other files stay: so do their entries.
 const previous = existsSync(RECORD) ? (JSON.parse(readFileSync(RECORD, 'utf8')) as CamRecord) : undefined
 const record: CamRecord = only && previous?.version === 2 ? previous : { version: 2, files: {} }
+// The inputs' hashes: the STEP, the model's module (its `CAM` config; also its geometry, already in the STEP), the
+// catalogs and the code.
 const inputs = Object.fromEntries(
-  [step, from, TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
-    .filter((file): file is string => !!file)
+  [step, source, TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
     .map((file) => [shown(file), sha256(file)]),
 )
 const failed: string[] = []

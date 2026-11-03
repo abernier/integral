@@ -40,18 +40,18 @@ The files cut 2.5D, from the top only: vertical walls, inside corners at the too
 
 ## Parameters
 
-Strongest first: CLI flag (`pnpm cam --help`), manifest `defaults`, the defaults of [`machining.ts`](https://github.com/abernier/integral/blob/main/scripts/cam/machining.ts) (`MACHINING_DEFAULTS`, each value documented on `MachiningOptions`). Same inputs and Fusion version: same bytes.
+Strongest first: CLI flag (`pnpm cam --help`), the model's `CAM.defaults`, the defaults of [`machining.ts`](https://github.com/abernier/integral/blob/main/scripts/cam/machining.ts) (`MACHINING_DEFAULTS`, each value documented on `MachiningOptions`). Same inputs and Fusion version: same bytes.
 
 The tool, per sheet: the narrowest of `tools.json` whose flutes reach the sheet's thickness, `overcut` below it, and `reach` to spare, and whose stickout (its `assemblyGaugeLength`, out of the collet) reaches it with `nutClearance` to spare; or `--tool <number>`. A wedge setup and a rest pass are held to the same. Tabs: `height` is the wood a tab leaves (Fusion is given `height + overcut`, from the cut's bottom); `false`: none.
 
-Fixed: parts laid largest planar face down (manifest `flip`: up), part-in-part off; stock = the sheet, its bottom on the parts', its material Fusion's library one (`materials.json` `stock`); WCS at the sheet's top, x-min y-min corner; a 2D pocket on the pockets Fusion recognises (holes the tool fits in), to size, inside corners at the tool's radius, with Fusion's finishing pass on the walls; a 2D contour outside each part's silhouette, through; then the same contour with Fusion's rest machining (what a tool of the main one's diameter leaves) and the narrowest tool, as deep as it reaches, in its own file; feeds, speeds, stepdown, stepover from the tool's preset for the material, in even passes; all else Fusion's defaults.
+Fixed: parts laid largest planar face down (a part's `flip`: up), part-in-part off; stock = the sheet, its bottom on the parts', its material Fusion's library one (`materials.json` `stock`); WCS at the sheet's top, x-min y-min corner; a 2D pocket on the pockets Fusion recognises (holes the tool fits in), to size, inside corners at the tool's radius, with Fusion's finishing pass on the walls; a 2D contour outside each part's silhouette, through; then the same contour with Fusion's rest machining (what a tool of the main one's diameter leaves) and the narrowest tool, as deep as it reaches, in its own file; feeds, speeds, stepdown, stepover from the tool's preset for the material, in even passes; all else Fusion's defaults.
 
-Grain: a material with grain keeps each part's grain along its length, the sheet's x: Fusion's Arrange is given each part's rotation (from its zero direction to its longest side, as Fusion's smallest box around it finds it) and may only turn it 180°. Fusion's own grain direction (the envelope's) needs the Manufacturing Extension, so it is not used. Manifest `grain`: degrees more, per part, so a near-square part or a loose tenon gets its grain across its joint. A material without grain: any rotation.
+Grain: a material with grain keeps each part's grain along its length, the sheet's x: Fusion's Arrange is given each part's rotation (from its zero direction to its longest side, as Fusion's smallest box around it finds it) and may only turn it 180°. Fusion's own grain direction (the envelope's) needs the Manufacturing Extension, so it is not used. A part's `grain`: degrees more, so a near-square part or a loose tenon gets its grain across its joint. A material without grain: any rotation.
 
 ## Catalogs
 
 - [`tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam/tools.json): the cutters, their sizes and feed presets per material (each tool's and preset's `description` says what it is and where its values come from). A Fusion tool library, in Fusion's own JSON, sent as is; the code reads only each tool's number, diameter, flute length and stickout, to pick one. The post writes one feed per operation (`MS`): ramps and lead-ins run at the cutting feed, whatever the preset's ramp feed. **Adjust by the chips and burn marks.**
-- [`materials.json`](https://github.com/abernier/integral/blob/main/scripts/cam/materials.json): per material, `grain` (parts keep it along their length), `preset` (the tool presets' name), `stock` (Fusion's library stock material, if any). A model's material: manifest `defaults.material`, a part's own: `parts[].material`; one sheet per material and thickness.
+- [`materials.json`](https://github.com/abernier/integral/blob/main/scripts/cam/materials.json): per material, `grain` (parts keep it along their length), `preset` (the tool presets' name), `stock` (Fusion's library stock material, if any). A model's material: `CAM.defaults.material`, a part's own: its `material`; one sheet per material and thickness.
 
 To edit `tools.json`, in Fusion:
 
@@ -59,13 +59,13 @@ To edit `tools.json`, in Fusion:
 2. Edit the tools and their presets (one per material, named as in `materials.json`).
 3. Right-click the library, Export, over `tools.json` (JSON).
 
-## The manifest
+## Config
 
-`<model>/cam.config.json`, hand-written, optional (`.docs/<model>/<model>.cam.json` first, if a build ever generates one). Unknown keys are errors. Its keys are documented at the top of [`manifest.ts`](https://github.com/abernier/integral/blob/main/scripts/cam/manifest.ts); a part's `note` says why it is skipped, turned or set up on a wedge. Examples: [zigzag chair](https://github.com/abernier/integral/blob/main/zigzag-chair/cam.config.json), [compass armchair](https://github.com/abernier/integral/blob/main/compass-armchair/cam.config.json).
+What Fusion cannot know from the STEP (skips, grain turns, flips, wedge setups, the model's material and post): the `CAM` export of the model's own module, optional, typed `CamConfig` and documented in [`config.ts`](https://github.com/abernier/integral/blob/main/scripts/cam/config.ts); a comment on each part says why. Examples: [zigzag chair](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts), [compass armchair](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts).
 
 ## The record: `cam.json`
 
-Generated by each run beside the files, out of git. Per file: its sha256; for a sheet, its material, thickness, number, parts, their grain turn, where they lie (`partsBox` and per part `boxes`, mm from the corner), size, spacing, frame; for a wedge setup, its turn, depth, margin; the tool and every value given to Fusion; for a `_rest` file, its tool and depth; the deepest cut; the post and its version; the Fusion version; the sha256 of the inputs (STEP, manifest, `tools.json`, `materials.json`, `fusion-job.py`, `machining.ts`, `cam.ts`). What a model's files are, which tool, which parts on which sheet: read it there.
+Generated by each run beside the files, out of git. Per file: its sha256; for a sheet, its material, thickness, number, parts, their grain turn, where they lie (`partsBox` and per part `boxes`, mm from the corner), size, spacing, frame; for a wedge setup, its turn, depth, margin; the tool and every value given to Fusion; for a `_rest` file, its tool and depth; the deepest cut; the post and its version; the Fusion version; the sha256 of the inputs (STEP, the model's module, `tools.json`, `materials.json`, `fusion-job.py`, `machining.ts`, `cam.ts`). What a model's files are, which tool, which parts on which sheet: read it there.
 
 ## In the workshop
 

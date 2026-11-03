@@ -55,7 +55,7 @@ flowchart TD
   out --> site["site<br/>GitHub Pages"]
   out --> bl["Buerligons<br/>edit online"]
   out -->|pnpm cam| fusion["Fusion desktop<br/>local MCP server"]
-  manifest["cam.config.json<br/>skips, wedge setups"] --> fusion
+  ts -->|CAM export<br/>skips, wedge setups| fusion
   tools["tools.json<br/>cutters, feeds"] --> fusion
   fusion -->|Arrange: parts nested<br/>by thickness| sheets["one sheet<br/>per thickness"]
   sheets -->|CAM + ShopBot post| sbp[".sbp per sheet<br/>+ cam.json"]

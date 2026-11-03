@@ -56,7 +56,7 @@ In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole c
 pnpm cam compass-armchair --force
 ```
 
-How it works, in the workshop: [CAM](https://abernier.github.io/integral/integral/cam). What is cut how, per part (skips, the loose tenons' grain): [cam.config.json](https://github.com/abernier/integral/blob/main/compass-armchair/cam.config.json). The files and what each holds: `.docs/compass-armchair/cam/cam.json`, out of git.
+How it works, in the workshop: [CAM](https://abernier.github.io/integral/integral/cam). What is cut how, per part (skips, the loose tenons' grain): `CAM` in [compass-armchair.ts](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts). The files and what each holds: `.docs/compass-armchair/cam/cam.json`, out of git.
 
 By hand (the files cut square, from the top):
 
