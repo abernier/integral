@@ -7,7 +7,7 @@
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things").
 //
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
-// for a local site those URLs are rewritten to the local servers, for a Vercel preview to its own URL.
+// for a local site those URLs are rewritten to the local servers, for a Vercel preview to its branch URL.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
@@ -21,8 +21,13 @@ export const DIST = join(ROOT, 'dist')
 
 /** Where GitHub Pages serves the site: the READMEs link pages and files by this URL. */
 const PAGES_URL = 'https://abernier.github.io/integral'
-/** Where this build is served: GitHub Pages, or on Vercel the preview deployment's own URL, at its root. */
-export const SITE_URL = process.env.SITE_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : PAGES_URL)
+/**
+ * Where this build is served: GitHub Pages, or on Vercel the preview's branch URL, at its root. The pages link
+ * their images and files by this host (@pmndrs/docs makes image URLs absolute), and a preview's sign-in cookie holds
+ * for one host: the branch URL is the one the pull request links, not the deployment's own URL.
+ */
+const VERCEL_HOST = process.env.VERCEL_BRANCH_URL ?? process.env.VERCEL_URL
+export const SITE_URL = process.env.SITE_URL ?? (VERCEL_HOST ? `https://${VERCEL_HOST}` : PAGES_URL)
 export const HOME = '/integral/introduction'
 
 /** A part's page, under "Things" in the sidebar. */
