@@ -32,9 +32,26 @@ pnpm cam zigzag-chair --force --keep   # then Simulate the setups in Fusion
 pnpm cam --force                       # every model, every file made again
 ```
 
-With `--keep`, the document stays open in Fusion: select a setup, Actions > Simulate, and watch the stock go.
+With `--keep`, the document stays open in Fusion: select a setup, Actions > Simulate, and watch the stock go. With a machine on the setup, Simulate with Machine shows the sheet on the ShopBot, and the tool going into anything it should not.
 
-![Fusion's Simulate on the zigzag chair's Seat_wedge8 setup: the seat on its wedge, the stock transparent, the tool cutting the dovetails' walls](https://abernier.github.io/integral/integral/cam/simulate.png)
+![Fusion's Simulate with Machine on the zigzag chair's sheet: the ShopBot's gantry over the cherry sheet, the toolpaths in blue, no collision](https://abernier.github.io/integral/integral/cam/simulate.png)
+
+<details>
+<summary>The ShopBot in Fusion</summary>
+
+The machine is a local Fusion setting, not in the repo. Fusion's API cannot put a simulation-ready machine on a setup, so it is picked by hand on each `--keep` run: double-click the setup, Machine > Select > My machines > Local.
+
+It is Autodesk's generic 3-axis router, made into the workshop's ShopBot PRSalpha 96-48:
+
+- travel X 2500, Y 1250, Z 150 mm; spindle 6000 to 18000 rpm;
+- the table stretched along X to 2540 x 1300 mm, with a 19 mm spoilboard on it;
+- the sheet centred on the spoilboard: the table's attach point at `[-809, -57, 19.3]`.
+
+The 0.3 above the spoilboard is the cut's overcut (`deepest` in `cam.json` is the thickness plus 0.3): the planned pass below the sheet cuts air, and a deeper one hits the spoilboard and shows as a collision. Change one, change the other.
+
+The machine is a `.mch` file in Fusion's machine library (`~/Library/Application Support/Autodesk/CAM360/machines/` on macOS), and its 3D model is a Fusion document in the cloud, which the `.mch` names. Fusion places the sheet in the document's coordinates, so the attach point holds for Z-up documents only: set Preferences > General > Default modeling orientation to Z up.
+
+</details>
 
 Files that already exist are left alone, so a run is cheap to repeat. To work on one part, `--only <part>` writes to a folder of its own.
 
