@@ -44,3 +44,20 @@ nr build      # parts + site into dist/
 - Engine key: local ClassCAD sign-in; in CI, the `CLASSCAD_TOKEN` secret
 - CAM: `pnpm cam <folder>`, ShopBot `.sbp` files for each board, by Fusion's CAM in the Fusion desktop app, through its local MCP server, into `.docs/<folder>/cam/`; see `scripts/cam/README.md`; simulate before cutting
 - Deploy: every push to `main`, GitHub Pages; every pull request, a Vercel preview (`vercel.json`, the engine key in its `CLASSCAD_TOKEN` variable)
+
+## Pipeline
+
+From a part's code to the machine. `nr build` runs in CI; `pnpm cam` only on a Mac with Fusion open.
+
+```mermaid
+flowchart TD
+  ts["part.ts<br/>parameters"] -->|nr build<br/>ClassCAD| out["STEP, OFB, GLB, PNG<br/>.docs/part/"]
+  out --> site["site<br/>GitHub Pages"]
+  out --> bl["Buerligons<br/>edit online"]
+  out -->|pnpm cam| fusion["Fusion desktop<br/>local MCP server"]
+  manifest["cam.config.json<br/>skips, wedge setups"] --> fusion
+  tools["tools.json<br/>cutters, feeds"] --> fusion
+  fusion -->|Arrange: parts nested<br/>by thickness| sheets["one sheet<br/>per thickness"]
+  sheets -->|CAM + ShopBot post| sbp[".sbp per sheet<br/>+ cam.json"]
+  sbp -->|simulate, air-cut| shopbot["ShopBot"]
+```
