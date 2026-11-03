@@ -5,13 +5,29 @@ import { Bounds, Grid, OrbitControls } from '@react-three/drei'
 import { button, Leva, useControls } from 'leva'
 import { Mesh, type Object3D } from 'three'
 import { type Model, models } from './models.ts'
-import { changedParams, withQueryValues } from './App.query.ts'
+import { changedParams, parseValuesFile, valuesFile, withQueryValues } from './App.query.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
 const DEBOUNCE_MS = 200
 
 const query = new URLSearchParams(location.search)
 const part = query.get('part') ?? ''
+
+/** Asks the user for a JSON file and reads it; undefined when none is picked. */
+function pickJsonFile() {
+  return new Promise<string | undefined>((done) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json,application/json'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (file) file.text().then(done, () => done(undefined))
+      else done(undefined)
+    })
+    input.addEventListener('cancel', () => done(undefined))
+    input.click()
+  })
+}
 
 /** Copies text to the clipboard; the textarea route is for iframes and non-secure contexts. Never throws. */
 async function copyText(text: string) {
@@ -61,14 +77,38 @@ function Message({ children, color = '#b00020', bottom = 16 }: { children: strin
 }
 
 function Configurator({ model }: { model: Model }) {
-  const [toast, setToast] = useState<string>()
+  // A problem stays longer than a confirmation, in red.
+  const [toast, setToast] = useState<{ text: string; problem?: boolean }>()
+  /** The sliders' values now, read when a button is clicked. */
+  const current = () => {
+    const value = get as unknown as (name: string) => number
+    return Object.fromEntries(Object.keys(model.schema).map((name) => [name, value(name)]))
+  }
   const [values, set, get] = useControls(() => ({
     'Copy link': button(async () => {
-      const current = get as unknown as (name: string) => number
-      const values = Object.fromEntries(Object.keys(model.schema).map((name) => [name, current(name)]))
-      const params = changedParams(model.schema, values, part)
+      const params = changedParams(model.schema, current(), part)
       const copied = await copyText(`${location.origin}${location.pathname}?${params}`)
-      setToast(copied ? 'Link copied' : 'Could not copy the link')
+      setToast(copied ? { text: 'Link copied' } : { text: 'Could not copy the link', problem: true })
+    }),
+    // A values file for `pnpm cam <part> --values <file.json>`: the CNC files of this very part. Its schema is among
+    // the part's built files, a folder up from this app's on every host (the site, `nr dev`'s file server).
+    'Copy values': button(async () => {
+      const schemaUrl = new URL(`../${part}/${part}.values.schema.json`, location.href).href
+      const copied = await copyText(valuesFile({ schema: model.schema, values: current(), part, schemaUrl }))
+      setToast(copied ? { text: 'Values copied' } : { text: 'Could not copy the values', problem: true })
+    }),
+    // A values file back into the sliders, checked as `pnpm cam --values` checks it: all of it, or nothing.
+    'Import values': button(async () => {
+      const text = await pickJsonFile()
+      if (text === undefined) return
+      const parsed = parseValuesFile(model.schema, part, text)
+      if ('problems' in parsed) {
+        const shown = parsed.problems.slice(0, 3).join('; ')
+        const more = parsed.problems.length > 3 ? ` (and ${parsed.problems.length - 3} more)` : ''
+        return setToast({ text: `Not imported: ${shown}${more}`, problem: true })
+      }
+      set(parsed.values)
+      setToast({ text: 'Values imported' })
     }),
     Reset: button(() => set(Object.fromEntries(Object.entries(model.schema).map(([name, control]) => [name, control.value])))),
     // The schema entries go through as they are: leva shows each control's `hint` on hover.
@@ -77,7 +117,7 @@ function Configurator({ model }: { model: Model }) {
   const numbers = values as unknown as Record<string, number>
   useEffect(() => {
     if (!toast) return
-    const timer = setTimeout(() => setToast(undefined), 1500)
+    const timer = setTimeout(() => setToast(undefined), toast.problem ? 6000 : 1500)
     return () => clearTimeout(timer)
   }, [toast])
   const [shape, setShape] = useState<Object3D>()
@@ -132,7 +172,11 @@ function Configurator({ model }: { model: Model }) {
       {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
       {!shape && !error && <Message color="#555">Building the model…</Message>}
       {error && <Message>{error}</Message>}
-      {toast && <Message color="#111" bottom={error ? 64 : 16}>{toast}</Message>}
+      {toast && (
+        <Message color={toast.problem ? undefined : '#111'} bottom={error ? 64 : 16}>
+          {toast.text}
+        </Message>
+      )}
     </>
   )
 }

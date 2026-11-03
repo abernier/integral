@@ -2,8 +2,10 @@
 // the MDX folder themselves: paths.ts).
 //
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
-// ClassCAD, and a README.md.
-// Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`;
+// ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`), and a README.md.
+// Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`, or a
+// variant's folder, and the JSON Schema of its values files (masters.ts), `<folder>.values.schema.json`, into
+// `.docs/<folder>/`;
 // `buildConfigurator` builds the configurator app into `.docs/configurator/`, and each part's page embeds it. The MDX folder also
 // gets one page per README, where the sidebar wants it: the root one as `integral/introduction.mdx`, each part's
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things"), and one per
@@ -17,6 +19,7 @@ import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
 import { build as vite } from 'vite'
 import { type Engine, glb, render, run, save } from './classcad.ts'
+import { type Values, defaultValues, valuesJsonSchema } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
 
 export const DIST = join(ROOT, 'dist')
@@ -63,20 +66,27 @@ function docPages() {
 }
 const docPage = (name: string) => `integral/${name}`
 
-export async function buildPart(engine: Engine, part: string) {
+/**
+ * Build a part and write its files into `out`.
+ * @param values Every master's value (masters.ts); the defaults when omitted.
+ * @param out The folder of its files: `.docs/<part>/` by default, a variant's (`variantDir`) for other values.
+ */
+export async function buildPart(engine: Engine, part: string, values?: Values, out = join(MDX, part)) {
   const started = performance.now()
   // A fresh URL each time: `dev` imports a part again after its file changes.
   const url = `${pathToFileURL(join(ROOT, part, `${part}.ts`)).href}?t=${Date.now()}`
   const { default: build } = await import(url)
-  const returned = await run(engine, build)
-  const out = join(MDX, part)
+  const resolved = values ?? (await defaultValues(part))
+  const returned = await run(engine, (api) => build(api, resolved))
   mkdirSync(out, { recursive: true })
   const ofb = await save(engine, 'OFB', join(out, `${part}.ofb`))
   const step = await save(engine, 'STP', join(out, `${part}.step`))
   const model = await glb(engine, join(out, `${part}.glb`))
   await render(engine, join(out, `${part}.png`))
+  // Beside the model's own files, whatever `out`: the configurator's values files point at it.
+  writeFileSync(join(MDX, part, `${part}.values.schema.json`), `${JSON.stringify(await valuesJsonSchema(part), null, 2)}\n`)
   const seconds = ((performance.now() - started) / 1000).toFixed(1)
-  console.log(`${part}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
+  console.log(`${relative(MDX, out)}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
 }
 
 /**

@@ -59,6 +59,12 @@ The machine is a `.mch` file in Fusion's machine library (`~/Library/Application
 
 Files that already exist are left alone, so a run is cheap to repeat. To work on one part, `--only <part>` writes to a folder of its own.
 
+A model with values of its own, not the defaults: `pnpm cam <model> --values my-chair.json`. The file is what the configurator's "Copy values" gives: `{ "model": "zigzag-chair", "values": { … } }`, with every master of the model's `<model>.masters.ts` in `values`. Its JSON Schema, which its `$schema` points at, is built as `.docs/<model>/<model>.values.schema.json`. The configurator's "Import values" loads such a file back into the sliders, checked by the same rules: all of it, or nothing. The rules:
+
+- **Every value, the current code.** The file holds every value, not the changed ones, so it means the same part when a default changes; the part is always built by the code checked out.
+- **The schema refuses what the code cannot build.** Another model, a missing or unknown key, or a value out of its range fails the run before anything is made.
+- **The values name the variant.** Its folder is `.docs/<model>/variants/<h>/`, `<h>` the first 8 hex digits of the sha256 of the values: the same values, the same folder, whatever the file is called. The model is built there (again with `--force`), its files go to `<h>/cam/`, and its `CAM` config follows the values: at `"BACK_LEAN": 10`, the zigzag chair's Seat goes on a 10° wedge. `cam.json` records the model, the full hash and every value.
+
 A part with no flat face, too thick for every tool, or larger than the sheet gets no file, and the run says so. A toolpath Fusion warns about fails the run.
 
 The files cut in 2.5D, from the top only: vertical walls, inside corners rounded to the tool's radius. Bevels, sloped walls, square corners, and whatever the rest pass cannot reach are hand work. Each model's page lists them; `--only <part> --keep` lets you Simulate one in Fusion.

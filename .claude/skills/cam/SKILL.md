@@ -12,14 +12,14 @@ Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the
 ## Run
 
 1. `pnpm cam --list-tools`. An answer means Fusion and its MCP server are up. No answer: Fusion is closed, its MCP server is off, or a dialog is open; [FUSION.md](FUSION.md) says which you can fix.
-2. `pnpm cam <model> --force`, with `--keep` when anything is to be simulated, `--only <Part>` for some parts (into `cam/only/`). Long runs go in the background.
+2. `pnpm cam <model> --force`, with `--keep` when anything is to be simulated, `--only <Part>` for some parts (into `cam/only/`), `--values <file.json>` for a model made with other values than its defaults (into `variants/<values' hash>/cam/`). Long runs go in the background.
 3. Read the whole output. `no file for:` lists parts without a file; `nothing to cut for Pockets` is normal on a sheet without pockets; `toolpaths with warnings` are Fusion's own. Report each as it is.
 
 Done when every part of the model has a file or is named in `no file for:`.
 
 ## Check
 
-Before calling a file good, each of these, against `.docs/<model>/cam/cam.json` (`cam/only/cam.json` after `--only`):
+Before calling a file good, each of these, against `.docs/<model>/cam/cam.json` (`cam/only/cam.json` after `--only`, `variants/<hash>/cam/cam.json` after `--values`):
 
 - Depth: a sheet's `deepest` is its thickness plus the overcut; nothing below the tool's flutes (the run checks it). A `_rest` file: the narrowest tool, no deeper than its flutes less `reach`, nor its stickout less `nutClearance`.
 - Grain: in `boxes`, each part of a material with grain is longer along x than y, unless its config turns it. The grain crosses every joint edge (tails, fingers, a loose tenon's length): a near-square part or a tenon needs a `grain`.

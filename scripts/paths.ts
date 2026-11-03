@@ -19,3 +19,8 @@ export function parts() {
     .filter((entry) => entry.isDirectory() && existsSync(join(ROOT, entry.name, `${entry.name}.ts`)))
     .map((entry) => entry.name)
 }
+
+/** Where the build writes a model's variant, built with other values: `.docs/<model>/variants/<name>/`, its hash's 8 first hex digits. */
+export function variantDir(model: string, name: string) {
+  return join(MDX, model, 'variants', name)
+}

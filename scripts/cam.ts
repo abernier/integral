@@ -1,6 +1,8 @@
 // `pnpm cam <model>`: ShopBot (OpenSBP, .sbp) files for a model, one per sheet and one per setup of its own, made by
 // Fusion's CAM in the Fusion desktop app running on this machine, driven through its local MCP server (cam/fusion.ts):
-// each step is a script cam/fusion-job.py runs there. The files go to `.docs/<model>/cam/`, recorded in its cam.json.
+// each step is a script cam/fusion-job.py runs there. The files go to `.docs/<model>/cam/`, recorded in its cam.json;
+// with `--values <file.json>`, the model made with those values (masters.ts), into
+// `.docs/<model>/variants/<hash of the values>/cam/`.
 // Flags: USAGE below. Usage, naming and the tool rule: docs/cam.md (https://abernier.github.io/integral/integral/cam).
 //
 // Simulate every .sbp before cutting.
@@ -29,7 +31,8 @@ import {
   type Tool,
 } from './cam/machining.ts'
 import { configFile, loadConfig } from './cam/config.ts'
-import { MDX, ROOT, parts } from './paths.ts'
+import { type ValuesFile, defaultValues, loadValues, mastersFile } from './masters.ts'
+import { MDX, ROOT, parts, variantDir } from './paths.ts'
 import { stepParts } from './step-assembly.ts'
 
 const shown = (path: string) => (path.startsWith(ROOT) ? relative(ROOT, path) : path)
@@ -47,6 +50,7 @@ const { values: flags, positionals } = parseArgs({
     sheet: { type: 'string' },
     spacing: { type: 'string' },
     only: { type: 'string' },
+    values: { type: 'string' },
     force: { type: 'boolean', default: false },
     keep: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
@@ -56,15 +60,17 @@ const { values: flags, positionals } = parseArgs({
 })
 
 const USAGE = `usage: pnpm cam [<model>] [options]      (no model: every model, one after the other)
-  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step)
+  --values <file.json>   the model made with the values of this file (the configurator's "Copy values"): its STEP built
+                         first if missing (or with --force), its files into .docs/<model>/variants/<values' hash>/cam/
+  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step, or the variant's)
   --post <text>          the library post whose vendor/description contains it (default ${DEFAULT_POST})
   --tool <number>        this tool of scripts/cam/tools.json for every sheet (default: per sheet, the narrowest that reaches)
   --sheet <LxW>          the sheet, mm (default ${MACHINING_DEFAULTS.sheet.join('x')})
   --spacing <mm>         between two parts on a sheet (default ${MACHINING_DEFAULTS.spacing}; at least the tool's diameter + ${SPACING_OVER_TOOL})
   --only <A,B>           these parts only, into .docs/<model>/cam/only/ with its own cam.json (the full run's files stay)
-  --force                make the files again: the folder's old .sbp go first
+  --force                make the files again: the folder's old .sbp go first (and a --values STEP)
   --keep                 leave the document open in Fusion, unsaved, to simulate its setups
-  --dry-run              print the plan, connect to nothing
+  --dry-run              print the plan, send nothing to Fusion
   --list-tools           list the tools of Fusion's MCP server (${ENDPOINT}), then stop`
 
 if (flags.help) {
@@ -81,6 +87,7 @@ if (flags['list-tools']) {
 }
 
 const model = positionals[0]
+if (!model && flags.values !== undefined) fail('--values is for one model: pnpm cam <model> --values <file.json>')
 if (!model) {
   // Every model (a folder with its <name>.ts, as the build finds them), each in its own run with the same flags.
   const failed = parts().filter((name) => {
@@ -93,12 +100,25 @@ if (!model) {
 }
 if (!parts().includes(model)) fail(`no model ${model} (no ${model}/${model}.ts)`)
 
-const step = resolve(flags.step ?? join(MDX, model, `${model}.step`))
+// The values first: a wrong one fails before anything is built or sent.
+const variant = flags.values === undefined ? undefined : await loadValues(model, flags.values).catch((error: Error) => fail(error.message))
+const values = variant?.values ?? (await defaultValues(model))
+/** The model's built files: its own folder, or its variant's. */
+const built = variant ? variantDir(model, variant.name) : join(MDX, model)
+if (variant) console.log(`cam: ${model} variant ${variant.hash}, in ${shown(built)}`)
+
+const step = resolve(flags.step ?? join(built, `${model}.step`))
+if (variant && !flags.step && (flags.force || !existsSync(step))) {
+  // The build loads ClassCAD, which this script never does (paths.ts): it runs in a process of its own.
+  console.log(`cam: building ${shown(step)} with ${shown(variant.file)}`)
+  const build = spawnSync(process.execPath, [join(import.meta.dirname, 'build.ts'), '--parts-only', model, '--values', variant.file], { stdio: 'inherit' })
+  if (build.status !== 0) fail(`building ${shown(step)} failed`)
+}
 if (!existsSync(step)) fail(`no STEP at ${shown(step)}: run \`nr build:parts\` first, or pass --step`)
 const source = configFile(ROOT, model)
 const { library, tools } = loadTools()
 const materials = loadMaterials()
-const config = await loadConfig(source, materials).catch((error: Error) => fail(error.message))
+const config = await loadConfig(source, materials, values).catch((error: Error) => fail(error.message))
 const partConfigs = config.parts ?? {}
 const sheetFlag = flags.sheet?.split('x').map(Number)
 const cli: MachiningOptions = {
@@ -113,7 +133,7 @@ if (options.tool !== undefined && !tools.some((t) => t.number === options.tool))
 const post = flags.post ?? config.defaults?.post ?? DEFAULT_POST
 const only = flags.only?.split(',').map((s) => s.trim())
 // An --only run is a run of its own, in its own folder: the full run's files and record stay as they are.
-const out = only ? join(MDX, model, 'cam', 'only') : join(MDX, model, 'cam')
+const out = only ? join(built, 'cam', 'only') : join(built, 'cam')
 
 const stepNames = stepParts(step)
 if (!stepNames.length) fail(`${shown(step)} is not an assembly (no NEXT_ASSEMBLY_USAGE_OCCURRENCE): rebuild it with \`nr build:parts\``)
@@ -131,6 +151,7 @@ const grain = Object.fromEntries(selected.filter((name) => materials[materialOf(
 /** The parts' setups of their own (a wedge): one file each, beside the sheets. */
 const ownSetups = selected.flatMap((part) => (entryOf(part)?.setups ?? []).map((setup) => ({ part, setup })))
 
+if (variant) console.log(`cam: ${model} made with the values of ${shown(variant.file)}`)
 console.log(`cam: ${model}, ${selected.length} parts from ${shown(step)}, ${config.parts || config.defaults ? `CAM config from ${shown(source)}` : 'no CAM config'}`)
 if (skipped.length) console.log(`cam: skipping ${skipped.join(', ')}`)
 
@@ -187,8 +208,9 @@ const finish = () =>
 process.on('SIGINT', () => void finish().then(() => process.exit(130)))
 
 /**
- * The record of this run, beside the files (`cam.json`): for each file made, every value it was made with, the parts
- * on it, and the hashes of what made it, so that a file can be made again the same.
+ * The record of this run, beside the files (`cam.json`): the model, every master's value it was made with (`values`,
+ * the defaults or a `--values` file's), and the variant's `hash`, and for each file made, every value it was made with, the parts on it, and the
+ * hashes of what made it, so that a file can be made again the same.
  *
  * Per file: its sha256, the tool and every value given to Fusion, the deepest cut, the post and its version, the
  * Fusion version, the sha256 of every input (`inputs`). A sheet adds its material, thickness and number, its parts
@@ -196,12 +218,12 @@ process.on('SIGINT', () => void finish().then(() => process.exit(130)))
  * frame. A wedge setup adds its turn, depth and margin; a `_rest` file its tool and depth.
  */
 const RECORD = join(out, 'cam.json')
-type CamRecord = { version: 2; files: Record<string, unknown> }
-const record: CamRecord = { version: 2, files: {} }
-// The inputs' hashes: the STEP, the model's module (its `CAM` config; also its geometry, already in the STEP), the
-// catalogs and the code.
+type CamRecord = Omit<ValuesFile, '$schema'> & { version: 3; hash?: string; files: Record<string, unknown> }
+const record: CamRecord = { version: 3, model, hash: variant?.hash, values, files: {} }
+// The inputs' hashes: the STEP, the model's module (its `CAM` config; also its geometry, already in the STEP), its
+// masters and the values file, the catalogs and the code.
 const inputs = Object.fromEntries(
-  [step, source, TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
+  [step, source, mastersFile(model), ...(variant ? [variant.file] : []), TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
     .map((file) => [shown(file), sha256(file)]),
 )
 const failed: string[] = []

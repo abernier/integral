@@ -1,9 +1,10 @@
 // A model's CAM config: what Fusion cannot know from the STEP, the `CAM` export of the model's own module
-// (`<model>/<model>.ts`), typed `CamConfig`. Optional: without one, every part is cut on the sheets, with the
-// defaults.
+// (`<model>/<model>.ts`), a function of the masters' values returning a `CamConfig`: a wedge follows the angle the
+// part was built with. Optional: without one, every part is cut on the sheets, with the defaults.
 
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import type { Values } from '../masters.ts'
 import { machiningProblems, type MachiningOptions, type Material } from './machining.ts'
 
 /**
@@ -38,7 +39,7 @@ export type PartConfig = {
   setups?: Setup[]
 }
 
-/** A model's CAM config: its `CAM` export. */
+/** A model's CAM config: what its `CAM` export returns. */
 export type CamConfig = {
   /** The machining values (see machining.ts) and the post (default DEFAULT_POST), for every part. */
   defaults?: MachiningOptions & { post?: string }
@@ -52,11 +53,13 @@ export function configFile(root: string, model: string) {
 }
 
 /**
- * The `CAM` export of a model's module (none: every part, the defaults), checked for what its type cannot say:
- * machining values in range, materials of `materials` (materials.json), setup names fit for a file name.
+ * The CAM config of a model's module for the model made with `values` (no `CAM` export: every part, the defaults),
+ * checked for what its type cannot say: machining values in range, materials of `materials` (materials.json), setup
+ * names fit for a file name.
  */
-export async function loadConfig(file: string, materials: Record<string, Material>): Promise<CamConfig> {
-  const { CAM: config = {} } = (await import(pathToFileURL(file).href)) as { CAM?: CamConfig }
+export async function loadConfig(file: string, materials: Record<string, Material>, values: Values): Promise<CamConfig> {
+  const { CAM } = (await import(pathToFileURL(file).href)) as { CAM?: (values: Values) => CamConfig }
+  const config = CAM?.(values) ?? {}
   if (config.defaults) {
     const problems = machiningProblems(config.defaults, materials)
     if (problems.length) throw new Error(`${file}: CAM.defaults: ${problems.join('; ')}`)
