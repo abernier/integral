@@ -9,6 +9,9 @@
 // unsaved (`--keep` leaves it open, to simulate the setups in Fusion). A file already there is kept (`--force` makes
 // it again).
 //
+// A template is read from scripts/cam/templates/<name>.f3dhsm-template when the repo has it, so any Fusion makes the
+// same files; else it is looked up by name in the Fusion template libraries.
+//
 //   pnpm cam zigzag-chair [--template integral-19mm-6mm] [--post shopbot] [--only Seat]
 //   pnpm cam zigzag-chair --only Seat --force --keep   # then Simulate the setups in Fusion
 //   pnpm cam zigzag-chair --dry-run        # the plan, without connecting
@@ -48,7 +51,7 @@ const { values: flags, positionals } = parseArgs({
 
 const USAGE = `usage: pnpm cam <model> [options]
   --step <file>          the STEP to read the boards from (default .docs/<model>/<model>.step)
-  --template <name>      CAM template, by name, in your Fusion library (default integral-19mm-6mm)
+  --template <name>      CAM template: scripts/cam/templates/<name>.f3dhsm-template, else by name in your Fusion library (default integral-19mm-6mm)
   --post <text>          the library post whose vendor/description contains it (default shopbot)
   --margin <mm>          stock around each board's box (default 5)
   --only <A,B>           these boards only
@@ -110,6 +113,13 @@ console.log(`cam: ${model}, ${jobs.length} setups to post, boards from ${shown(s
 if (skipped.length) console.log(`cam: skipping ${skipped.join(', ')}`)
 if (only) for (const name of only) if (!jobs.some((j) => j.body === name) && !skipped.some((s) => s.startsWith(name))) console.log(`cam: no board ${name} in the STEP`)
 
+/** The repo's copy of a template, as XML, or undefined to look it up in Fusion's libraries. */
+const TEMPLATES = join(import.meta.dirname, 'cam', 'templates')
+const templateXml = (name: string) => {
+  const file = join(TEMPLATES, `${name}.f3dhsm-template`)
+  return existsSync(file) ? readFileSync(file, 'utf8') : undefined
+}
+
 const SCRIPT = readFileSync(join(import.meta.dirname, 'cam', 'fusion-job.py'), 'utf8')
 /** The script for one step: JOB first (a JSON string is a valid Python string literal), then fusion-job.py. */
 const script = (job: Record<string, unknown>) => `import json\nJOB = json.loads(${JSON.stringify(JSON.stringify(job))})\n${SCRIPT}`
@@ -128,6 +138,7 @@ const steps = {
     cut: job.setup.cut ?? 'all',
     reference: job.reference.wcs?.rotate ?? [0, 0, 0],
     template: job.template,
+    templateXml: templateXml(job.template),
     margin: defaults.margin,
   }),
   status: (job: Job) => ({ op: 'status', tag, setup: setupName(job) }),

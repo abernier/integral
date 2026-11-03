@@ -135,7 +135,10 @@ def turned(design, body):
 
 
 def find_template():
-    """The template named JOB["template"], searched through the local, cloud and hub template libraries."""
+    """The template named JOB["template"]: the repo's copy when sent (JOB["templateXml"]), else searched through the
+    local, cloud and hub template libraries."""
+    if JOB.get("templateXml"):
+        return adsk.cam.CAMTemplate.createFromXML(JOB["templateXml"])
     library = adsk.cam.CAMManager.get().libraryManager.templateLibrary
     seen = []
     for location in [adsk.cam.LibraryLocations.LocalLibraryLocation, adsk.cam.LibraryLocations.CloudLibraryLocation, adsk.cam.LibraryLocations.HubLibraryLocation]:
