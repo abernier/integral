@@ -1,0 +1,297 @@
+{
+    "data": [
+        {
+            "BMC": "carbide",
+            "GRADE": "Mill Generic",
+            "description": "CMT 191 6x27x70 upcut spiral, 2 flutes, shank 6; 50 out of the collet: 70 long less the 20 mm of shank an ER20/ER25 collet must hold (about 2/3 of its bore)",
+            "geometry": {
+                "CSP": false,
+                "DC": 6,
+                "HAND": true,
+                "LB": 27,
+                "LCF": 27,
+                "NOF": 2,
+                "NT": 1,
+                "OAL": 70,
+                "RE": 0,
+                "SFDM": 6,
+                "TA": 0,
+                "TP": 0,
+                "assemblyGaugeLength": 50,
+                "shoulder-diameter": 6,
+                "shoulder-length": 27,
+                "thread-profile-angle": 60,
+                "tip-diameter": 6,
+                "tip-length": 0,
+                "tip-offset": 0
+            },
+            "guid": "b30264d7-a658-4ce3-8fac-cc6577c379be",
+            "post-process": {
+                "break-control": false,
+                "comment": "",
+                "diameter-offset": 1,
+                "length-offset": 1,
+                "live": true,
+                "manual-tool-change": false,
+                "number": 1,
+                "turret": 0
+            },
+            "product-id": "",
+            "product-link": "",
+            "start-values": {
+                "presets": [
+                    {
+                        "description": "Onsrud/Amana hardwood chip loads, ShopBot 12k-18k rpm; adjust by chips and burn marks",
+                        "f_n": 0.0625,
+                        "f_z": 0.13125,
+                        "guid": "089dc852-24a3-474b-bae0-bc3e2a554f80",
+                        "material": {
+                            "category": "all",
+                            "query": "",
+                            "use-hardness": false
+                        },
+                        "n": 16000,
+                        "n_ramp": 16000,
+                        "name": "Hardwood",
+                        "ramp-angle": 2,
+                        "stepdown": 6,
+                        "stepover": 2.4,
+                        "tool-coolant": "disabled",
+                        "use-stepdown": true,
+                        "use-stepover": true,
+                        "v_c": 301.59289474462014,
+                        "v_f": 4200,
+                        "v_f_leadIn": 4200,
+                        "v_f_leadOut": 4200,
+                        "v_f_plunge": 1000,
+                        "v_f_ramp": 2100,
+                        "v_f_transition": 4200
+                    }
+                ]
+            },
+            "type": "flat end mill",
+            "unit": "millimeters",
+            "vendor": "CMT"
+        },
+        {
+            "BMC": "carbide",
+            "GRADE": "Mill Generic",
+            "description": "CMT 191 8x32x80 upcut spiral, 2 flutes, shank 8; 60 out of the collet: 80 long less the 20 mm of shank an ER20/ER25 collet must hold (about 2/3 of its bore)",
+            "geometry": {
+                "CSP": false,
+                "DC": 8,
+                "HAND": true,
+                "LB": 32,
+                "LCF": 32,
+                "NOF": 2,
+                "NT": 1,
+                "OAL": 80,
+                "RE": 0,
+                "SFDM": 8,
+                "TA": 0,
+                "TP": 0,
+                "assemblyGaugeLength": 60,
+                "shoulder-diameter": 8,
+                "shoulder-length": 32,
+                "thread-profile-angle": 60,
+                "tip-diameter": 8,
+                "tip-length": 0,
+                "tip-offset": 0
+            },
+            "guid": "cc8cf20c-511b-4fc9-b8b9-1193ca3117c2",
+            "post-process": {
+                "break-control": false,
+                "comment": "",
+                "diameter-offset": 2,
+                "length-offset": 2,
+                "live": true,
+                "manual-tool-change": false,
+                "number": 2,
+                "turret": 0
+            },
+            "product-id": "",
+            "product-link": "",
+            "start-values": {
+                "presets": [
+                    {
+                        "description": "Onsrud/Amana hardwood chip loads, ShopBot 12k-18k rpm; adjust by chips and burn marks",
+                        "f_n": 0.075,
+                        "f_z": 0.140625,
+                        "guid": "5baf9355-3711-4ee7-b1c1-1816bfd70d1c",
+                        "material": {
+                            "category": "all",
+                            "query": "",
+                            "use-hardness": false
+                        },
+                        "n": 16000,
+                        "n_ramp": 16000,
+                        "name": "Hardwood",
+                        "ramp-angle": 2,
+                        "stepdown": 8,
+                        "stepover": 3.2,
+                        "tool-coolant": "disabled",
+                        "use-stepdown": true,
+                        "use-stepover": true,
+                        "v_c": 402.1238596594935,
+                        "v_f": 4500,
+                        "v_f_leadIn": 4500,
+                        "v_f_leadOut": 4500,
+                        "v_f_plunge": 1200,
+                        "v_f_ramp": 2250,
+                        "v_f_transition": 4500
+                    }
+                ]
+            },
+            "type": "flat end mill",
+            "unit": "millimeters",
+            "vendor": "CMT"
+        },
+        {
+            "BMC": "carbide",
+            "GRADE": "Mill Generic",
+            "description": "CMT 191 8x42x90 upcut spiral, 2 flutes, shank 8; 70 out of the collet: 90 long less the 20 mm of shank an ER20/ER25 collet must hold (about 2/3 of its bore)",
+            "geometry": {
+                "CSP": false,
+                "DC": 8,
+                "HAND": true,
+                "LB": 42,
+                "LCF": 42,
+                "NOF": 2,
+                "NT": 1,
+                "OAL": 90,
+                "RE": 0,
+                "SFDM": 8,
+                "TA": 0,
+                "TP": 0,
+                "assemblyGaugeLength": 70,
+                "shoulder-diameter": 8,
+                "shoulder-length": 42,
+                "thread-profile-angle": 60,
+                "tip-diameter": 8,
+                "tip-length": 0,
+                "tip-offset": 0
+            },
+            "guid": "7a527365-a0f7-4282-abd7-342ab89e5dd3",
+            "post-process": {
+                "break-control": false,
+                "comment": "",
+                "diameter-offset": 3,
+                "length-offset": 3,
+                "live": true,
+                "manual-tool-change": false,
+                "number": 3,
+                "turret": 0
+            },
+            "product-id": "",
+            "product-link": "",
+            "start-values": {
+                "presets": [
+                    {
+                        "description": "Onsrud/Amana hardwood chip loads, ShopBot 12k-18k rpm; adjust by chips and burn marks",
+                        "f_n": 0.075,
+                        "f_z": 0.140625,
+                        "guid": "db0221ab-776b-4ac6-93e3-c600f7d04fa3",
+                        "material": {
+                            "category": "all",
+                            "query": "",
+                            "use-hardness": false
+                        },
+                        "n": 16000,
+                        "n_ramp": 16000,
+                        "name": "Hardwood",
+                        "ramp-angle": 2,
+                        "stepdown": 8,
+                        "stepover": 3.2,
+                        "tool-coolant": "disabled",
+                        "use-stepdown": true,
+                        "use-stepover": true,
+                        "v_c": 402.1238596594935,
+                        "v_f": 4500,
+                        "v_f_leadIn": 4500,
+                        "v_f_leadOut": 4500,
+                        "v_f_plunge": 1200,
+                        "v_f_ramp": 2250,
+                        "v_f_transition": 4500
+                    }
+                ]
+            },
+            "type": "flat end mill",
+            "unit": "millimeters",
+            "vendor": "CMT"
+        },
+        {
+            "BMC": "carbide",
+            "GRADE": "Mill Generic",
+            "description": "CMT 191 12x52x100 upcut spiral, 2 flutes, shank 12; 80 out of the collet: 100 long less the 20 mm of shank an ER20/ER25 collet must hold (about 2/3 of its bore)",
+            "geometry": {
+                "CSP": false,
+                "DC": 12,
+                "HAND": true,
+                "LB": 52,
+                "LCF": 52,
+                "NOF": 2,
+                "NT": 1,
+                "OAL": 100,
+                "RE": 0,
+                "SFDM": 12,
+                "TA": 0,
+                "TP": 0,
+                "assemblyGaugeLength": 80,
+                "shoulder-diameter": 12,
+                "shoulder-length": 52,
+                "thread-profile-angle": 60,
+                "tip-diameter": 12,
+                "tip-length": 0,
+                "tip-offset": 0
+            },
+            "guid": "91d26674-65ae-4141-b6f4-b9bd1583e680",
+            "post-process": {
+                "break-control": false,
+                "comment": "",
+                "diameter-offset": 4,
+                "length-offset": 4,
+                "live": true,
+                "manual-tool-change": false,
+                "number": 4,
+                "turret": 0
+            },
+            "product-id": "",
+            "product-link": "",
+            "start-values": {
+                "presets": [
+                    {
+                        "description": "Onsrud/Amana hardwood chip loads, ShopBot 12k-18k rpm; adjust by chips and burn marks",
+                        "f_n": 0.10714285714285714,
+                        "f_z": 0.17857142857142858,
+                        "guid": "b508f070-1119-4ff4-91e5-d789447036b5",
+                        "material": {
+                            "category": "all",
+                            "query": "",
+                            "use-hardness": false
+                        },
+                        "n": 14000,
+                        "n_ramp": 14000,
+                        "name": "Hardwood",
+                        "ramp-angle": 2,
+                        "stepdown": 10,
+                        "stepover": 4.8,
+                        "tool-coolant": "disabled",
+                        "use-stepdown": true,
+                        "use-stepover": true,
+                        "v_c": 527.7875658030853,
+                        "v_f": 5000,
+                        "v_f_leadIn": 5000,
+                        "v_f_leadOut": 5000,
+                        "v_f_plunge": 1500,
+                        "v_f_ramp": 2500,
+                        "v_f_transition": 5000
+                    }
+                ]
+            },
+            "type": "flat end mill",
+            "unit": "millimeters",
+            "vendor": "CMT"
+        }
+    ],
+    "version": 37
+}

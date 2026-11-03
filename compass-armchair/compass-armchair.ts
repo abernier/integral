@@ -15,6 +15,7 @@
 // parameters, and every board is a named body in it, so changing one rebuilds them all.
 
 import { type Api, created, nameSolids } from '../scripts/part.ts'
+import type { CamConfig } from '../scripts/cam/config.ts'
 
 const TEAK: [number, number, number] = [155, 106, 60] // #9b6a3c
 const CANE: [number, number, number] = [230, 210, 160] // #e6d2a0
@@ -71,6 +72,23 @@ export const MASTERS = {
   SEAT_PIN_MID: 6,
   BACK_TAIL_SHOULDER: 12, // the back rail's shoulders either side of its tail
 }
+
+/** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. */
+export const CAM = {
+  defaults: { material: 'teak' },
+  parts: {
+    // The loose tenons: their grain across the joint, along their length into both members, not their height.
+    FrontRailTenonLeft: { grain: 90 },
+    FrontRailTenonRight: { grain: 90 },
+    RearRailTenonLeft: { grain: 90 },
+    RearRailTenonRight: { grain: 90 },
+    ArmTenonLeft: { grain: 90 },
+    ArmTenonRight: { grain: 90 },
+    // Woven cane on its frame, not milled.
+    SeatCane: { skip: true },
+    BackCane: { skip: true },
+  },
+} satisfies CamConfig
 
 // Everything else, derived. The armrest's underside is z = U0 - K y.
 const DERIVED = {

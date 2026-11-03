@@ -14,6 +14,7 @@ import { buildScene, sceneToGlb } from '@classcad/mcp/dist/viewer/scene.js'
 import { buildScriptApi } from '@classcad/script'
 import { renderSession } from '@classcad/renderer/node'
 import type { Api } from './part.ts'
+import { stepAssembly } from './step-assembly.ts'
 
 const registry = createRequire(import.meta.url)('@classcad/skill/method-registry.json')
 
@@ -44,7 +45,10 @@ export async function run<T>(engine: Engine, build: (api: Api) => Promise<T>) {
   return build(buildScriptApi(engine.session as never, { registry, strict: true }) as Api)
 }
 
-/** Write the drawing as OFB (with its history) or STP; returns the size in bytes. */
+/**
+ * Write the drawing as OFB (with its history) or STP; returns the size in bytes. The STP is an assembly, one
+ * component per named solid, so that other CAD systems keep the solids' names (`stepAssembly`).
+ */
 export async function save(engine: Engine, format: 'OFB' | 'STP', path: string) {
   const args: Record<string, unknown> = { format, encoding: 'base64' }
   // Planes, cylinders and the like as such, not as B-spline surfaces: smaller, and other CAD systems recognise them.
@@ -54,7 +58,8 @@ export async function save(engine: Engine, format: 'OFB' | 'STP', path: string) 
   if (!content) {
     throw new Error(`saving ${format} failed (maxLevel ${response.maxLevel}): ${JSON.stringify(response.messages)}`)
   }
-  const data = Buffer.from(content, 'base64')
+  const saved = Buffer.from(content, 'base64')
+  const data = format === 'STP' ? Buffer.from(stepAssembly(saved.toString('utf8'))) : saved
   writeFileSync(path, data)
   return data.length
 }

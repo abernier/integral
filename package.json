@@ -9,14 +9,18 @@
   "scripts": {
     "build": "node scripts/build.ts",
     "build:parts": "node scripts/build.ts --parts-only",
+    "cam": "node scripts/cam.ts",
     "dev": "node scripts/dev.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'scripts/**/*.test.ts'",
+    "lgtm": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@classcad/mcp": "0.6.1",
     "@classcad/renderer": "0.1.0",
     "@classcad/script": "0.2.0",
     "@classcad/skill": "0.0.8",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@pmndrs/docs": "4.26.0",
     "sharp": "^0.34.5"
   },
