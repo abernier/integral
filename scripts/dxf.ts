@@ -3,9 +3,12 @@
 // Each board is laid on a 3-axis router by `machiningSetup`: the main setup works from the side of the board's
 // largest flat face that leaves the fewest features to other setups. What that setup cannot cut then gets one
 // more: the board turned over (`_back`) and each edge a mortise opens on (`_edge<n>`), when it holds pockets.
-// Written into `.docs/<part>/dxf/<board>[_back|_edge<n>].dxf`, layers OUTLINE, THROUGH, POCKET_D<depth>, LABEL.
+// A board whose faces lean a few degrees from the tool gets a tilted setup (`_tilted`): it lies on a wedge of that
+// angle, so that the tool comes along those faces.
+// Written into `.docs/<part>/dxf/<board>[_back|_edge<n>|_tilted].dxf`, layers OUTLINE, THROUGH, POCKET_D<depth>, LABEL,
+// with `files.json` beside them: the notice `machiningNotes` makes the part's page of.
 
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MachiningSetup, Part, Vector, exportDxf, importStep, machiningSetup, type Plane } from '@classcad/smlibwasm'
 
@@ -95,21 +98,93 @@ function setups(part: Part) {
     if (stillLeaning(tilted) < stillLeaning(main)) all.push({ suffix: '_tilted', setup: tilted, direction: d })
   }
   // an edge whose feature a vertical cutter cannot make there is left out
-  return all.filter(({ suffix, setup }) => !suffix || suffix === '_tilted' || setup.layers.some((layer) => layer.name?.startsWith('POCKET')))
+  const kept = all.filter(({ suffix, setup }) => !suffix || suffix === '_tilted' || setup.layers.some((layer) => layer.name?.startsWith('POCKET')))
+  return { setups: kept, left: leftOver(kept) }
 }
 
-/** Writes the DXF files of a part's boards, read from its STEP file; returns how many. */
+/** What the router cannot cut, from the face-up setup or its tilted one, whichever leaves the least: how far the faces it leaves lean from its tool. */
+function leftOver(all: { suffix: string; setup: MachiningSetup }[]) {
+  const leaning = (setup: MachiningSetup) => setup.elsewhere.filter(([why]) => why === 'not a prism along the tool')
+  const count = (setup: MachiningSetup) => leaning(setup).reduce((n, [, , faces]) => n + faces.length, 0)
+  const best = all.filter(({ suffix }) => suffix === '' || suffix === '_tilted').map(({ setup }) => setup).reduce((a, b) => (count(b) < count(a) ? b : a))
+  const angles = new Set<number>()
+  for (const [, , faces] of leaning(best))
+    for (const face of faces) if (face.isPlanar) angles.add(Math.round(Math.abs(90 - Math.acos(Math.min(1, Math.abs(face.normalAt().z))) * (180 / Math.PI)) * 10) / 10)
+  return {
+    leaning: count(best),
+    angles: [...angles].sort((a, b) => a - b),
+    enclosed: best.elsewhere.filter(([why]) => why === 'enclosed').reduce((n, [, , faces]) => n + faces.length, 0),
+  }
+}
+
+/** What `files.json` says of one board: its DXF files, and what is left for the saw or the hand. */
+type Board = {
+  board: string
+  thickness: number
+  files: { file: string; setup: 'main' | 'back' | 'edge' | 'tilted'; wedge?: number; layers: string[] }[]
+  left: { leaning: number; angles: number[]; enclosed: number }
+}
+
+const SETUPS = { '': 'main', _back: 'back', _tilted: 'tilted' } as const
+
+/** Writes the DXF files of a part's boards, read from its STEP file, and `files.json`; returns how many files. */
 export function buildDxf(stepFile: string, out: string) {
   const bodies: unknown[] = [importStep(stepFile)].flat(Infinity)
   rmSync(out, { recursive: true, force: true })
   mkdirSync(out, { recursive: true })
-  let count = 0
+  const boards: Board[] = []
   for (const body of bodies) {
     if (!(body instanceof Part)) continue
-    for (const { suffix, setup } of setups(body)) {
-      exportDxf(setup.layers, join(out, `${body.name ?? "part"}${suffix}.dxf`), { curves: 'arcs' })
-      count++
-    }
+    const name = body.name ?? 'part'
+    const { setups: made, left } = setups(body)
+    const files = made.map(({ suffix, setup, direction }) => {
+      const file = `${name}${suffix}.dxf`
+      exportDxf(setup.layers, join(out, file), { curves: 'arcs' })
+      const kind = SETUPS[suffix as keyof typeof SETUPS] ?? 'edge'
+      const wedge = kind === 'tilted' ? Math.round(direction.angleTo(made[0].direction) * 10) / 10 : undefined
+      return { file, setup: kind, wedge, layers: setup.layers.flatMap((layer) => (layer.name && layer.name !== 'LABEL' ? [layer.name] : [])) }
+    })
+    boards.push({ board: name, thickness: Math.round(made[0].setup.thickness * 10) / 10, files, left })
   }
-  return count
+  writeFileSync(join(out, 'files.json'), `${JSON.stringify(boards, null, 2)}\n`)
+  return boards.reduce((n, b) => n + b.files.length, 0)
+}
+
+/**
+ * The notice of a part's machining files, in Markdown, from the `files.json` `buildDxf` wrote: how to read a file,
+ * each file with its setup, and what is left for the saw or the hand. `base` is where the files are served.
+ */
+export function machiningNotes(manifest: string, base: string) {
+  const boards: Board[] = JSON.parse(readFileSync(manifest, 'utf8'))
+  const how = {
+    main: 'face up: the board lies on its face',
+    back: 'turned over, the other face up',
+    edge: 'on its edge, the edge a mortise opens on up',
+    tilted: (wedge?: number) => `on a wedge of ${wedge}°, so that the tool comes along the leaning faces`,
+  }
+  const files = boards.flatMap(({ board, thickness, files }) =>
+    files.map((f) => {
+      const setup = f.setup === 'tilted' ? how.tilted(f.wedge) : how[f.setup]
+      return `| ${board} | [${f.file}](${base}/${f.file}) | ${setup} | ${thickness} | ${f.layers.join(', ')} |`
+    }),
+  )
+  const left = boards.flatMap(({ board, left }) => {
+    const what = [
+      left.leaning && `${left.leaning} faces lean ${left.angles.join(', ')}° from the tool: a tilted saw blade, or by hand`,
+      left.enclosed && `${left.enclosed} enclosed faces: by hand`,
+    ].filter(Boolean)
+    return what.length ? [`| ${board} | ${what.join('; ')} |`] : []
+  })
+  return [
+    '## Machining files',
+    '',
+    'One DXF per setup of each board, flat, in millimeters, for a 3-axis router: the tool comes from above, the grain runs along x, the board rests on z = 0 with its corner at the origin. The layers are `OUTLINE` (cut through along the outer contour), `THROUGH` (holes through the board), `POCKET_D<depth>` (pockets, `<depth>` mm below the top face; `D7_5` is 7.5 mm) and `LABEL` (the board\'s name and its grain, to engrave or ignore).',
+    '',
+    'A wedge is not in the files: make it at the angle given, rest the board on it with the face named up, and set the tool\'s zero on the top face.',
+    '',
+    '| Board | File | Lay the board | Thickness (mm) | Layers |',
+    '|---|---|---|---|---|',
+    ...files,
+    ...(left.length ? ['', '### Not cut on the router', '', '| Board | What is left |', '|---|---|', ...left] : []),
+  ].join('\n')
 }

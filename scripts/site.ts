@@ -13,7 +13,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFi
 import { pathToFileURL } from 'node:url'
 import { join, relative, resolve } from 'node:path'
 import { type Engine, glb, render, run, save } from './classcad.ts'
-import { buildDxf } from './dxf.ts'
+import { buildDxf, machiningNotes } from './dxf.ts'
 
 export const ROOT = resolve(import.meta.dirname, '..')
 // Not named `.mdx`: @pmndrs/docs takes every file whose path contains `.md` for a page.
@@ -124,8 +124,10 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
   // A page link goes to the site, any other link to the site's files to where the files are served, Buerligons'
   // `?url=` to the absolute URL. A link's root-relative URL (markdown or `<a href>`) loses the base path: Next.js
   // puts it back; an `src` keeps it.
+  const manifest = part && join(MDX, part, 'dxf', 'files.json')
+  const notes = manifest && existsSync(manifest) ? `\n\n${machiningNotes(manifest, `${PAGES_URL}/${part}/dxf`)}\n` : ''
   const pages = [HOME, ...parts().map((p) => `/${partPage(p)}`)]
-  const linked = body.replace(new RegExp(`(\\]\\(|href="|\\?url=)?${PAGES_URL.replaceAll('.', '\\.')}(/[^\\s)"']*)`, 'g'), (_, before = '', path: string) => {
+  const linked = (body + notes).replace(new RegExp(`(\\]\\(|href="|\\?url=)?${PAGES_URL.replaceAll('.', '\\.')}(/[^\\s)"']*)`, 'g'), (_, before = '', path: string) => {
     if (before === '?url=') return `${before}${buerligonsUrl(urls.shared, path)}`
     const url = `${pages.includes(path) ? urls.site : urls.files}${path}`
     return before && BASE_PATH && url.startsWith(`${BASE_PATH}/`) ? `${before}${url.slice(BASE_PATH.length)}` : `${before}${url}`
