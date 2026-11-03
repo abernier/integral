@@ -1,12 +1,7 @@
-// How `pnpm cam` cuts a sheet: the material's tool preset, the tool chosen per sheet from the Fusion tool library
-// (`scripts/cam/tools.json`, Fusion's own JSON, edited in Fusion), and the values sent with it to Fusion
-// (fusion-job.py applies them and has none of its own).
-//
-// The values are, from the strongest: the CLI's, the model's CAM config's (`defaults`, cam/config.ts), these defaults.
-//
-// The tool: the one numbered `tool`, else the narrowest of the library that reaches the cut (the sheet's thickness and
-// `overcut` below it): its flutes `reach` more, its stickout `nutClearance` more. Feeds, speeds, stepdown and stepover are the tool's
-// preset named in materials.json for the sheet's material: Fusion's, not ours.
+// How `pnpm cam` cuts: the machining values of a run (the CLI's, over the model's CAM config's `defaults`, over
+// MACHINING_DEFAULTS), the tool chosen per cut from the Fusion tool library (`scripts/cam/tools.json`), and what is
+// sent with it to Fusion (fusion-job.py applies it and has no values of its own). Usage, naming and the tool rule:
+// docs/cam.md (https://abernier.github.io/integral/integral/cam).
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -47,9 +42,10 @@ export type MachiningOptions = {
   tabs?: Partial<Tabs> | false
 }
 
+/** The machining values when neither the CLI nor the model's CAM config `defaults` sets them. */
 export const MACHINING_DEFAULTS = {
   material: 'hardwood',
-  sheet: [2440, 1220] as [number, number],
+  sheet: [2440, 1220],
   spacing: 12,
   frame: 20,
   margin: 5,
@@ -58,8 +54,11 @@ export const MACHINING_DEFAULTS = {
   // 5 mm keeps the nut clear of the stock top through what the cut depth does not see: a sheet thicker than its
   // nominal size or not flat, a Z zero off by a millimetre or two, chips on the surface, the nut's own chamfer.
   nutClearance: 5,
-  tabs: { count: 4, width: 6, height: 3 } as Tabs,
-}
+  tabs: { count: 4, width: 6, height: 3 },
+} satisfies Required<Omit<MachiningOptions, 'tool' | 'tabs'>> & { tabs: Tabs }
+
+/** The post when neither the CLI (`--post`) nor the model's CAM config `defaults.post` names one: ShopBot OpenSBP. */
+export const DEFAULT_POST = 'shopbot'
 
 /** Two parts stand at least the tool's diameter and this much apart (mm), so the outline passes between them. */
 export const SPACING_OVER_TOOL = 4
@@ -70,8 +69,11 @@ const MINIMUM_GRIP = 20
 /** Pockets of any corner radius (mm). */
 const CORNER_RADIUS = [0, 1000]
 
-/** The problems with a CAM config's (or the CLI's) machining values, as messages; none when they are right. */
-export function machiningProblems(options: MachiningOptions) {
+/**
+ * The problems with a CAM config's (or the CLI's) machining values, as messages; none when they are right.
+ * `materials`: materials.json's, when `options` names one.
+ */
+export function machiningProblems(options: MachiningOptions, materials?: Record<string, Material>) {
   const problems: string[] = []
   const positive = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0
   if (options.margin !== undefined && !positive(options.margin)) problems.push('margin must be a number of mm above 0')
@@ -82,7 +84,7 @@ export function machiningProblems(options: MachiningOptions) {
   const sheet = options.sheet
   if (sheet !== undefined && !(sheet.length === 2 && sheet.every(positive))) problems.push('sheet must be [length, width] in mm')
   if (options.tool !== undefined && !Number.isInteger(options.tool)) problems.push('tool must be a tool number of scripts/cam/tools.json')
-  if (options.material !== undefined && !(options.material in loadMaterials())) problems.push(`material must be one of scripts/cam/materials.json (${Object.keys(loadMaterials()).join(', ')})`)
+  if (options.material !== undefined && !(materials && options.material in materials)) problems.push(`material must be one of scripts/cam/materials.json (${Object.keys(materials ?? {}).join(', ')})`)
   const tabs = options.tabs
   if (tabs) {
     for (const [key, value] of Object.entries(tabs)) {
@@ -97,22 +99,25 @@ export function resolveMachining(...layers: (MachiningOptions | undefined)[]) {
   const pick = <K extends keyof MachiningOptions>(key: K) => layers.find((layer) => layer?.[key] !== undefined)?.[key]
   const tabs = pick('tabs')
   return {
-    tool: pick('tool') as number | undefined,
-    material: (pick('material') as string | undefined) ?? MACHINING_DEFAULTS.material,
-    sheet: (pick('sheet') as [number, number] | undefined) ?? MACHINING_DEFAULTS.sheet,
-    spacing: (pick('spacing') as number | undefined) ?? MACHINING_DEFAULTS.spacing,
-    frame: (pick('frame') as number | undefined) ?? MACHINING_DEFAULTS.frame,
-    margin: (pick('margin') as number | undefined) ?? MACHINING_DEFAULTS.margin,
-    overcut: (pick('overcut') as number | undefined) ?? MACHINING_DEFAULTS.overcut,
-    reach: (pick('reach') as number | undefined) ?? MACHINING_DEFAULTS.reach,
-    nutClearance: (pick('nutClearance') as number | undefined) ?? MACHINING_DEFAULTS.nutClearance,
+    tool: pick('tool'),
+    material: pick('material') ?? MACHINING_DEFAULTS.material,
+    sheet: pick('sheet') ?? MACHINING_DEFAULTS.sheet,
+    spacing: pick('spacing') ?? MACHINING_DEFAULTS.spacing,
+    frame: pick('frame') ?? MACHINING_DEFAULTS.frame,
+    margin: pick('margin') ?? MACHINING_DEFAULTS.margin,
+    overcut: pick('overcut') ?? MACHINING_DEFAULTS.overcut,
+    reach: pick('reach') ?? MACHINING_DEFAULTS.reach,
+    nutClearance: pick('nutClearance') ?? MACHINING_DEFAULTS.nutClearance,
     tabs: tabs === false ? (false as const) : { ...MACHINING_DEFAULTS.tabs, ...tabs },
   }
 }
 
+/** The machining values of a run, every one resolved (resolveMachining). */
 export type Machining = ReturnType<typeof resolveMachining>
 
+/** The Fusion tool library, Fusion's own JSON (edited in Fusion, exported as JSON). */
 export const TOOLS_FILE = join(import.meta.dirname, 'tools.json')
+/** The materials: per material, its grain, its tool preset and Fusion's stock material. */
 export const MATERIALS_FILE = join(import.meta.dirname, 'materials.json')
 
 /** The library as Fusion wrote it (sent as is to Fusion), and its tools as the selection rule sees them. */
@@ -130,15 +135,24 @@ export function loadTools(file = TOOLS_FILE) {
   return { library, tools }
 }
 
+/** The materials of materials.json, by name. */
 export function loadMaterials(file = MATERIALS_FILE) {
   const list = JSON.parse(readFileSync(file, 'utf8')) as { version: number; materials: Record<string, Material> }
   if (list.version !== 1) throw new Error(`${file}: version ${list.version}, expected 1`)
   return list.materials
 }
 
-/** How deep `tool` may cut, mm: its flutes less `reach`, its stickout less `nutClearance`, the shorter. */
+/**
+ * How deep `tool` can cut at all, mm: its flutes, or its stickout less `nutClearance` (the collet nut above the
+ * cut), the shorter. A posted file must cut no deeper.
+ */
+export function toolLimit(tool: Tool, machining: Pick<Machining, 'nutClearance'>) {
+  return Math.min(tool.fluteLength, tool.stickout - machining.nutClearance)
+}
+
+/** How deep `tool` may cut when choosing it, mm: toolLimit, with `reach` of its flutes to spare. */
 export function toolReach(tool: Tool, machining: Machining) {
-  return Math.min(tool.fluteLength - machining.reach, tool.stickout - machining.nutClearance)
+  return Math.min(tool.fluteLength - machining.reach, toolLimit(tool, machining))
 }
 
 /** Why `tool` may cut so deep, for a message. */
@@ -170,13 +184,16 @@ export function restTool(tools: Tool[], main: Tool) {
   return narrowest.diameter < main.diameter ? narrowest : undefined
 }
 
-/** What fusion-job.py reads in JOB["machining"]: every value resolved, in mm. */
-export function machiningJob(tool: Tool, machining: Machining, depth: number, tools: Tool[]) {
+/**
+ * What fusion-job.py reads in JOB["machining"] (`job`): every value resolved, in mm; and the rest tool (`rest`, see
+ * restTool), whose number `job.rest.tool` carries.
+ */
+export function machiningJob(tool: Tool, machining: Machining, depth: number, tools: Tool[], materials: Record<string, Material>) {
   const rest = restTool(tools, tool)
   const restDepth = rest ? +Math.min(depth, toolReach(rest, machining)).toFixed(3) : 0
-  return {
+  const job = {
     tool: tool.number,
-    preset: loadMaterials()[machining.material].preset,
+    preset: materials[machining.material].preset,
     overcut: machining.overcut,
     // Fusion measures a tab from the cut's bottom, `overcut` below the wood: the wood a tab leaves is `height`.
     tabs: machining.tabs === false ? null : { ...machining.tabs, height: +(machining.tabs.height + machining.overcut).toFixed(3) },
@@ -185,4 +202,5 @@ export function machiningJob(tool: Tool, machining: Machining, depth: number, to
     // After the outline, what this tool leaves (narrow sockets, corners): the narrowest tool, as deep as it reaches.
     rest: rest ? { tool: rest.number, after: tool.diameter, depth: restDepth, through: restDepth >= +depth.toFixed(3) } : null,
   }
+  return { job, rest }
 }

@@ -42,12 +42,12 @@ nr build      # parts + site into dist/
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
 - Engine key: local ClassCAD sign-in; in CI, the `CLASSCAD_TOKEN` secret
-- CAM: `pnpm cam <folder>`, ShopBot `.sbp` files for each board, by Fusion's CAM in the Fusion desktop app, through its local MCP server, into `.docs/<folder>/cam/`; see [CAM](https://abernier.github.io/integral/integral/cam); simulate before cutting
+- CAM: `pnpm cam <folder>`, see [CAM](https://abernier.github.io/integral/integral/cam)
 - Deploy: every push to `main`, GitHub Pages; every pull request, a Vercel preview (`vercel.json`, the engine key in its `CLASSCAD_TOKEN` variable)
 
 ## Pipeline
 
-From a part's code to the machine. `nr build` runs in CI; `pnpm cam` only on a Mac with Fusion open.
+From a part's code to the machine. `nr build` runs in CI; `pnpm cam` only on a machine with Fusion desktop open.
 
 ```mermaid
 flowchart TD
@@ -56,8 +56,8 @@ flowchart TD
   out --> bl["Buerligons<br/>edit online"]
   out -->|pnpm cam| fusion["Fusion desktop<br/>local MCP server"]
   ts -->|CAM export<br/>skips, wedge setups| fusion
-  tools["tools.json<br/>cutters, feeds"] --> fusion
-  fusion -->|Arrange: parts nested<br/>by thickness| sheets["one sheet<br/>per thickness"]
+  tools["tools.json, materials.json<br/>cutters, feeds, materials"] --> fusion
+  fusion -->|Arrange: parts nested<br/>by material and thickness| sheets["sheets per material<br/>and thickness, as many as it takes"]
   sheets -->|CAM + ShopBot post| sbp[".sbp per sheet<br/>+ cam.json"]
   sbp -->|simulate, air-cut| shopbot["ShopBot"]
 ```

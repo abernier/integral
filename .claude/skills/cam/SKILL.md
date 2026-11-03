@@ -12,12 +12,12 @@ Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the
 ## Run
 
 1. `pnpm cam --list-tools`. No answer: Fusion is closed, or its MCP server is off; ask the user to fix it, that is theirs.
-2. `pnpm cam <model> --force` (no model: every model). `--only <Part>` for some parts, `--keep` to leave the document open in Fusion.
+2. `pnpm cam <model> --force` (no model: every model). `--only <Part>` for some parts (into `.docs/<model>/cam/only/`, the full run's files untouched), `--keep` to leave the document open in Fusion.
 3. Read the output: `no file for:` lists parts without a file; `nothing to cut for Pockets` is normal on a sheet without pockets. Report both. `toolpaths with warnings`: Fusion's own, report them as they are; never hide one.
 
 ## Check, before saying a file is good
 
-- `.docs/<model>/cam/cam.json`: per file, its parts, material, thickness, tool, values.
+- `.docs/<model>/cam/cam.json` (`cam/only/cam.json` after `--only`): per file, its parts, material, thickness, tool, values.
 - Each sheet `.sbp`: lowest Z = -(thickness + overcut); moves within the sheet; tabs (wood left = tab height); nothing below the tool's flute length (the run checks it). A `_rest.sbp`: the narrowest tool, no deeper than its flutes less `reach`, nor its stickout less `nutClearance`.
 - Grain: in `cam.json` `boxes`, each part of a material with grain is longer along x than y (unless its config turns it). The grain must cross every joint edge (tails, fingers, a loose tenon's length): a near-square part or a tenon needs a `grain` in the config.
 - A part whose pockets are missing may lie the wrong face up: `flip: true` in the model's `CAM` config, rerun.

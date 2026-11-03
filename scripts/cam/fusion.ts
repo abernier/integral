@@ -8,18 +8,25 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
+/** The Fusion MCP server's URL: Fusion's default on this machine, or `FUSION_MCP_URL`. */
 export const ENDPOINT = process.env.FUSION_MCP_URL ?? 'http://127.0.0.1:27182/mcp'
 
 /** Long enough for a STEP import or a post: the toolpaths themselves are generated between calls. */
 const CALL_TIMEOUT_MS = 10 * 60_000
 
+/** An error's message, for a log line: an Error's own, anything else as it prints. */
+export function messageOf(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** A client connected to Fusion's MCP server at ENDPOINT; throws, saying what to check, when none answers there. */
 export async function connect() {
   const client = new Client({ name: 'integral-cam', version: '0.2.0' })
   try {
     await client.connect(new StreamableHTTPClientTransport(new URL(ENDPOINT)))
   } catch (error) {
     throw new Error(
-      `no Fusion MCP server at ${ENDPOINT} (${error instanceof Error ? error.message : error}): is Fusion running, ` +
+      `no Fusion MCP server at ${ENDPOINT} (${messageOf(error)}): is Fusion running, ` +
         'with "Fusion MCP Server" on in Preferences > General > API?',
     )
   }

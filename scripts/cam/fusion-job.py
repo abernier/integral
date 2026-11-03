@@ -16,7 +16,8 @@
 #               tabs, a rest-machining 2D contour; start generating the toolpaths
 #   "measure":  how high part JOB["part"] stands turned by JOB["rotate"], and how deep its squared faces go
 #   "part":     a milling setup JOB["setup"] on part JOB["part"] alone, turned by JOB["rotate"] (a wedge under it):
-#               with JOB["cut"] == "squared", only a contour on the faces the turn squares; else pockets and outline
+#               with JOB["cut"] == "squared", only a contour on the faces the turn squares, JOB["depth"] mm deep;
+#               else pockets and outline
 #   "status":   how far the toolpaths of setup JOB["setup"] are (read-only)
 #   "post":     post the operations of setup JOB["setup"] with tool JOB["tool"] (one tool per file: Fusion for Personal
 #               Use posts no tool change), with the library post matching JOB["post"], to JOB["folder"]/JOB["file"]
@@ -436,13 +437,17 @@ def part_body(design):
 
 
 def measure():
+    """
+    The part turned: its height, mm, and with JOB["cut"] == "squared" how far below its top its squared faces go, mm,
+    unrounded: `pnpm cam` adds the overcut and sends it back as the "part" step's JOB["depth"].
+    """
     copy = turned_copy(part_body(design_of(tagged_document())))
     top = max(v.geometry.z for v in copy.vertices)
     result = {"height": round((top - min(v.geometry.z for v in copy.vertices)) * 10, 3), "squaredDepth": None}
     if JOB["cut"] == "squared":
         faces = squared_faces(copy)
         if faces:
-            result["squaredDepth"] = round((top - min(v.geometry.z for f in faces for v in f.vertices)) * 10, 3)
+            result["squaredDepth"] = (top - min(v.geometry.z for f in faces for v in f.vertices)) * 10
     done(result)
 
 
@@ -491,17 +496,15 @@ def bottom_chains(faces):
 def cut_squared_only(setup, body, number):
     """
     Make the setup cut only the faces it squares: a 2D contour along their bottom edges, on the waste side, from the
-    stock top to JOB["machining"]["overcut"] below their lowest point, in stepdowns, without tabs. The rest of the part
-    is cut on its sheet.
+    stock top down JOB["depth"] mm (measured by "measure": to JOB["machining"]["overcut"] below their lowest point), in
+    stepdowns, without tabs. The rest of the part is cut on its sheet.
     """
     faces = squared_faces(body)
     if not faces:
         raise RuntimeError(f"{JOB['setup']}: no face of {JOB['part']} stands upright turned by {JOB['rotate']} that did not already as modelled")
     chains = bottom_chains(faces)
-    # The stock has nothing above the part: its top is the part's highest point.
-    top = max(vertex.geometry.z for vertex in body.vertices)
-    bottom = min(vertex.geometry.z for face in faces for vertex in face.vertices)
-    depth = (top - bottom) * 10 + JOB["machining"]["overcut"]  # mm
+    # The stock has nothing above the part: its top is the part's highest point, where "measure" measured from.
+    depth = JOB["depth"]  # mm
 
     operation = add_operation(setup, "contour2d", "Outline", number)
     value = adsk.cam.CadContours2dParameterValue.cast(operation.parameters.itemByName("contours").value)
@@ -521,7 +524,7 @@ def cut_squared_only(setup, body, number):
     set_parameter(operation, "bottomHeight_mode", "'from stock top'")
     set_parameter(operation, "bottomHeight_offset", f"{-depth:.3f} mm")
     set_parameter(operation, "group_tabs", "false")  # the Tabs checkbox
-    return {"faces": len(faces), "chains": [len(edges) for edges, _closed in chains], "depth": round(depth, 2)}
+    return {"faces": len(faces), "chains": [len(edges) for edges, _closed in chains]}
 
 
 def make_part_setup():

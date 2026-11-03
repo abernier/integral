@@ -4,6 +4,10 @@
 //
 // Everything already in the file stays as it is; only the root's B-rep representation loses its named solids, which
 // move to their own products. Entities are appended after the last one, numbered on from it.
+//
+// `stepParts` reads such an assembly back: its parts' names, for `pnpm cam`.
+
+import { readFileSync } from 'node:fs'
 
 /** A named solid of the STEP: its entity id and its name, still escaped as STEP writes it (`''` for a quote). */
 type Solid = { id: number; name: string }
@@ -93,4 +97,27 @@ export function stepAssembly(text: string) {
   const end = /^ENDSEC;\s*END-ISO-10303-21;/m
   if (!end.test(rewritten)) throw new Error('STEP assembly: no end of the DATA section')
   return rewritten.replace(end, () => `${lines.join('\n')}\nENDSEC;\nEND-ISO-10303-21;`)
+}
+
+/**
+ * The parts of an assembly STEP: the products its assembly uses (`NEXT_ASSEMBLY_USAGE_OCCURRENCE`'s related
+ * `PRODUCT_DEFINITION`, its formation, its `PRODUCT`), in the file's order, each once. Read from the text: no CAD
+ * kernel needed for a plan. Fusion names each component after its product.
+ */
+export function stepParts(stepFile: string) {
+  const text = readFileSync(stepFile, 'utf8')
+  const entities = new Map<string, string>()
+  for (const m of text.matchAll(/#(\d+)\s*=\s*([A-Z_0-9]+\s*\([^;]*\))\s*;/g)) entities.set(m[1], m[2])
+  const references = (entity: string | undefined) => [...(entity ?? '').matchAll(/#(\d+)/g)].map((m) => m[1])
+  const names: string[] = []
+  for (const entity of entities.values()) {
+    if (!entity.startsWith('NEXT_ASSEMBLY_USAGE_OCCURRENCE')) continue
+    // NEXT_ASSEMBLY_USAGE_OCCURRENCE(id, name, description, #relating, #related, ...)
+    const definition = entities.get(references(entity)[1])
+    const formation = entities.get(references(definition)[0])
+    const product = entities.get(references(formation)[0])
+    const name = /^PRODUCT\s*\(\s*'((?:[^']|'')*)'/.exec(product ?? '')?.[1].replace(/''/g, "'")
+    if (name && !names.includes(name)) names.push(name)
+  }
+  return names
 }

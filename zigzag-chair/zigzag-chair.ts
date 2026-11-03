@@ -43,7 +43,7 @@ export const MASTERS = {
 
 /** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. */
 export const CAM = {
-  defaults: { post: 'shopbot', material: 'cherry' },
+  defaults: { material: 'cherry' },
   parts: {
     // The tails are square to the back, which leans: once cut on its sheet, the seat goes on a wedge of the back's
     // lean, turned as much about x, and the tool comes along the tails' walls; it cuts only those.

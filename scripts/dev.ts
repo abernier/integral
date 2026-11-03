@@ -11,7 +11,8 @@ import { cpSync, rmSync, watch } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { openEngine } from './classcad.ts'
-import { HOME, MDX, ROOT, buildPart, docsEnv, parts, writePages } from './site.ts'
+import { MDX, ROOT, parts } from './paths.ts'
+import { HOME, buildPart, docsEnv, writePages } from './site.ts'
 
 const freePort = () =>
   new Promise<number>((done) => {
