@@ -88,7 +88,8 @@ const defaults = {
 const only = flags.only?.split(',').map((s) => s.trim())
 const out = join(DOCS, model, 'cam')
 
-type Job = { body: string; setup: Setup; template: string; file: string }
+/** `reference`: the board's first setup, which a `cut: "squared"` setup squares the faces of. */
+type Job = { body: string; setup: Setup; reference: Setup; template: string; file: string }
 const jobs: Job[] = []
 const skipped: string[] = []
 for (const body of stepBodies(step)) {
@@ -101,7 +102,7 @@ for (const body of stepBodies(step)) {
   for (const setup of setups) {
     const file = join(out, `${body}_${setup.name}.sbp`)
     if (existsSync(file) && !flags.force) skipped.push(`${body}_${setup.name} (already there)`)
-    else jobs.push({ body, setup, template: part?.template ?? defaults.template, file })
+    else jobs.push({ body, setup, reference: setups[0], template: part?.template ?? defaults.template, file })
   }
 }
 
@@ -124,6 +125,8 @@ const steps = {
     body: job.body,
     setup: setupName(job),
     rotate: job.setup.wcs?.rotate ?? [0, 0, 0],
+    cut: job.setup.cut ?? 'all',
+    reference: job.reference.wcs?.rotate ?? [0, 0, 0],
     template: job.template,
     margin: defaults.margin,
   }),
@@ -137,7 +140,9 @@ if (flags['dry-run']) {
   console.log(`\nplan (nothing is sent):\n  connect ${ENDPOINT}`)
   console.log(`  fusion-job.py ${plain(steps.import())}`)
   for (const job of jobs) {
-    console.log(`  fusion-job.py ${plain(steps.setup(job))}${job.setup.wedge ? ` (on a ${job.setup.wedge}° wedge)` : ''}`)
+    const wedge = job.setup.wedge ? ` (on a ${job.setup.wedge}° wedge)` : ''
+    const squared = job.setup.cut === 'squared' ? ` (only the faces it squares against ${job.reference.name})` : ''
+    console.log(`  fusion-job.py ${plain(steps.setup(job))}${wedge}${squared}`)
     console.log(`  fusion-job.py ${plain(steps.status(job))}, until generated`)
     console.log(`  fusion-job.py ${plain(steps.post(job))}\n    -> ${shown(job.file)}`)
   }
@@ -176,8 +181,15 @@ try {
     const name = setupName(job)
     try {
       const began = performance.now()
-      const made = (await runScript(client, script(steps.setup(job)))) as { operations: string[] }
+      const made = (await runScript(client, script(steps.setup(job)))) as {
+        operations: string[]
+        squared: { faces: number; chains: number[]; depth: number } | null
+      }
       console.log(`${name}: setup, ${made.operations.length} operations (${made.operations.join(', ')}), generating`)
+      if (made.squared) {
+        const { faces, chains, depth } = made.squared
+        console.log(`${name}: squared faces only: ${faces} faces, ${chains.length} chains of ${chains.join(', ')} edges, ${depth} mm deep`)
+      }
       await generated(job)
       const posting = Date.now()
       const posted = (await runScript(client, script(steps.post(job)))) as { post: string }

@@ -19,7 +19,7 @@
 //       "note": "…",                    // optional: for the maker
 //       "setups": [                     // optional; none means one setup, `main`, face up
 //         { "name": "main" },
-//         { "name": "wedge8", "wedge": 8, "wcs": { "rotate": [8, 0, 0] } }
+//         { "name": "wedge8", "wedge": 8, "wcs": { "rotate": [8, 0, 0] }, "cut": "squared" }
 //       ]
 //     }
 //   ]
@@ -27,13 +27,15 @@
 //
 // A setup's `wcs.rotate` is [x, y, z] in degrees, applied in that order to the board about its own bounding box
 // centre before the setup is made: the board lies on a wedge of that angle, and the tool comes along its leaning
-// faces. `wedge` is the wedge's angle, for the maker (it is not modelled). Each setup posts to
+// faces. `wedge` is the wedge's angle, for the maker (it is not modelled). `cut: "squared"` makes a setup cut only the
+// faces it squares: those upright as the board lies in it, but not as it lies in the board's first setup (the rest of
+// the board is cut there). Without it, a setup cuts what its template finds. Each setup posts to
 // `<Body>_<setup name>.sbp`.
 
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-export type Setup = { name: string; wedge?: number; wcs?: { rotate?: [number, number, number] } }
+export type Setup = { name: string; wedge?: number; wcs?: { rotate?: [number, number, number] }; cut?: 'squared' }
 
 export type PartEntry = {
   body: string
@@ -70,6 +72,12 @@ export function loadManifest(paths: string[]): { manifest: Manifest; from?: stri
       const rotate = setup.wcs?.rotate
       if (rotate && (rotate.length !== 3 || rotate.some((a) => typeof a !== 'number'))) {
         throw new Error(`${from}: ${part.body}/${setup.name}: wcs.rotate must be [x, y, z] degrees`)
+      }
+      if (setup.cut !== undefined && setup.cut !== 'squared') {
+        throw new Error(`${from}: ${part.body}/${setup.name}: cut "${setup.cut}", expected "squared" or none`)
+      }
+      if (setup.cut && setup === part.setups?.[0]) {
+        throw new Error(`${from}: ${part.body}/${setup.name}: cut "squared" on the first setup, which the others are squared against`)
       }
     }
   }

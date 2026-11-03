@@ -53,7 +53,7 @@ Fusion's setup takes the board as it lies in the model, the tool along the model
       "note": "for the maker",
       "setups": [
         { "name": "main" },
-        { "name": "wedge8", "wedge": 8, "wcs": { "rotate": [8, 0, 0] } }
+        { "name": "wedge8", "wedge": 8, "wcs": { "rotate": [8, 0, 0] }, "cut": "squared" }
       ]
     }
   ]
@@ -69,5 +69,8 @@ Fusion's setup takes the board as it lies in the model, the tool along the model
 | `setups[].name` | the file's suffix: `<Board>_<name>.sbp` |
 | `setups[].wcs.rotate` | `[x, y, z]` degrees, about the board's box centre, in that order: how the board lies on the machine |
 | `setups[].wedge` | the wedge's angle under the board, for the maker (the wedge is not modelled) |
+| `setups[].cut` | `"squared"`: this setup cuts only the faces it squares, see below; none: all the template finds |
+
+A setup with `"cut": "squared"` (never the first one) cuts only the planar faces upright as the board lies in it (normal level within 0.05°) that are not upright as it lies in the board's first setup, which cuts the rest. On the zigzag seat's `wedge8`: the dovetail tails' flanks and ends, and the rear between them, which lean 8° flat. The template is applied, then its 2D contours are given those faces' bottom edges as their geometry (chains, open where they do not close), cut on the waste side, from the stock top to 0.3 mm below the faces' lowest point, in stepdowns of 6 mm at most, without tabs; its other operations (pockets, cut in the first setup) are deleted. No such face is an error.
 
 A board missing from the manifest gets one setup, `main`, as it lies. The zigzag chair's angles follow its planes (the back leans 8°, the slant 45°), but their signs are not checked: look at each setup in Fusion before posting it.

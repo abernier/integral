@@ -9,7 +9,8 @@
 #   "import":   import the STEP JOB["step"] into a new design document, name its bodies after the STEP's solids
 #               (matched by their boxes, JOB["solids"]), tag the document with JOB["tag"]; return the bodies
 #   "setup":    for body JOB["body"], make setup JOB["setup"] ("<Body>_<setup>"; the board turned by JOB["rotate"], degrees), with the
-#               stock and the WCS, apply the template JOB["template"] and start generating its toolpaths
+#               stock and the WCS, apply the template JOB["template"] and start generating its toolpaths; with
+#               JOB["cut"] == "squared", only the faces the turn squares (JOB["reference"]: the first setup's turn)
 #   "status":   how far the toolpaths of setup JOB["setup"] are (read-only)
 #   "post":     post setup JOB["setup"] with the library post matching JOB["post"] to JOB["folder"]/JOB["file"]
 #   "close":    close the tagged document, without saving
@@ -101,20 +102,25 @@ def find_body(design, name):
     raise RuntimeError(f"no body {name} in the design")
 
 
+def rotation(angles, centre):
+    """The matrix turning by angles = [x, y, z] degrees about centre, x first, then y, then z."""
+    matrix = adsk.core.Matrix3D.create()
+    axes = [adsk.core.Vector3D.create(1, 0, 0), adsk.core.Vector3D.create(0, 1, 0), adsk.core.Vector3D.create(0, 0, 1)]
+    for degrees, axis in zip(angles, axes):
+        if degrees:
+            step = adsk.core.Matrix3D.create()
+            step.setToRotation(math.radians(degrees), axis, centre)
+            matrix.transformBy(step)
+    return matrix
+
+
 def turned(design, body):
     """The body, or a copy of it turned by JOB["rotate"] (x, then y, then z, degrees) about its box centre."""
-    rx, ry, rz = JOB["rotate"]
-    if not rx and not ry and not rz:
+    if not any(JOB["rotate"]):
         return body
     b = body.boundingBox
     centre = adsk.core.Point3D.create((b.minPoint.x + b.maxPoint.x) / 2, (b.minPoint.y + b.maxPoint.y) / 2, (b.minPoint.z + b.maxPoint.z) / 2)
-    matrix = adsk.core.Matrix3D.create()
-    axes = [adsk.core.Vector3D.create(1, 0, 0), adsk.core.Vector3D.create(0, 1, 0), adsk.core.Vector3D.create(0, 0, 1)]
-    for degrees, axis in zip([rx, ry, rz], axes):
-        if degrees:
-            rotation = adsk.core.Matrix3D.create()
-            rotation.setToRotation(math.radians(degrees), axis, centre)
-            matrix.transformBy(rotation)
+    matrix = rotation(JOB["rotate"], centre)
     temporary = adsk.fusion.TemporaryBRepManager.get()
     copy = temporary.copy(body)
     temporary.transform(copy, matrix)
@@ -159,6 +165,128 @@ def set_parameter(owner, name, expression):
     parameter.expression = expression
 
 
+# A face stands upright when its normal is level within 0.05 degrees.
+UPRIGHT = math.sin(math.radians(0.05))
+
+
+def plane_normal(face):
+    """The normal of a planar face, or None for a curved one."""
+    if not isinstance(face.geometry, adsk.core.Plane):
+        return None
+    _found, normal = face.evaluator.getNormalAtPoint(face.pointOnFace)
+    return normal
+
+
+def squared_faces(body):
+    """
+    The planar faces this setup squares: upright on the body turned by JOB["rotate"], but not in the board's first setup
+    (turned by JOB["reference"]), e.g. the walls of the zigzag seat's dovetails, which lean 8 degrees as it lies flat.
+    """
+    origin = adsk.core.Point3D.create(0, 0, 0)
+    # From this setup's frame back to the first setup's: undo this turn, then turn as the first setup does.
+    back = rotation(JOB["rotate"], origin)
+    back.invert()
+    back.transformBy(rotation(JOB["reference"], origin))
+    faces = []
+    for face in body.faces:
+        normal = plane_normal(face)
+        if normal is None or abs(normal.z) >= UPRIGHT:
+            continue
+        before = normal.copy()
+        before.transformBy(back)
+        if abs(before.z) >= UPRIGHT:
+            faces.append(face)
+    return faces
+
+
+def bottom_chains(faces):
+    """
+    The faces' bottom edges, where they meet a face looking down (the board's underside), as chains: [(edges end to
+    end, closed)]. In order, since Fusion, given the edges unordered, chains its own way between them (over the faces'
+    tops).
+    """
+    edges = []
+    for face in faces:
+        for edge in face.edges:
+            for other in edge.faces:
+                normal = plane_normal(other) if other != face else None
+                if normal is not None and normal.z < -UPRIGHT and edge not in edges:
+                    edges.append(edge)
+
+    def key(vertex):
+        point = vertex.geometry
+        return (round(point.x, 5), round(point.y, 5), round(point.z, 5))
+
+    around = {}
+    for edge in edges:
+        for vertex in [edge.startVertex, edge.endVertex]:
+            around.setdefault(key(vertex), []).append(edge)
+    chains = []
+    left = list(edges)
+    while left:
+        # From a chain's end (a vertex with one of these edges), else anywhere on a closed loop.
+        ends = [at for at, touching in around.items() if len(touching) == 1 and touching[0] in left]
+        start = ends[0] if ends else key(left[0].startVertex)
+        at = start
+        chain = []
+        while True:
+            following = [edge for edge in around[at] if edge in left]
+            if not following:
+                break
+            edge = following[0]
+            left.remove(edge)
+            chain.append(edge)
+            at = key(edge.endVertex) if key(edge.startVertex) == at else key(edge.startVertex)
+        chains.append((chain, at == start))
+    return chains
+
+
+def cut_squared_only(setup, body):
+    """
+    Make the setup cut only the faces it squares (JOB["cut"] == "squared"): its 2D contours along their bottom edges,
+    on the waste side, from the stock top to 0.3 mm below their lowest point, in stepdowns, without tabs; its other
+    operations (the pockets, cut in the first setup already) deleted.
+    """
+    faces = squared_faces(body)
+    if not faces:
+        raise RuntimeError(
+            f"{JOB['setup']}: no face of {JOB['body']} stands upright turned by {JOB['rotate']} that did not already "
+            f"in its first setup (turned by {JOB['reference']}): nothing for this setup to square"
+        )
+    chains = bottom_chains(faces)
+    # The stock has nothing above the board: its top is the board's highest point.
+    top = max(vertex.geometry.z for vertex in body.vertices)
+    bottom = min(vertex.geometry.z for face in faces for vertex in face.vertices)
+    depth = (top - bottom) * 10 + 0.3  # mm
+
+    operations = [setup.allOperations.item(i) for i in range(setup.allOperations.count)]
+    contours = [operation for operation in operations if operation.strategy == "contour2d"]
+    if not contours:
+        raise RuntimeError(f'{JOB["setup"]}: the template "{JOB["template"]}" has no 2D contour to cut the squared faces with')
+    for operation in operations:
+        if operation.strategy != "contour2d":
+            operation.deleteMe()
+    for operation in contours:
+        value = operation.parameters.itemByName("contours").value
+        selections = value.getCurveSelections()
+        selections.clear()
+        for edges, closed in chains:
+            # Fusion puts the tool outside the higher of the faces along the first edge: on the waste side, off the
+            # squared face. isOpen keeps an open chain open (false closes it with more edges).
+            selection = selections.createNewChainSelection()
+            selection.inputGeometry = edges
+            selection.isOpen = not closed
+        value.applyCurveSelections(selections)
+        set_parameter(operation, "topHeight_mode", "'from stock top'")
+        set_parameter(operation, "topHeight_offset", "0 mm")
+        set_parameter(operation, "bottomHeight_mode", "'from stock top'")
+        set_parameter(operation, "bottomHeight_offset", f"{-depth:.3f} mm")
+        set_parameter(operation, "doMultipleDepths", "true")
+        set_parameter(operation, "maximumStepdown", "6 mm")
+        set_parameter(operation, "group_tabs", "false")  # the Tabs checkbox
+    return {"faces": len(faces), "chains": [len(edges) for edges, _closed in chains], "depth": round(depth, 2)}
+
+
 def find_setup(cam):
     setup = cam.setups.itemByName(JOB["setup"])
     if not setup:
@@ -191,9 +319,10 @@ def make_setup():
     operations = setup.createFromCAMTemplate2(from_template)
     if not operations:
         raise RuntimeError(f'the template "{JOB["template"]}" made no operations')
+    squared = cut_squared_only(setup, model) if JOB["cut"] == "squared" else None
     # Started here, generated while Fusion is idle between calls: "status" says when it is done.
     cam.generateToolpath(setup)
-    done({"setup": setup.name, "operations": [operation.name for operation in setup.allOperations]})
+    done({"setup": setup.name, "operations": [operation.name for operation in setup.allOperations], "squared": squared})
 
 
 def status():

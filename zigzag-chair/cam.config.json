@@ -7,9 +7,9 @@
       "thickness": 19,
       "setups": [
         { "name": "main" },
-        { "name": "wedge8", "wedge": 8, "wcs": { "rotate": [8, 0, 0] } }
+        { "name": "wedge8", "wedge": 8, "wcs": { "rotate": [8, 0, 0] }, "cut": "squared" }
       ],
-      "note": "wedge8: the tails are square to the back, which leans 8 degrees (BACK_LEAN): turned 8 degrees about x, the tool comes along their walls"
+      "note": "wedge8: the tails are square to the back, which leans 8 degrees (BACK_LEAN): turned 8 degrees about x, the tool comes along their walls; it cuts only those (cut: squared), the rest is cut in main"
     },
     {
       "body": "Back",
