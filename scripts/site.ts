@@ -96,8 +96,37 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
   return `---\n${meta.filter(Boolean).join('\n')}\n---\n\n${body}`
 }
 
+/**
+ * The root README's parts table, one row per part: its render (linking to its page), the description line under
+ * its heading with a link to the page, and the badges line of its README. Taken from the parts' READMEs, so the
+ * table is never edited by hand: `writePages` rewrites the `## Parts` section of README.md when a part changes.
+ */
+function partsTable() {
+  const rows = parts().map((part) => {
+    const source = readFileSync(join(ROOT, part, 'README.md'), 'utf8')
+    const title = source.match(/^# (.+)$/m)?.[1] ?? part
+    const description = source.match(/^# .+\n+([^<\n].*)\n/m)?.[1] ?? ''
+    const badges = source.match(/^\[!\[.*$/m)?.[0] ?? ''
+    const page = `${SITE_URL}/${part}/introduction`
+    const image = `<a href="${page}"><img src="${SITE_URL}/${part}/${part}.png" alt="${title}" width="160" /></a>`
+    return `| ${image} | **[${title}](${page})**: ${description} | ${badges} |`
+  })
+  return ['| | Part | Files |', '|---|---|---|', ...rows].join('\n')
+}
+
+function syncReadme() {
+  const readme = join(ROOT, 'README.md')
+  const source = readFileSync(readme, 'utf8')
+  const synced = source.replace(/(^## Parts\n\n)[\s\S]*?(\n\n## )/m, `$1${partsTable()}$2`)
+  if (synced !== source) {
+    writeFileSync(readme, synced)
+    console.log('README.md: parts table updated')
+  }
+}
+
 /** Write the MDX pages. `urls` default to the published site; `dev` points them at its local servers. */
 export function writePages(urls = { site: SITE_URL, files: SITE_URL }) {
+  syncReadme()
   mkdirSync(join(MDX, 'integral'), { recursive: true })
   copyFileSync(join(ROOT, 'scripts', 'viewer.html'), join(MDX, 'viewer.html'))
   writeFileSync(join(MDX, 'integral', 'introduction.mdx'), page(join(ROOT, 'README.md'), 0, urls))
