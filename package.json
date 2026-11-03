@@ -17,7 +17,7 @@
     "@classcad/renderer": "0.1.0",
     "@classcad/script": "0.2.0",
     "@classcad/skill": "0.0.8",
-    "@pmndrs/docs": "4.25.2",
+    "@pmndrs/docs": "4.26.0",
     "sharp": "^0.34.5"
   },
   "devDependencies": {

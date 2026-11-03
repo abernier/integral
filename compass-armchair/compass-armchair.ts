@@ -1,4 +1,4 @@
-// Compass armchair, a parametric ClassCAD assembly. `nr build` calls this module's default export with the ClassCAD
+// Compass armchair, a parametric ClassCAD part. `nr build` calls this module's default export with the ClassCAD
 // script API (`api.v1`, as the ClassCAD MCP's run_script gives it), on an empty drawing.
 //
 // A teak and cane armchair on compass legs, after the 1955 Chandigarh office chair, measured from a side view (the
@@ -11,13 +11,10 @@
 //
 // As for the zigzag chair, every flat board is a large box cut down by half-spaces: work planes whose position and
 // normal are expressions. The arched members are a cylinder less a smaller one, cut the same way. Changing a
-// parameter moves the planes and the whole history rebuilds. The parameters live in the `Params` part (assemblies
-// hold no expressions); each board mirrors them as `Params.ExpressionSet.<name>`.
+// parameter moves the planes and the whole history rebuilds. The chair is one part: its expressions are the
+// parameters, and every board is a named body in it, so changing one rebuilds them all.
 
-import type { V1T } from '@classcad/api-js'
-
-/** The part of the ClassCAD script API this build uses. */
-export type Api = { v1: V1T }
+import { type Api, created, nameSolids } from '../scripts/part.ts'
 
 const TEAK: [number, number, number] = [155, 106, 60] // #9b6a3c
 const CANE: [number, number, number] = [230, 210, 160] // #e6d2a0
@@ -115,7 +112,6 @@ const DERIVED = {
   BACK_TAIL_END: 'BACK_TAIL_BASE + 2*POST_W*SLOPE',
 }
 
-const NAMES = [...Object.keys(MASTERS), ...Object.keys(DERIVED)]
 
 // A half-space: a point on its plane and its normal, pointing into the material. Components are expressions in
 // which `$X` stands for `@expr.X`.
@@ -239,13 +235,6 @@ const expr = (s: string) => s.replace(/\$/g, '@expr.')
 const vector = (v: Vec) => expr(`[${v.join(', ')}]`)
 const BIG = 3000
 
-/** The id a call created; the engine answers null when it created nothing. */
-async function created(call: Promise<{ result: number | null }>) {
-  const { result } = await call
-  if (result === null) throw new Error('ClassCAD created nothing')
-  return result
-}
-
 /** Cut `body` down by half-spaces, one work plane and one slice each. */
 async function cut(api: Api, part: number, name: string, body: number, planes: HalfSpace[]) {
   for (const { name: plane, at, normal } of planes) {
@@ -357,32 +346,22 @@ const BOARDS: Record<string, Builder> = {
   BackCane: (api, part) => arc(api, part, 'Cane', '$CANE_T', ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM']),
 }
 
-/** Build the chair: a root assembly, the `Params` part, one part per board; returns their ids and volumes. */
+/**
+ * Build the chair: one part whose expressions drive every board, each board a named body in it; returns the part,
+ * the boards' feature ids and their volumes.
+ */
 export default async function build(api: Api) {
-  const asm = await created(api.v1.assembly.create({ name: 'CompassArmchair' }))
-  const params = await created(api.v1.assembly.partTemplate({ name: 'Params' }))
+  const part = await created(api.v1.part.create({ name: 'CompassArmchair' }))
   await api.v1.part.expression({
-    id: params,
+    id: part,
     toCreate: [...Object.entries(MASTERS), ...Object.entries(DERIVED)].map(([name, value]) => ({ name, value })),
   })
 
-  const parts: Record<string, number> = {}
+  const boards: Record<string, number> = {}
   for (const [name, make] of Object.entries(BOARDS)) {
-    const part = await created(api.v1.assembly.partTemplate({ name }))
-    await api.v1.part.expression({ id: part, toCreate: NAMES.map((n) => ({ name: n, value: `Params.ExpressionSet.${n}` })) })
     const body = await make(api, part)
     await api.v1.part.setAppearance({ target: body, color: name.includes('Cane') ? CANE : TEAK })
-    parts[name] = part
+    boards[name] = body
   }
-
-  await api.v1.assembly.setCurrentProduct({ id: asm })
-  for (const [name, part] of Object.entries(parts)) {
-    await api.v1.assembly.instance({ productId: part, ownerId: asm, name })
-  }
-
-  const volumes: Record<string, number | undefined> = {}
-  for (const [name, part] of Object.entries(parts)) {
-    volumes[name] = (await api.v1.part.calculateMassProperties({ id: part })).result?.volume
-  }
-  return { asm, parts, volumes }
+  return { part, boards, volumes: await nameSolids(api, boards) }
 }

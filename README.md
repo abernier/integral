@@ -42,4 +42,4 @@ nr build      # parts + site into dist/
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
 - Engine key: local ClassCAD sign-in; in CI, the `CLASSCAD_TOKEN` secret
-- Deploy: every push to `main`, GitHub Pages
+- Deploy: every push to `main`, GitHub Pages; every pull request, a Vercel preview (`vercel.json`, the engine key in its `CLASSCAD_TOKEN` variable)

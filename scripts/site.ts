@@ -7,7 +7,7 @@
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things").
 //
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
-// for a local site those URLs are rewritten to the local servers.
+// for a local site those URLs are rewritten to the local servers, for a built site to root-relative paths.
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
@@ -19,9 +19,33 @@ export const ROOT = resolve(import.meta.dirname, '..')
 export const MDX = join(ROOT, '.docs')
 export const DIST = join(ROOT, 'dist')
 
-/** Where GitHub Pages serves the site. */
-export const SITE_URL = process.env.SITE_URL ?? 'https://abernier.github.io/integral'
+/** Where GitHub Pages serves the site: the READMEs link pages and files by this URL. */
+const PAGES_URL = 'https://abernier.github.io/integral'
+/** Where this build is served: GitHub Pages, or on Vercel the preview's branch URL, at its root. */
+const VERCEL_HOST = process.env.VERCEL_BRANCH_URL ?? process.env.VERCEL_URL
+export const SITE_URL = process.env.SITE_URL ?? (VERCEL_HOST ? `https://${VERCEL_HOST}` : PAGES_URL)
+/** The path the site is served under: `/integral` on GitHub Pages, nothing on Vercel. */
+const BASE_PATH = new URL(SITE_URL).pathname.replace(/\/$/, '')
 export const HOME = '/integral/introduction'
+
+/**
+ * Where a page's links point: `site` for its pages, `files` for the built files, `shared` for a file another site
+ * fetches (Buerligons' `?url=`), which must be absolute: GitHub Pages (but see `buerligonsUrl`).
+ * Built, pages and files are root-relative, so that they load from whichever host serves the build: a Vercel
+ * preview answers on its deployment URL and its branch URL, and its sign-in cookie holds for one host only.
+ */
+export type Urls = { site: string; files: string; shared: string }
+
+/**
+ * The file Buerligons opens, encoded for its `?url=`. On a Vercel preview, this deployment's own file, through the
+ * preview's sign-in by the project's protection bypass for automation (a secret Vercel gives the build; it ends up
+ * in the preview's pages, which are behind that sign-in themselves); elsewhere, `shared`'s.
+ */
+function buerligonsUrl(shared: string, path: string) {
+  const bypass = process.env.VERCEL_ENV === 'preview' ? process.env.VERCEL_AUTOMATION_BYPASS_SECRET : undefined
+  if (!bypass) return `${shared}${path}`
+  return encodeURIComponent(`https://${process.env.VERCEL_URL}${path}?x-vercel-protection-bypass=${bypass}`)
+}
 
 /** A part's page, under "Things" in the sidebar. */
 const partPage = (part: string) => `things/${part}`
@@ -53,7 +77,7 @@ export async function buildPart(engine: Engine, part: string) {
  * render itself. On GitHub the README shows the render alone (it prints iframes as text).
  */
 function views(part: string, alt: string) {
-  const file = (ext: string) => `${SITE_URL}/${part}/${part}.${ext}`
+  const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
   const frame = (src: string, title: string, height: number) =>
     `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen" />`
   return [
@@ -64,7 +88,7 @@ function views(part: string, alt: string) {
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '<TabsTrigger value="render">Render</TabsTrigger>',
     '</TabsList>',
-    `<TabsContent value="3d">${frame(`${SITE_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
+    `<TabsContent value="3d">${frame(`${PAGES_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     '</Tabs>',
@@ -73,10 +97,11 @@ function views(part: string, alt: string) {
 
 /**
  * Turn a README into an MDX page: its first heading becomes the title, the line under it the description, links
- * to the site become local ones.
+ * to the site become local ones, and "Edit this page" opens the README on GitHub.
  * A part's page also gets its source, its render as the page's image, and the render's tabs (`views`).
  */
-function page(readme: string, nav: number, urls: { site: string; files: string }, part?: string) {
+function page(readme: string, nav: number, urls: Urls, part?: string) {
+  const edit = `https://github.com/abernier/integral/edit/main/${part ? `${part}/` : ''}README.md`
   const source = readFileSync(readme, 'utf8')
   const title = source.match(/^# (.+)$/m)?.[1] ?? 'Untitled'
   // The line under the heading: short, shown under the title; the <Intro> after it says more.
@@ -85,20 +110,24 @@ function page(readme: string, nav: number, urls: { site: string; files: string }
     `title: ${JSON.stringify(title)}`,
     description && `description: ${JSON.stringify(description)}`,
     part && `sourcecode: ${part}/${part}.ts`,
-    part && `image: ../${part}/${part}.png`,
+    part && `image: ${urls.shared}/${part}/${part}.png`, // for link previews: absolute
+    `edit: ${edit}`,
     `nav: ${nav}`,
   ]
-  const render = part && `${SITE_URL}/${part}/${part}.png`
+  const render = part && `${PAGES_URL}/${part}/${part}.png`
   const body = source
     .replace(/^# .+\n+/m, '')
     .replace(description ? `${description}\n` : '', '')
     .replace(/^!\[([^\]]*)\]\((\S+)\)$/m, (image, alt, src) => (part && src === render ? views(part, alt) : image))
-  // A page link goes to the site, any other link to the site's files to where the files are served.
-  let linked = body
-  for (const path of [HOME, ...parts().map((p) => `/${partPage(p)}`)]) {
-    linked = linked.replaceAll(`${SITE_URL}${path}`, `${urls.site}${path}`)
-  }
-  linked = linked.replaceAll(`${SITE_URL}/`, `${urls.files}/`)
+  // A page link goes to the site, any other link to the site's files to where the files are served, Buerligons'
+  // `?url=` to the absolute URL. A link's root-relative URL (markdown or `<a href>`) loses the base path: Next.js
+  // puts it back; an `src` keeps it.
+  const pages = [HOME, ...parts().map((p) => `/${partPage(p)}`)]
+  const linked = body.replace(new RegExp(`(\\]\\(|href="|\\?url=)?${PAGES_URL.replaceAll('.', '\\.')}(/[^\\s)"']*)`, 'g'), (_, before = '', path: string) => {
+    if (before === '?url=') return `${before}${buerligonsUrl(urls.shared, path)}`
+    const url = `${pages.includes(path) ? urls.site : urls.files}${path}`
+    return before && BASE_PATH && url.startsWith(`${BASE_PATH}/`) ? `${before}${url.slice(BASE_PATH.length)}` : `${before}${url}`
+  })
   return `---\n${meta.filter(Boolean).join('\n')}\n---\n\n${linked}`
 }
 
@@ -112,8 +141,8 @@ function partsTable() {
     const source = readFileSync(join(ROOT, part, 'README.md'), 'utf8')
     const title = source.match(/^# (.+)$/m)?.[1] ?? part
     const description = source.match(/^# .+\n+([^<\n].*)\n/m)?.[1] ?? ''
-    const page = `${SITE_URL}/${partPage(part)}`
-    const image = `<a href="${page}"><img src="${SITE_URL}/${part}/${part}.png" alt="${title}" width="72" /></a>`
+    const page = `${PAGES_URL}/${partPage(part)}`
+    const image = `<a href="${page}"><img src="${PAGES_URL}/${part}/${part}.png" alt="${title}" width="72" /></a>`
     return `| ${image} | **[${title}](${page})**: ${description} |`
   })
   return ['| | Part |', '|---|---|', ...rows].join('\n')
@@ -129,8 +158,8 @@ function syncReadme() {
   }
 }
 
-/** Write the MDX pages. `urls` default to the published site; `dev` points them at its local servers. */
-export function writePages(urls = { site: SITE_URL, files: SITE_URL }) {
+/** Write the MDX pages. `urls` default to the built site; `dev` points them at its local servers. */
+export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, shared: PAGES_URL }) {
   syncReadme()
   mkdirSync(MDX, { recursive: true })
   copyFileSync(join(ROOT, 'scripts', 'viewer.html'), join(MDX, 'viewer.html'))
@@ -150,13 +179,17 @@ export function docsEnv(overrides: Record<string, string> = {}) {
     MDX,
     NEXT_PUBLIC_LIBNAME: 'integral',
     NEXT_PUBLIC_LIBNAME_SHORT: 'integral',
-    BASE_PATH: new URL(SITE_URL).pathname.replace(/\/$/, ''),
+    BASE_PATH,
     HOME_REDIRECT: HOME,
-    MDX_BASEURL: SITE_URL,
+    // Unset: @pmndrs/docs would make every image URL absolute on it, the pages' root-relative ones included.
+    MDX_BASEURL: '',
     NEXT_PUBLIC_URL: SITE_URL,
     SOURCECODE_BASEURL: 'https://github.com/abernier/integral/tree/main',
-    // Off: the link is the page's path under this base, and the pages do not sit at their READMEs' paths.
+    // No base: the pages do not sit at their READMEs' paths, so each page gives its own `edit` URL.
     EDIT_BASEURL: '',
+    // Not a pmndrs library: no "Sponsor Poimandres" card, no menu of the pmndrs libraries.
+    SPONSOR_CARD: 'false',
+    LIBS_MENU: 'false',
     GITHUB: 'https://github.com/abernier/integral',
     ...overrides,
   }

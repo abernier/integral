@@ -17,13 +17,13 @@ Each side is two tapered boards in a V and an armrest on edge, one plane, one th
 | Wood | teak, 30 mm boards; cane seat and back |
 | Size | 480 × 553.1 × 794.7 mm |
 | Joints | 6 loose tenons; 8 through dovetails |
-| Model | ClassCAD assembly, 24 parts |
+| Model | ClassCAD part, 24 named bodies |
 | Source | [smlibpy's `compass_armchair.py`](https://github.com/abernier/smlibpy/pull/11) |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
 
 ## Parameters
 
-In the `Params` part, mm. Edit, then recalculate.
+In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole chair rebuilds.
 
 | Name | Default | Meaning |
 |---|---|---|
@@ -49,33 +49,3 @@ In the `Params` part, mm. Edit, then recalculate.
 | `SEAT_TAILS` | 2 | Dovetails per seat corner |
 | `SLOPE` | 1/6 | Dovetail slope |
 | `SEAT_PIN_EDGE`, `SEAT_PIN_MID`, `BACK_TAIL_SHOULDER` | 6, 6, 2 | Pins, shoulder |
-
-## Volumes
-
-cm³, from the STEP, equal to smlibpy's to 1e-7, here and with `W` 520, `SEAT_TAILS` 3.
-
-| Part | × | Volume |
-|---|---|---|
-| Front leg | 2 | 1295.3 |
-| Rear leg | 2 | 1269.6 |
-| Armrest | 2 | 1252.1 |
-| Side rail | 2 | 632.6 |
-| Front rail | 1 | 716.5 |
-| Rear rail | 1 | 955.3 |
-| Back post | 2 | 302.2 |
-| Back rail | 2 | 422.9 |
-| Spline | 2 | 48.6 |
-| Arm tenon | 2 | 27.4 |
-| Rail tenon | 4 | 14.0 |
-| Seat cane | 1 | 1181.0 |
-| Back cane | 1 | 663.7 |
-
-Teak 7.95 kg at 0.65 g/cm³.
-
-## Notes
-
-- \+ Parameters in Buerligons, a recalc in seconds; STEP for any CAD
-- \+ Every board a box (or a cylinder band) cut by half-spaces, one side mirrored to the other
-- − ClassCAD's own mass properties under-read the arched parts (back rails −9 to −12 %, cane −0.3 %); the STEP is exact
-- − No assembly-order or overlap checks, which smlibpy runs; no machining files or exploded views
-- − A first build takes about 100 s

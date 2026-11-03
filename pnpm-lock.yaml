@@ -21,8 +21,8 @@ importers:
         specifier: 0.0.8
         version: 0.0.8
       '@pmndrs/docs':
-        specifier: 4.25.2
-        version: 4.25.2
+        specifier: 4.26.0
+        version: 4.26.0
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
@@ -114,7 +114,7 @@ packages:
     resolution: {integrity: sha512-SzKYY68rseOrb9KILVzPsl6SjkQtdWw01SRGB5aCVI5kFcHltQsOYV3JB0Ffst72DgkvHCyDQ0NLwxtmCCf97Q==}
 
   '@classcad/api-js@https://awvstatic.com/classcad/download/release/21.2.0/js/classcad-api-js-21.2.0.tgz':
-    resolution: {integrity: sha512-FiWUD1x2eTkXQXat5MGWvRcdiaRBuGI6mITkkrvQhZjLsI/o2LUyuy+/dk/INLh4FRTGCJ4ivCuqDem5TqMiiQ==, tarball: https://awvstatic.com/classcad/download/release/21.2.0/js/classcad-api-js-21.2.0.tgz}
+    resolution: {tarball: https://awvstatic.com/classcad/download/release/21.2.0/js/classcad-api-js-21.2.0.tgz}
     version: 21.2.0
 
   '@classcad/mcp@0.6.1':
@@ -696,8 +696,8 @@ packages:
   '@open-draft/deferred-promise@2.2.0':
     resolution: {integrity: sha512-CecwLWx3rhxVQF6V4bAgPS5t+So2sTbPgAzafKkVizyi7tlwpcFpdFqq+wqF2OwNBmqFuu6tOyouTuxgpMfzmA==}
 
-  '@pmndrs/docs@4.25.2':
-    resolution: {integrity: sha512-52vPzNODqAnrlIrBJiy2dQKZgJzFeZuVdNATFbouOGshtT2+4+DNYTb4yk7j2oHckMn1O1yhfU3LXHy5YeBVFg==}
+  '@pmndrs/docs@4.26.0':
+    resolution: {integrity: sha512-H/QbejiqQRAmHnXHK1JIZRcQxYlbnOOSlwLxH5UHDfldz7eG+fp/cGyEmTMqZgeuqgPiIOkDp9JNKHbpOEPDBQ==}
     engines: {node: ^22.18.0 || >=23.6.0}
     hasBin: true
 
@@ -4034,7 +4034,7 @@ snapshots:
 
   '@open-draft/deferred-promise@2.2.0': {}
 
-  '@pmndrs/docs@4.25.2':
+  '@pmndrs/docs@4.26.0':
     dependencies:
       '@base-ui/react': 1.9.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@codemirror/language': 6.13.1

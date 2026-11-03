@@ -2,6 +2,8 @@ name: Build the parts and the site, deploy to GitHub Pages
 on:
   push:
     branches: ['main']
+  # A pull request is built, not deployed: its preview is Vercel's (vercel.json).
+  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -35,12 +37,15 @@ jobs:
         env:
           # A ClassCAD secret access token (ccsk_...), from classcad.ch/account: it buys the engine's key.
           CLASSCAD_TOKEN: ${{ secrets.CLASSCAD_TOKEN }}
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
 
