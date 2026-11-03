@@ -4,7 +4,7 @@ A cane armchair on compass legs, after the 1955 Chandigarh office chair, paramet
 
 <Intro>
 
-Each side is two tapered boards in a V and an armrest on edge, one plane, one thickness. The seat frame takes the boards on loose tenons, its cross rails are dovetailed through. The arched back hangs between the armrests, on one loose tenon a post. Every dimension below is a parameter: change one in Buerligons, the chair rebuilds.
+Each side is two tapered boards in a V and an armrest on edge, one plane, one thickness. The seat frame takes the boards on loose tenons, its cross rails are dovetailed through. The arched back hangs between the armrests, on one loose tenon a post. Every dimension is a parameter: change one in the model or in Buerligons, the chair rebuilds.
 
 </Intro>
 
@@ -17,38 +17,9 @@ Each side is two tapered boards in a V and an armrest on edge, one plane, one th
 | Wood | teak, 30 mm boards; cane seat and back |
 | Size | 480 × 553.1 × 794.7 mm |
 | Joints | 6 loose tenons; 8 through dovetails |
-| Model | ClassCAD part, 24 named bodies |
+| Model | ClassCAD part, 24 named bodies; the site also runs it in the browser (smlibwasm) |
 | Source | [smlibpy's `compass_armchair.py`](https://github.com/abernier/smlibpy/pull/11) |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
-
-## Parameters
-
-In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole chair rebuilds.
-
-| Name | Default | Meaning |
-|---|---|---|
-| `W`, `LEG_T` | 480, 30 | Width over the boards; their thickness |
-| `FRONT_FOOT_FRONT`, `FRONT_FOOT_BACK` | −181, −139 | Front foot on the floor |
-| `REAR_FOOT_FRONT`, `REAR_FOOT_BACK` | 139, 181 | Rear foot |
-| `NOTCH_Z` | 400 | Where the boards part, on the seam |
-| `ARM_EDGE_FRONT`, `ARM_EDGE_REAR` | −70, 70 | Boards' edges under the armrest |
-| `SPLINE_W`, `SPLINE_T`, `SPLINE_Z`, `SPLINE_IN_ARM` | 20, 16, 457, 40 | Seam tenon |
-| `ARM_TOP`, `ARM_FRONT` | 645, −235 | Armrest top, nose |
-| `ARM_NOSE_H`, `ARM_BACK_Y`, `ARM_BACK_H` | 60, 280, 95 | Armrest height, nose and back |
-| `ARM_BEHIND` | 40 | Armrest behind the back |
-| `SEAT_TOP`, `RAIL_H`, `RAIL_T`, `CANE_T` | 437, 60, 25, 8 | Seat frame |
-| `SEAT_FRONT`, `SEAT_BACK` | −229, 240 | Side rails |
-| `FRONT_RAIL_T`, `REAR_RAIL_T` | 30, 40 | Cross rails |
-| `TENON_LEN`, `TENON_T`, `TENON_H`, `TENON_Y`, `TENON_IN_RAIL` | 20, 10, 40, 55, 15 | Side rail tenons |
-| `BACK_TILT` | 15 | Back lean, degrees |
-| `POST_W`, `POST_D`, `POST_Y_AT_ARM` | 30, 40, 260 | Posts |
-| `BOW` | 10 | Back's arc, behind the posts between them |
-| `LOW_RAIL_BOTTOM`, `LOW_RAIL_TOP` | 65, 100 | Lower back rail, along the posts |
-| `HIGH_RAIL_BOTTOM`, `HIGH_RAIL_TOP` | 330, 365 | Upper back rail |
-| `ARM_TENON`, `ARM_TENON_DEPTH`, `ARM_TENON_MARGIN` | 12, 15, 8 | Post tenons |
-| `SEAT_TAILS` | 2 | Dovetails per seat corner |
-| `SLOPE` | 1/6 | Dovetail slope |
-| `SEAT_PIN_EDGE`, `SEAT_PIN_MID`, `BACK_TAIL_SHOULDER` | 6, 6, 12 | Pins, shoulder |
 
 ## ShopBot files
 

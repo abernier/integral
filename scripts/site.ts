@@ -3,7 +3,8 @@
 //
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
 // ClassCAD, and a README.md.
-// Building it writes `<folder>.ofb`, `<folder>.step` and `<folder>.png` into `.docs/<folder>/`. The MDX folder also
+// Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`;
+// `buildConfigurator` builds the configurator app into `.docs/configurator/`, and each part's page embeds it. The MDX folder also
 // gets one page per README, where the sidebar wants it: the root one as `integral/introduction.mdx`, each part's
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things"), and one per
 // `docs/<name>.md`, a page that belongs to no part (how a tool works), as `integral/<name>.mdx`.
@@ -14,6 +15,7 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
+import { build as vite } from 'vite'
 import { type Engine, glb, render, run, save } from './classcad.ts'
 import { MDX, ROOT, parts } from './paths.ts'
 
@@ -78,13 +80,36 @@ export async function buildPart(engine: Engine, part: string) {
 }
 
 /**
- * A part's render, as the site shows it: tabs with the render itself, a 3D viewer of its GLB, and the part open in
- * Buerligons. On GitHub the README shows the render alone (it prints iframes as text).
+ * Build the configurator (a Vite app) into the MDX folder, where the pages' iframes load it; `watch` rebuilds it as
+ * its files change. Resolves once the (first) build is done, so that what follows can serve its files.
+ * @param watch true keeps vite watching and rebuilds the app on every change, instead of building once.
+ */
+export async function buildConfigurator(watch = false) {
+  const result = await vite({
+    configFile: join(ROOT, 'configurator', 'vite.config.ts'),
+    logLevel: 'warn',
+    // In watch mode the folder is being served: a rebuild must not empty it (stale hashed chunks are harmless in dev).
+    build: { outDir: join(MDX, 'configurator'), emptyOutDir: !watch, watch: watch ? {} : null },
+  })
+  if (!watch) return
+  // In watch mode vite returns as soon as the watcher exists, before the first build ran: wait for its end.
+  const watcher = result as Extract<typeof result, { on: unknown }>
+  await new Promise<void>((done) => {
+    watcher.on('event', (event) => {
+      if (event.code === 'ERROR') console.error(String(event.error))
+      if (event.code === 'END' || event.code === 'ERROR') done()
+    })
+  })
+}
+
+/**
+ * A part's render, as the site shows it: tabs with the render itself, its configurator (the `configurator/` app:
+ * the part rebuilt in the browser as sliders move), and the part open in Buerligons. On GitHub the README shows the render alone (it prints iframes as text).
  */
 function views(part: string, alt: string) {
   const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
-  const frame = (src: string, title: string, height: number) =>
-    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen" />`
+  const frame = (src: string, title: string, height: number, allow = 'fullscreen') =>
+    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="${allow}" />`
   return [
     // syncKey: the pick is kept in localStorage, the same on every part's page.
     '<Tabs defaultValue="render" syncKey="part-view">',
@@ -94,7 +119,9 @@ function views(part: string, alt: string) {
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '</TabsList>',
     `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
-    `<TabsContent value="3d">${frame(`${PAGES_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
+    // The directory URL, not index.html: Vercel's clean URLs redirect the file to its directory, and the app's
+    // relative base resolves against the trailing slash on every host.
+    `<TabsContent value="3d">${frame(`${PAGES_URL}/configurator/?part=${part}`, `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     '</Tabs>',
   ].join('\n')
@@ -173,7 +200,6 @@ function syncReadme() {
 export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, shared: PAGES_URL }) {
   syncReadme()
   mkdirSync(MDX, { recursive: true })
-  copyFileSync(join(ROOT, 'scripts', 'viewer.html'), join(MDX, 'viewer.html'))
   mkdirSync(join(MDX, 'integral'), { recursive: true })
   writeFileSync(join(MDX, 'integral', 'introduction.mdx'), page(join(ROOT, 'README.md'), 0, urls))
   docPages().forEach((name, i) => {

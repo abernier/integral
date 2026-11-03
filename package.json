@@ -12,7 +12,8 @@
     "cam": "node scripts/cam.ts",
     "dev": "node scripts/dev.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --test 'scripts/**/*.test.ts'",
+    "dev:configurator": "vite --config configurator/vite.config.ts",
+    "test": "node --test 'scripts/**/*.test.ts' 'configurator/**/*.test.ts'",
     "lgtm": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
@@ -20,15 +21,27 @@
     "@classcad/renderer": "0.1.0",
     "@classcad/script": "0.2.0",
     "@classcad/skill": "0.0.8",
+    "@classcad/smlibwasm": "^0.6.2",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@pmndrs/docs": "4.26.0",
-    "sharp": "^0.34.5"
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.2",
+    "leva": "^0.10.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sharp": "^0.34.5",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@classcad/api-js": "https://awvstatic.com/classcad/download/release/21.2.0/js/classcad-api-js-21.2.0.tgz",
     "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "@vitejs/plugin-react": "^6.2.1",
     "serve": "^14.2.4",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

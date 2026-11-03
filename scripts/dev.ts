@@ -12,7 +12,7 @@ import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { openEngine } from './classcad.ts'
 import { MDX, ROOT, parts } from './paths.ts'
-import { HOME, buildPart, docsEnv, writePages } from './site.ts'
+import { HOME, buildConfigurator, buildPart, docsEnv, writePages } from './site.ts'
 
 const freePort = () =>
   new Promise<number>((done) => {
@@ -30,6 +30,7 @@ const urls = { site: `http://localhost:${port}`, files, shared: files }
 const engine = await openEngine()
 for (const part of parts()) await buildPart(engine, part)
 writePages(urls)
+await buildConfigurator(true) // rebuilt as its files change; reload the page
 
 const app = join(ROOT, '.pmndrs-docs', 'dev')
 const docsPackage = join(ROOT, 'node_modules', '@pmndrs', 'docs')
@@ -41,7 +42,7 @@ for (const file of APP_FILES) {
 
 const bin = (name: string) => join(ROOT, 'node_modules', '.bin', name)
 const children = [
-  // serve.json turns clean URLs off: they would redirect viewer.html to /viewer and lose its ?src=.
+  // serve.json turns clean URLs off: they would redirect configurator/index.html to /configurator/index and lose its ?part=.
   spawn(bin('serve'), [MDX, '-c', join(ROOT, 'scripts', 'serve.json'), '-p', String(filesPort), '--cors', '--no-port-switching', '--no-clipboard'], {
     stdio: 'ignore',
   }),
@@ -72,7 +73,7 @@ const later = (key: string, task: () => Promise<void> | void) => {
 }
 
 watch(ROOT, { recursive: true }, (_event, file) => {
-  if (!file || /^(node_modules|\.docs|\.pmndrs-docs|dist)\b/.test(file)) return
+  if (!file || /^(configurator|node_modules|\.docs|\.pmndrs-docs|dist)\b/.test(file)) return
   const [folder, name] = file.split('/')
   if (file === 'README.md' || (name === 'README.md' && parts().includes(folder)) || (folder === 'docs' && name?.endsWith('.md'))) {
     later('pages', () => void writePages(urls))

@@ -12,34 +12,12 @@
 
 import { type Api, created, nameSolids } from '../scripts/part.ts'
 import type { CamConfig } from '../scripts/cam/config.ts'
+import { MASTERS } from './zigzag-chair.masters.ts'
 
-const DEG = Math.PI / 180
 const CHERRY: [number, number, number] = [168, 96, 58] // #a8603a
 
-/**
- * The parameters a maker changes. The seat length and the back height are chosen so that the chair has a
- * 480 depth and 740 height (the back's rear top corner) with its 8 degree lean.
- */
-export const MASTERS = {
-  T: 19, // every board's thickness
-  W_NOSE: 370, // width at the seat's nose
-  W_FOOT: 330, // width at the slant's rear bottom corner: with W_NOSE, it sets the taper
-  W_BASE_FRONT: 300, // the base's top face at its front edge
-  SEAT_TOP: 430, // height of the seat's top face
-  SEAT_LEN: 480 - 310 * Math.tan(8 * DEG), // the seat's top face, from the nose to the back's rear face (436.43)
-  BACK_H: 310 / Math.cos(8 * DEG), // the back above the seat, along its rear face (313.04)
-  BACK_LEAN: 8, // the back's lean from the vertical, degrees
-  BASE_LENGTH: 418, // the base's underside, from the foot to its square front end
-  CLEAT: 30, // a cleat's legs
-  TAILS: 6, // dovetail count
-  SLOPE: 1 / 6, // dovetail slope, 1 in 6
-  PIN: 20, // a pin, at the back's rear face
-  HALF_PIN: 20, // the half pins at the back's edges
-  GRIP: 140, // hand grip length, round ends included
-  GRIP_HIGH: 20,
-  GRIP_DEEP: 10,
-  GRIP_BELOW: 20, // from the back's top edge to the grip, along the rear face
-}
+/** The masters as ClassCAD sees them: a name and its default value, from zigzag-chair.masters.ts. */
+const MASTER_VALUES = Object.entries(MASTERS).map(([name, { value }]) => [name, value] as const)
 
 /** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. */
 export const CAM = {
@@ -47,7 +25,7 @@ export const CAM = {
   parts: {
     // The tails are square to the back, which leans: once cut on its sheet, the seat goes on a wedge of the back's
     // lean, turned as much about x, and the tool comes along the tails' walls; it cuts only those.
-    Seat: { setups: [{ name: `wedge${MASTERS.BACK_LEAN}`, wedge: MASTERS.BACK_LEAN, rotate: [MASTERS.BACK_LEAN, 0, 0], cut: 'squared' }] },
+    Seat: { setups: [{ name: `wedge${MASTERS.BACK_LEAN.value}`, wedge: MASTERS.BACK_LEAN.value, rotate: [MASTERS.BACK_LEAN.value, 0, 0], cut: 'squared' }] },
     // Near square, wider than high: its grain runs up its height, across its tails, not along its longest side.
     Back: { grain: 90 },
     // The triangular cleats: the table saw.
@@ -232,7 +210,7 @@ export default async function build(api: Api) {
   const part = await created(api.v1.part.create({ name: 'ZigzagChair' }))
   await api.v1.part.expression({
     id: part,
-    toCreate: [...Object.entries(MASTERS), ...Object.entries(DERIVED)].map(([name, value]) => ({ name, value })),
+    toCreate: [...MASTER_VALUES, ...Object.entries(DERIVED)].map(([name, value]) => ({ name, value })),
   })
 
   const boards: Record<string, number> = {}

@@ -28,19 +28,20 @@ pnpm install
 <Step>Work on the site, live</Step>
 
 ```sh
-nr dev        # localhost:3000; saving a part's .ts rebuilds it
+nr dev        # localhost:3000; saving a part's .ts rebuilds it; saving a .model.ts rebuilds the configurator (reload the page)
 ```
 
 <Step>Check and build</Step>
 
 ```sh
 nr typecheck  # tsc --noEmit
-nr build      # parts + site into dist/
+nr build      # parts + configurator + site into dist/
 ```
 
 </Steps>
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
+- Configurator: `configurator/` (Vite + r3f + leva, the "Model" tab; `nr dev:configurator` runs it alone, `nr test` checks each model's schema and builds it, plus the query-string helpers); a part is picked up from `<folder>/<folder>.model.ts` (`schema`, `build`), nothing to register; its parameters (default, range, hint) live in `<folder>/<folder>.masters.ts`, shared with the ClassCAD part
 - Engine key: local ClassCAD sign-in; in CI, the `CLASSCAD_TOKEN` secret
 - CAM: `pnpm cam <folder>`, see [CAM](https://abernier.github.io/integral/integral/cam)
 - Deploy: every push to `main`, GitHub Pages; every pull request, a Vercel preview (`vercel.json`, the engine key in its `CLASSCAD_TOKEN` variable)
@@ -51,8 +52,12 @@ From a part's code to the machine. `nr build` runs in CI; `pnpm cam` only on a m
 
 ```mermaid
 flowchart TD
-  ts["part.ts<br/>parameters"] -->|nr build<br/>ClassCAD| out["STEP, OFB, GLB, PNG<br/>.docs/part/"]
+  masters["part.masters.ts<br/>parameters: default, range, hint"] --> ts["part.ts<br/>ClassCAD"]
+  masters --> model["part.model.ts<br/>browser, smlibwasm"]
+  ts -->|nr build<br/>ClassCAD| out["STEP, OFB, GLB, PNG<br/>.docs/part/"]
+  model -->|nr build<br/>vite| cfg["configurator<br/>.docs/configurator/"]
   out --> site["site<br/>GitHub Pages"]
+  cfg --> site
   out --> bl["Buerligons<br/>edit online"]
   out -->|pnpm cam| fusion["Fusion desktop<br/>local MCP server"]
   ts -->|CAM export<br/>skips, wedge setups| fusion
