@@ -49,11 +49,3 @@ In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole c
 | `SEAT_TAILS` | 2 | Dovetails per seat corner |
 | `SLOPE` | 1/6 | Dovetail slope |
 | `SEAT_PIN_EDGE`, `SEAT_PIN_MID`, `BACK_TAIL_SHOULDER` | 6, 6, 2 | Pins, shoulder |
-
-## Notes
-
-- \+ Parameters in Buerligons: change one, the whole chair rebuilds; STEP for any CAD
-- \+ Every board a box (or a cylinder band) cut by half-spaces, one side mirrored to the other
-- − ClassCAD's own mass properties under-read the arched parts (back rails −9 to −12 %, cane −0.3 %); the STEP is exact
-- − No assembly-order or overlap checks, which smlibpy runs; no machining files or exploded views
-- − A first build takes about 100 s
