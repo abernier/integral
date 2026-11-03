@@ -5,5 +5,20 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
   "cleanUrls": true,
-  "git": { "deploymentEnabled": { "main": false } }
+  "headers": [
+    {
+      "source": "/(.*)\\.ofb",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://buerligons.io"
+        }
+      ]
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  }
 }

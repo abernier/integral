@@ -30,12 +30,22 @@ export const HOME = '/integral/introduction'
 
 /**
  * Where a page's links point: `site` for its pages, `files` for the built files, `shared` for a file another site
- * fetches (Buerligons' `?url=`), which must be absolute: GitHub Pages, even from a Vercel preview, whose sign-in
- * Buerligons cannot pass (a preview's Buerligons link opens main's model, not the pull request's).
+ * fetches (Buerligons' `?url=`), which must be absolute: GitHub Pages (but see `buerligonsUrl`).
  * Built, pages and files are root-relative, so that they load from whichever host serves the build: a Vercel
  * preview answers on its deployment URL and its branch URL, and its sign-in cookie holds for one host only.
  */
 export type Urls = { site: string; files: string; shared: string }
+
+/**
+ * The file Buerligons opens, encoded for its `?url=`. On a Vercel preview, this deployment's own file, through the
+ * preview's sign-in by the project's protection bypass for automation (a secret Vercel gives the build; it ends up
+ * in the preview's pages, which are behind that sign-in themselves); elsewhere, `shared`'s.
+ */
+function buerligonsUrl(shared: string, path: string) {
+  const bypass = process.env.VERCEL_ENV === 'preview' ? process.env.VERCEL_AUTOMATION_BYPASS_SECRET : undefined
+  if (!bypass) return `${shared}${path}`
+  return encodeURIComponent(`https://${process.env.VERCEL_URL}${path}?x-vercel-protection-bypass=${bypass}`)
+}
 
 /** A part's page, under "Things" in the sidebar. */
 const partPage = (part: string) => `things/${part}`
@@ -114,7 +124,7 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
   // puts it back; an `src` keeps it.
   const pages = [HOME, ...parts().map((p) => `/${partPage(p)}`)]
   const linked = body.replace(new RegExp(`(\\]\\(|href="|\\?url=)?${PAGES_URL.replaceAll('.', '\\.')}(/[^\\s)"']*)`, 'g'), (_, before = '', path: string) => {
-    if (before === '?url=') return `${before}${urls.shared}${path}`
+    if (before === '?url=') return `${before}${buerligonsUrl(urls.shared, path)}`
     const url = `${pages.includes(path) ? urls.site : urls.files}${path}`
     return before && BASE_PATH && url.startsWith(`${BASE_PATH}/`) ? `${before}${url.slice(BASE_PATH.length)}` : `${before}${url}`
   })
