@@ -1,26 +1,23 @@
-// `pnpm cam <model>`: ShopBot (OpenSBP, .sbp) files for every board of a model, made by Fusion's CAM in Autodesk's
-// cloud through the Fusion Compute MCP server: no Fusion window, no clicks.
+// `pnpm cam <model>`: ShopBot (OpenSBP, .sbp) files for every board of a model, made by Fusion's CAM in the Fusion
+// desktop app running on this machine, driven through its local MCP server: no clicks.
 //
-// For each board of the model's STEP (`.docs/<model>/<model>.step`, from `nr build:parts`) and each of its setups
-// (its manifest's, see cam/manifest.ts; else one, face up), in one Fusion session: open the model's design from
-// Fusion Team, make a milling setup on the board (box stock, `--margin` mm around; WCS at the stock's top corner;
-// the board first turned by the setup's `wcs.rotate`, for a wedge), apply the CAM template `--template`, generate
-// its toolpaths, post them with the Fusion library post matching `--post`, and write
-// `.docs/<model>/cam/<Board>_<setup>.sbp`. A file already there is kept (`--force` makes it again): a run cut short
-// by the session's hour goes on where it stopped.
+// The model's STEP (`.docs/<model>/<model>.step`, from `nr build:parts`) is imported into a new Fusion document; for
+// each of its boards and each of its setups (its manifest's, see cam/manifest.ts; else one, face up): a milling setup
+// on the board (box stock, `--margin` mm around; WCS at the stock's top corner; the board first turned by the
+// setup's `wcs.rotate`, for a wedge), the CAM template `--template`, its toolpaths, an NC program posted with the
+// Fusion library post matching `--post` to `.docs/<model>/cam/<Board>_<setup>.sbp`. Then the document is closed,
+// unsaved. A file already there is kept (`--force` makes it again).
 //
-//   pnpm cam zigzag-chair --document urn:adsk.wipprod:dm.lineage:… [--template integral-19mm-6mm] [--post shopbot]
-//   pnpm cam zigzag-chair --dry-run        # the plan and the MCP calls, without connecting
-//   pnpm cam --list-tools                  # what the server offers (signs in, starts and stops a session)
+//   pnpm cam zigzag-chair [--template integral-19mm-6mm] [--post shopbot] [--only Seat]
+//   pnpm cam zigzag-chair --dry-run        # the plan, without connecting
+//   pnpm cam --list-tools                  # what Fusion's MCP server offers
 //
-// Prototype: the Fusion side is unverified (see cam/fusion.ts and cam/fusion-job.js). Simulate every .sbp before
-// cutting.
+// Simulate every .sbp before cutting.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { ENDPOINT, FusionSession, connect, mapTools } from './cam/fusion.ts'
-import { TOKEN_FILE } from './cam/auth.ts'
+import { ENDPOINT, connect, runScript } from './cam/fusion.ts'
 import { loadManifest, manifestPaths, setupsOf, stepBodies, type Setup } from './cam/manifest.ts'
 
 const ROOT = join(import.meta.dirname, '..')
@@ -34,7 +31,6 @@ const fail = (message: string): never => {
 const { values: flags, positionals } = parseArgs({
   allowPositionals: true,
   options: {
-    document: { type: 'string' },
     step: { type: 'string' },
     template: { type: 'string' },
     post: { type: 'string' },
@@ -43,22 +39,19 @@ const { values: flags, positionals } = parseArgs({
     force: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
     'list-tools': { type: 'boolean', default: false },
-    'queue-timeout': { type: 'string', default: '600' },
     help: { type: 'boolean', short: 'h', default: false },
   },
 })
 
-const USAGE = `usage: pnpm cam <model> --document <Fusion Team file id> [options]
-  --document <id>        the model's design in Fusion Team (upload .docs/<model>/<model>.step there once)
+const USAGE = `usage: pnpm cam <model> [options]
   --step <file>          the STEP to read the boards from (default .docs/<model>/<model>.step)
   --template <name>      CAM template, by name, in your Fusion library (default integral-19mm-6mm)
   --post <text>          the library post whose vendor/description contains it (default shopbot)
   --margin <mm>          stock around each board's box (default 5)
   --only <A,B>           these boards only
   --force                make files already there again
-  --dry-run              print the plan and the MCP calls, connect to nothing
-  --list-tools           list the server's tools and the session's worker tools, then stop
-  --queue-timeout <s>    how long to wait for a queued session (default 600)`
+  --dry-run              print the plan, connect to nothing
+  --list-tools           list the tools of Fusion's MCP server (${ENDPOINT}), then stop`
 
 if (flags.help) {
   console.log(USAGE)
@@ -66,7 +59,10 @@ if (flags.help) {
 }
 
 if (flags['list-tools']) {
-  await listTools()
+  const client = await connect()
+  const { tools } = await client.listTools()
+  for (const tool of tools) console.log(`\n${tool.name}: ${tool.description ?? ''}\n  input: ${JSON.stringify(tool.inputSchema)}`)
+  await client.close()
   process.exit(0)
 }
 
@@ -77,7 +73,7 @@ if (!model) {
 }
 if (!existsSync(join(ROOT, model, `${model}.ts`))) fail(`no model ${model} (no ${model}/${model}.ts)`)
 
-const step = flags.step ?? join(DOCS, model, `${model}.step`)
+const step = resolve(flags.step ?? join(DOCS, model, `${model}.step`))
 if (!existsSync(step)) fail(`no STEP at ${shown(step)}: run \`nr build:parts\` first, or pass --step`)
 const { manifest, from } = loadManifest(manifestPaths(ROOT, DOCS, model))
 const defaults = {
@@ -109,78 +105,87 @@ console.log(`cam: ${model}, ${jobs.length} setups to post, boards from ${shown(s
 if (skipped.length) console.log(`cam: skipping ${skipped.join(', ')}`)
 if (only) for (const name of only) if (!jobs.some((j) => j.body === name) && !skipped.some((s) => s.startsWith(name))) console.log(`cam: no board ${name} in the STEP`)
 
-const SCRIPT = readFileSync(join(import.meta.dirname, 'cam', 'fusion-job.js'), 'utf8')
-/** The script for one job: JOB, then fusion-job.js inside an async function (it ends with a `return`). */
-const script = (job: Record<string, unknown>) => `const JOB = ${JSON.stringify(job)};\n(async () => {\n${SCRIPT}\n})()`
+const SCRIPT = readFileSync(join(import.meta.dirname, 'cam', 'fusion-job.py'), 'utf8')
+/** The script for one step: JOB first (a JSON string is a valid Python string literal), then fusion-job.py. */
+const script = (job: Record<string, unknown>) => `import json\nJOB = json.loads(${JSON.stringify(JSON.stringify(job))})\n${SCRIPT}`
 
-const jobOf = (job: Job) => ({
-  op: 'setup',
-  body: job.body,
-  setup: job.setup.name,
-  rotate: job.setup.wcs?.rotate ?? [0, 0, 0],
-  template: job.template,
-  post: defaults.post,
-  margin: defaults.margin,
-  generateTimeout: 8 * 60_000,
-})
+/** This run's tag on the document it imports: how later steps find it, and how it is told from the user's. */
+const tag = `integral-cam-${process.pid}-${Date.now()}`
+const setupName = (job: Job) => `${job.body}_${job.setup.name}`
+const steps = {
+  import: () => ({ op: 'import', tag, step, solids: stepSolidBoxes(step) }),
+  setup: (job: Job) => ({
+    op: 'setup',
+    tag,
+    body: job.body,
+    setup: setupName(job),
+    rotate: job.setup.wcs?.rotate ?? [0, 0, 0],
+    template: job.template,
+    margin: defaults.margin,
+  }),
+  status: (job: Job) => ({ op: 'status', tag, setup: setupName(job) }),
+  post: (job: Job) => ({ op: 'post', tag, setup: setupName(job), post: defaults.post, folder: out, file: setupName(job) }),
+  close: () => ({ op: 'close', tag }),
+}
 
 if (flags['dry-run']) {
-  const auth = process.env.AUTODESK_TOKEN ? 'AUTODESK_TOKEN' : existsSync(TOKEN_FILE) ? TOKEN_FILE : 'browser sign-in (OAuth, PKCE)'
-  console.log(`\nplan (nothing is sent):\n  connect ${ENDPOINT}, auth: ${auth}`)
-  console.log('  tools/list, mapped: start_fusion, fusion_status, invoke_fusion, stop_fusion (by name, else by intent)')
-  console.log('  start_fusion {toolMode: "Execute"}, then fusion_status until it runs')
-  console.log('  invoke_fusion list, describe the TypeScript executor (MCP.ExecuteTypeScript)')
-  console.log(`  run fusion-job.js ${JSON.stringify({ op: 'open', document: flags.document ?? '<--document>' })}`)
+  const plain = (job: Record<string, unknown>) => JSON.stringify({ ...job, solids: job.solids ? `(${(job.solids as unknown[]).length} boxes)` : undefined })
+  console.log(`\nplan (nothing is sent):\n  connect ${ENDPOINT}`)
+  console.log(`  fusion-job.py ${plain(steps.import())}`)
   for (const job of jobs) {
-    console.log(`  run fusion-job.js ${JSON.stringify(jobOf(job))}\n    -> ${shown(job.file)}${job.setup.wedge ? ` (on a ${job.setup.wedge}° wedge)` : ''}`)
+    console.log(`  fusion-job.py ${plain(steps.setup(job))}${job.setup.wedge ? ` (on a ${job.setup.wedge}° wedge)` : ''}`)
+    console.log(`  fusion-job.py ${plain(steps.status(job))}, until generated`)
+    console.log(`  fusion-job.py ${plain(steps.post(job))}\n    -> ${shown(job.file)}`)
   }
-  console.log('  stop_fusion')
+  console.log(`  fusion-job.py ${plain(steps.close())}`)
   process.exit(0)
 }
 
 if (!jobs.length) process.exit(0)
-if (!flags.document) fail('--document: the model\'s Fusion Team file id (upload its STEP to Fusion Team once; see the README)')
 
 const client = await connect()
-const session = await FusionSession.start(client, await discover(client), Number(flags['queue-timeout']) * 1000)
-const stop = async () => {
-  await session.stop()
+let imported = false
+const finish = async () => {
+  // Only the document this run imported, found by its tag; never one that was open before.
+  if (imported) {
+    try {
+      await runScript(client, script(steps.close()))
+      console.log('fusion: document closed, unsaved')
+    } catch (error) {
+      console.error(`fusion: closing the imported document failed, close it by hand: ${error instanceof Error ? error.message : error}`)
+    }
+  }
   await client.close()
 }
-process.on('SIGINT', () => void stop().then(() => process.exit(130)))
+process.on('SIGINT', () => void finish().then(() => process.exit(130)))
 
 const failed: string[] = []
 try {
-  const opened = (await session.runScript(script({ op: 'open', document: flags.document }))) as { bodies?: { name: string }[] }
-  const names = opened.bodies?.map((b) => b.name) ?? []
-  console.log(`fusion: design open, bodies ${names.join(', ') || '(none reported)'}`)
+  const started = performance.now()
+  imported = true // from here on, close it: an import cut short may still have made the document
+  const { bodies, document } = (await runScript(client, script(steps.import()))) as { bodies: string[]; document: string }
+  console.log(`fusion: ${shown(step)} imported as "${document}" in ${seconds(started)} s, bodies ${bodies.join(', ')}`)
   mkdirSync(out, { recursive: true })
   for (const job of jobs) {
-    if (!session.hasTime) {
-      console.log('cam: the session nears its hour; run again to go on with the rest')
-      break
-    }
-    const name = `${job.body}_${job.setup.name}`
-    if (names.length && !names.includes(job.body)) {
-      failed.push(`${name}: no body ${job.body} in the Fusion design`)
-      continue
-    }
+    const name = setupName(job)
     try {
-      const started = performance.now()
-      const result = (await session.runScript(script(jobOf(job)))) as { content?: string | null; path?: string; post?: string; operations?: number }
-      if (typeof result?.content !== 'string' || !result.content) {
-        throw new Error(`posted to ${result?.path ?? '?'} in the session, but its content did not come back: ${JSON.stringify(result).slice(0, 300)}`)
+      const began = performance.now()
+      const made = (await runScript(client, script(steps.setup(job)))) as { operations: string[] }
+      console.log(`${name}: setup, ${made.operations.length} operations (${made.operations.join(', ')}), generating`)
+      await generated(job)
+      const posting = Date.now()
+      const posted = (await runScript(client, script(steps.post(job)))) as { post: string }
+      if (!existsSync(job.file) || statSync(job.file).mtimeMs < posting - 1000) {
+        throw new Error(`posted with ${posted.post}, but no new ${shown(job.file)}`)
       }
-      writeFileSync(job.file, result.content)
-      const seconds = ((performance.now() - started) / 1000).toFixed(1)
-      console.log(`${name}: ${seconds} s, ${result.operations ?? '?'} operations, post ${result.post ?? defaults.post}, ${shown(job.file)}`)
+      console.log(`${name}: ${seconds(began)} s, post ${posted.post}, ${shown(job.file)}`)
     } catch (error) {
       failed.push(`${name}: ${error instanceof Error ? error.message : error}`)
       console.error(`${name}: failed: ${error instanceof Error ? error.message : error}`)
     }
   }
 } finally {
-  await stop()
+  await finish()
 }
 if (failed.length) {
   console.error(`cam: ${failed.length} failed:\n  ${failed.join('\n  ')}`)
@@ -189,24 +194,48 @@ if (failed.length) {
 console.log('cam: simulate every .sbp (Fusion, ShopBot Previewer) before cutting')
 process.exit(0)
 
-async function discover(client: Awaited<ReturnType<typeof connect>>) {
-  const { tools } = await client.listTools()
-  console.log(`fusion: tools ${tools.map((t) => t.name).join(', ')}`)
-  return mapTools(tools)
+/** Wait while Fusion generates the setup's toolpaths, asking every 2 s; 10 minutes at most. */
+async function generated(job: Job) {
+  const until = Date.now() + 10 * 60_000
+  for (;;) {
+    const status = (await runScript(client, script(steps.status(job)), { readOnly: true })) as { generating: string[]; failed: string[] }
+    if (!status.generating.length) {
+      if (status.failed.length) throw new Error(`toolpaths failed: ${status.failed.join('; ')}`)
+      return
+    }
+    if (Date.now() > until) throw new Error(`toolpaths still generating after 10 min: ${status.generating.join(', ')}`)
+    await new Promise((r) => setTimeout(r, 2000))
+  }
 }
 
-async function listTools() {
-  const client = await connect()
-  const { tools } = await client.listTools()
-  for (const tool of tools) {
-    console.log(`\n${tool.name}: ${tool.description ?? ''}\n  input: ${JSON.stringify(tool.inputSchema)}`)
+function seconds(since: number) {
+  return ((performance.now() - since) / 1000).toFixed(1)
+}
+
+/**
+ * Each solid of a STEP file with the box of its vertices, in the file's units (mm, as the build writes them): Fusion
+ * names the bodies it imports Body1, Body2, …, and the import step gives them back their names by these boxes.
+ */
+function stepSolidBoxes(stepFile: string) {
+  const text = readFileSync(stepFile, 'utf8')
+  const entities = new Map<string, { type: string; args: string }>()
+  for (const m of text.matchAll(/#(\d+)\s*=\s*([A-Z_0-9]+)\s*\(([^;]*)\)\s*;/g)) entities.set(m[1], { type: m[2], args: m[3] })
+  // A solid's entities follow it in the file, up to the next solid: its vertices are the VERTEX_POINTs among them.
+  const solids: { name: string; box: number[] }[] = []
+  for (const { type, args } of entities.values()) {
+    if (type === 'MANIFOLD_SOLID_BREP' || type === 'BREP_WITH_VOIDS') {
+      const name = /^\s*'((?:[^']|'')*)'/.exec(args)?.[1].replace(/''/g, "'") ?? ''
+      solids.push({ name, box: [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity] })
+    } else if (type === 'VERTEX_POINT' && solids.length) {
+      const point = entities.get(/#(\d+)/.exec(args)?.[1] ?? '')
+      const xyz = /\(([^()]*)\)\s*$/.exec(point?.args ?? '')?.[1].split(',').map(Number)
+      if (!xyz || xyz.length !== 3) continue
+      const box = solids[solids.length - 1].box
+      for (let i = 0; i < 3; i++) {
+        box[i] = Math.min(box[i], xyz[i])
+        box[i + 3] = Math.max(box[i + 3], xyz[i])
+      }
+    }
   }
-  let session: FusionSession | undefined
-  try {
-    session = await FusionSession.start(client, mapTools(tools), Number(flags['queue-timeout']) * 1000)
-    console.log(`\nworker tools of the session:\n  ${(await session.workerTools()).join('\n  ')}`)
-  } finally {
-    await session?.stop()
-    await client.close()
-  }
+  return solids
 }

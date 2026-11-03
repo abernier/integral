@@ -42,5 +42,5 @@ nr build      # parts + site into dist/
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
 - Engine key: local ClassCAD sign-in; in CI, the `CLASSCAD_TOKEN` secret
-- CAM: `pnpm cam <folder>`, ShopBot `.sbp` files for each board, by Fusion's CAM in Autodesk's cloud (Fusion Compute MCP, beta) into `.docs/<folder>/cam/`; a prototype, see `scripts/cam/README.md`; simulate before cutting
+- CAM: `pnpm cam <folder>`, ShopBot `.sbp` files for each board, by Fusion's CAM in the Fusion desktop app, through its local MCP server, into `.docs/<folder>/cam/`; see `scripts/cam/README.md`; simulate before cutting
 - Deploy: every push to `main`, GitHub Pages; every pull request, a Vercel preview (`vercel.json`, the engine key in its `CLASSCAD_TOKEN` variable)

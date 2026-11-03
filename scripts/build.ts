@@ -22,8 +22,6 @@ if (!process.argv.includes('--parts-only')) {
   })
   // The built files, at the URLs the pages link them by.
   cpSync(MDX, DIST, { recursive: true, filter: (path) => path === MDX || !path.endsWith('.mdx') })
-  // `pnpm cam`'s OAuth client for Autodesk: a client ID metadata document, whose URL is the client id.
-  cpSync(join(ROOT, 'scripts', 'cam', 'autodesk-client.json'), join(DIST, 'autodesk-client.json'))
   console.log(`site: ${DIST}`)
 }
 

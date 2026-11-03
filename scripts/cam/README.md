@@ -1,30 +1,35 @@
 # CAM: ShopBot files from Fusion, from the command line
 
-`pnpm cam <model>` makes a ShopBot OpenSBP file (`.sbp`) for every board of a model, with Fusion's CAM running in Autodesk's cloud through the [Fusion Compute MCP server](https://www.autodesk.com/products/fusion-360/blog/fusion-compute-mcp/) (public beta): no Fusion window, no clicks. The files land in `.docs/<model>/cam/<Board>_<setup>.sbp`, out of git.
+`pnpm cam <model>` makes a ShopBot OpenSBP file (`.sbp`) for every board of a model, with Fusion's CAM in the Fusion desktop app running on this machine, driven through its local MCP server: no clicks. The files land in `.docs/<model>/cam/<Board>_<setup>.sbp`, out of git.
 
-**A prototype, not checked against the server yet.** It was written where Autodesk's servers could not be reached: the tool names and arguments come from Autodesk's documentation and are found again at run time (`--list-tools`), and the script run in Fusion (`fusion-job.js`) follows the Fusion API reference but has never run. Expect to fix it on the first runs. **Simulate every `.sbp` before cutting** (Fusion's simulation of the setup, ShopBot's Previewer), air-cut it on a ShopBot first, and check the units, the zero and the tool against the machine.
+**Simulate every `.sbp` before cutting** (Fusion's simulation of the setup, ShopBot's Previewer), air-cut it on a ShopBot first, and check the units, the zero and the tool against the machine.
 
 ## Once
 
-1. **Autodesk account**, with an active **Fusion license** and a **Fusion Team hub** linked to it (Autodesk checks both).
-2. **The CAM template**, in Fusion desktop, Manufacture workspace: on any 19 mm board, a setup with the operations you want, for instance a 6 mm flat end mill, a 2D pocket for the pockets, then a 2D contour through, with tabs or an onion skin of 0.3 mm (stepdowns, feeds and speeds for your wood and machine). Right-click the setup, *Create template*, and save it **in the cloud library** as `integral-19mm-6mm` (or any name: `--template`). The CLI applies it, by name, to every board.
-3. **The model in Fusion Team**: build it (`nr build:parts`), upload `.docs/<model>/<model>.step` to a Fusion Team project, wait for it to be translated, and copy the file's id (`urn:adsk.wipprod:dm.lineage:…`, in the file's URL or its *Properties*): that is `--document`. Upload again after changing the model.
-4. **Sign-in**: the first run opens the browser on Autodesk's sign-in; the tokens are kept in `~/.config/integral/autodesk.json` (mode 600) and refreshed. The browser comes back to `http://localhost:8976/callback` (`AUTODESK_CALLBACK_PORT` to change it). In CI, `AUTODESK_TOKEN` is used as the bearer token as it is. Autodesk takes no client registration: the client is [`autodesk-client.json`](autodesk-client.json), a client ID metadata document published with the site at `https://abernier.github.io/integral/autodesk-client.json` (its URL is the client id). `AUTODESK_CLIENT_METADATA_URL` points to another one, for instance with another callback port.
+1. **Fusion**, installed and running on this Mac, signed in.
+2. **Its MCP server**: Preferences > General > API, *Fusion MCP Server* on. It listens on `http://127.0.0.1:27182/mcp`, no sign-in (`FUSION_MCP_URL` to point elsewhere). `pnpm cam --list-tools` checks it answers.
+3. **The CAM template**, in Fusion's Manufacture workspace: on any 19 mm board, a setup with the operations you want, for instance a 6 mm flat end mill, a 2D pocket for the pockets, then a 2D contour through, with tabs or an onion skin of 0.3 mm (stepdowns, feeds and speeds for your wood and machine). Right-click the setup, *Create template*, and save it in your template library (local or cloud) as `integral-19mm-6mm` (or any name: `--template`). The CLI applies it, by name, to every board.
+
+It runs on this machine only: no CI.
 
 ## Run
 
 ```sh
-pnpm cam --list-tools                          # what the server offers; starts and stops a session
-pnpm cam zigzag-chair --dry-run                # the plan and the MCP calls, nothing sent
-pnpm cam zigzag-chair --document urn:adsk.wipprod:dm.lineage:…
-pnpm cam zigzag-chair --document … --only Seat --force --template integral-19mm-6mm --post shopbot --margin 5
+pnpm cam --list-tools                          # what Fusion's MCP server offers
+pnpm cam zigzag-chair --dry-run                # the plan, nothing sent
+pnpm cam zigzag-chair
+pnpm cam zigzag-chair --only Seat --force --template integral-19mm-6mm --post shopbot --margin 5
 ```
 
-One session for the whole model: `start_fusion` (TypeScript mode), `fusion_status` until it runs, then for each board and setup a script through `invoke_fusion`: a milling setup on the board (box stock, `--margin` mm around, nothing above; WCS at the stock's top, x-min y-min corner), the template, the toolpaths, an NC program posted with the Fusion library post whose vendor or description contains `--post` (`shopbot`: ShopBot OpenSBP). Then `stop_fusion`, also on Ctrl-C.
+Each step is a Python script ([`fusion-job.py`](fusion-job.py)) run in Fusion by the server's `fusion_mcp_execute` tool, one small step per call:
 
-### Beta limits
+1. the model's STEP (`.docs/<model>/<model>.step`, from `nr build:parts`; or `--step`) imported into a new, unsaved design document, its bodies named after the STEP's solids (Fusion calls them Body1, Body2, …; they are matched by their boxes);
+2. for each board and setup: a milling setup on the board (box stock, `--margin` mm on its sides, nothing above; WCS at the stock's top, x-min y-min corner), the template, its toolpaths started;
+3. the toolpaths waited for, between calls, while Fusion is idle;
+4. an NC program posted with the Fusion library post whose vendor or description contains `--post` (`shopbot`: ShopBot OpenSBP), straight into `.docs/<model>/cam/`;
+5. the imported document closed without saving, also on Ctrl-C. Documents open before are not touched.
 
-Two sessions per user, one hour per session, stopped after 15 minutes idle, queued when Autodesk's capacity is full. The CLI uses one session, waits `--queue-timeout` seconds (600) while queued, stops starting boards after 50 minutes, and keeps every file it made: run it again to go on, a file already there is skipped (`--force` makes it again).
+A file already there is skipped (`--force` makes it again).
 
 ## The manifest: setups, wedges
 
