@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "defaults": { "post": "shopbot" },
+  "defaults": { "post": "shopbot", "material": "cherry" },
   "parts": [
     {
       "part": "Seat",

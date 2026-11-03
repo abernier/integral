@@ -6,10 +6,11 @@
 //
 // {
 //   "version": 1,
-//   "defaults": { "post": "shopbot", "sheet": [2440, 1220], "tabs": { "count": 4 } },   // all optional
+//   "defaults": { "post": "shopbot", "material": "cherry", "sheet": [2440, 1220], "tabs": { "count": 4 } },   // all optional
 //   "parts": [
 //     { "part": "SeatCleat", "skip": true, "note": "the table saw" },   // no CAM for this part
 //     { "part": "Back", "flip": true },                                  // laid largest planar face up, not down
+//     { "part": "Slant", "material": "plywood", "grain": 90 },           // its own material; its grain 90° off its length
 //     {
 //       "part": "Seat",
 //       "setups": [{ "name": "wedge8", "wedge": 8, "rotate": [8, 0, 0], "cut": "squared" }]
@@ -18,6 +19,8 @@
 // }
 //
 // `part` is the STEP component's name. `defaults` holds the machining values (see cam/machining.ts) and the post.
+// `material` (materials.json) gives the sheet; `grain`, degrees, turns a part's grain off its length (0, the default:
+// along its longest side), for a material with grain.
 //
 // `setups`: setups of the part alone, each to its own file `<Part>_<name>.sbp`, beside its sheet (what Arrange
 // cannot do: a part on a wedge). `rotate` is [x, y, z] in degrees, applied in that order about the part's box centre:
@@ -35,6 +38,8 @@ export type PartEntry = {
   part: string
   skip?: boolean
   flip?: boolean
+  material?: string
+  grain?: number
   note?: string
   setups?: Setup[]
 }
@@ -46,7 +51,7 @@ export type Manifest = {
 }
 
 const DEFAULTS_KEYS = ['post', ...MACHINING_KEYS]
-const PART_KEYS = ['part', 'skip', 'flip', 'note', 'setups']
+const PART_KEYS = ['part', 'skip', 'flip', 'material', 'grain', 'note', 'setups']
 const SETUP_KEYS = ['name', 'wedge', 'rotate', 'cut']
 
 /** Where a model's manifest is read from, in order: the generated one, then the hand-written one. */
@@ -71,6 +76,9 @@ export function loadManifest(paths: string[]): { manifest: Manifest; from?: stri
   for (const part of manifest.parts) {
     if (typeof part.part !== 'string') throw new Error(`${from}: an entry of "parts" without "part"`)
     unknown(part.part, part, PART_KEYS)
+    const problems = machiningProblems({ material: part.material })
+    if (problems.length) throw new Error(`${from}: ${part.part}: ${problems.join('; ')}`)
+    if (part.grain !== undefined && typeof part.grain !== 'number') throw new Error(`${from}: ${part.part}: grain must be degrees`)
     for (const setup of part.setups ?? []) {
       unknown(`${part.part}/${setup.name}`, setup, SETUP_KEYS)
       if (!/^[\w-]+$/.test(setup.name)) throw new Error(`${from}: ${part.part}: setup name "${setup.name}" (letters, digits, - and _)`)

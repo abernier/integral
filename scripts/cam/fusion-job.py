@@ -3,21 +3,23 @@
 # Fusion's Python with the Fusion API. Fusion calls `run`; a raised exception comes back as the tool's error.
 #
 # Each call does one small step, so that no call holds Fusion long; toolpaths are generated between calls. Fusion
-# decides what it can: how the parts lie and where on the sheet (Arrange), the pockets (recognition), the toolpaths.
-# The values (sheet, tool, feeds, tabs, ...) all come from `pnpm cam`, in JOB: this script only applies them.
+# decides what it can: how the parts lie and where on the sheet (Arrange), the pockets (recognition), the toolpaths,
+# what the main tool leaves (rest machining), the feeds and stepdowns (the tool library's presets). The values (sheet,
+# tool numbers, preset, tabs, ...) all come from `pnpm cam`, in JOB: this script only applies them.
 #
 # JOB["op"]:
 #   "import":   import the STEP JOB["step"] (an assembly, one component per part) into a new design document, tag
 #               it with JOB["tag"]; return each part's thickness and Fusion's version
-#   "arrange":  lay the parts JOB["parts"] flat on one sheet (an Arrange feature named JOB["sheet"]); return the
-#               parts it placed (those that do not fit go on the next sheet)
-#   "sheet":    a milling setup JOB["setup"] on that sheet: the sheet as stock, a 2D pocket and a 2D contour with
-#               tabs; start generating the toolpaths
+#   "arrange":  lay the parts JOB["parts"] flat on one sheet (an Arrange feature named JOB["sheet"]), each in
+#               JOB["grain"] with its grain along x; return the parts it placed (the rest go on the next sheet)
+#   "sheet":    a milling setup JOB["setup"] on that sheet: the sheet as stock, a 2D pocket, a 2D contour with
+#               tabs, a rest-machining 2D contour; start generating the toolpaths
 #   "measure":  how high part JOB["part"] stands turned by JOB["rotate"], and how deep its squared faces go
 #   "part":     a milling setup JOB["setup"] on part JOB["part"] alone, turned by JOB["rotate"] (a wedge under it):
 #               with JOB["cut"] == "squared", only a contour on the faces the turn squares; else pockets and outline
 #   "status":   how far the toolpaths of setup JOB["setup"] are (read-only)
-#   "post":     post setup JOB["setup"] with the library post matching JOB["post"] to JOB["folder"]/JOB["file"]
+#   "post":     post the operations of setup JOB["setup"] with tool JOB["tool"] (one tool per file: Fusion for Personal
+#               Use posts no tool change), with the library post matching JOB["post"], to JOB["folder"]/JOB["file"]
 #   "close":    close the tagged document, without saving
 #
 # Every op prints its result as one line `INTEGRAL_RESULT <json>`.
@@ -137,11 +139,23 @@ def find_sheet(design):
     raise RuntimeError(f"no sheet {JOB['sheet']} in the design")
 
 
+def long_axis(occurrence, across):
+    """The part's longest side square to `across` (the way it lies): a side of Fusion's smallest box around it."""
+    box = occurrence.bRepBodies.item(0).orientedMinimumBoundingBox
+    sides = [(box.length, box.lengthDirection), (box.width, box.widthDirection), (box.height, box.lengthDirection.crossProduct(box.widthDirection))]
+    return max((side for side in sides if abs(side[1].dotProduct(across)) < 0.5), key=lambda side: side[0])[1]
+
+
 def arrange():
     """
     One Arrange feature: the parts laid flat (Fusion picks the face), turned and packed on a sheet JOB["size"] mm, at
     the origin (the sheets of a run lie on one another: each setup sees only its own). Fusion places what fits; the
     rest is for the next sheet. Part-in-part is off: a part inside another's hole would be cut by that hole's pocket.
+
+    Grain: Fusion's own (the envelope's grainDirection) needs the Manufacturing Extension ("Cannot set envelope
+    direction for non-extension environment"). Instead each part of JOB["grain"] is given its rotation, which Fusion
+    measures from the part's zero direction to the sheet's x, so that its long axis lies along x (turned
+    JOB["grain"][part] degrees more), and Arrange may only turn it 180 degrees more. The other parts turn freely.
     """
     design = design_of(tagged_document())
     # Arrange is a Design feature: it fails while the Manufacture workspace is active.
@@ -155,6 +169,17 @@ def arrange():
         # other, where pockets open (their openings make it the smaller). A part in JOB["flip"] (manifest `flip`) is
         # left largest face up.
         component.isDirectionFlipped = name not in JOB["flip"]
+        if name in JOB["grain"]:
+            # The angle from the zero direction to the long axis, counterclockwise seen from the face that ends up
+            # on top (Fusion's upDirection does not follow the flip: measured on a flipped and an unflipped run).
+            up = component.upDirection
+            if component.isDirectionFlipped:
+                up.scaleBy(-1)
+            zero = component.zeroDirection
+            axis = long_axis(find_part(design, name), up)
+            angle = math.atan2(zero.crossProduct(axis).dotProduct(up), zero.dotProduct(axis))
+            component.rotation = angle + math.radians(JOB["grain"][name])
+            component.rotationType = adsk.fusion.ArrangeRotationTypes.Only180ArrangeRotationType
     definition = adsk.fusion.ArrangeDefinition2DInput.cast(feature_input.definition)
     definition.globalRotation = adsk.fusion.ArrangeRotationTypes.AllRotationsArrangeRotationType
     definition.isPartInPartAllowed = False
@@ -179,34 +204,46 @@ def set_parameter(owner, name, expression):
     parameter.expression = expression
 
 
-def add_operation(setup, strategy, name, tool):
-    """An operation with the tool and its preset, the feeds and the stepdowns of JOB["machining"]."""
-    machining = JOB["machining"]
+def library_tool(number):
+    """Tool `number` of the Fusion tool library JOB["library"] (tools.json, Fusion's own JSON)."""
+    library = adsk.cam.ToolLibrary.createFromJson(JOB["library"])
+    for i in range(library.count):
+        tool = library.item(i)
+        if tool.parameters.itemByName("tool_number").value.value == number:
+            return tool
+    raise RuntimeError(f"no tool #{number} in the tool library")
+
+
+def add_operation(setup, strategy, name, number):
+    """
+    An operation with tool `number` and its preset JOB["machining"]["preset"]: feeds, speeds, stepdown and stepover
+    are the preset's, in even passes.
+    """
+    tool = library_tool(number)
+    presets = tool.presets.itemsByName(JOB["machining"]["preset"])
+    if not presets:
+        raise RuntimeError(f"tool #{number} has no preset {JOB['machining']['preset']}")
     operation_input = setup.operations.createInput(strategy)
     operation_input.tool = tool
-    operation_input.toolPreset = tool.presets.item(0)
+    operation_input.toolPreset = presets[0]
     operation_input.displayName = name
     operation = setup.operations.add(operation_input)
-    set_parameter(operation, "tool_spindleSpeed", f"{machining['spindleSpeed']} rpm")
-    set_parameter(operation, "tool_feedCutting", f"{machining['feedCutting']} mm/min")
-    set_parameter(operation, "tool_feedPlunge", f"{machining['feedPlunge']} mm/min")
-    set_parameter(operation, "tool_feedRamp", f"{machining['feedRamp']} mm/min")
-    set_parameter(operation, "tool_coolant", "'disabled'")  # a router has none
     set_parameter(operation, "doMultipleDepths", "true")
-    set_parameter(operation, "maximumStepdown", f"{machining['stepdown']} mm")
+    set_parameter(operation, "maximumStepdown", "tool_stepdown")
     set_parameter(operation, "useEvenStepdowns", "true")
     return operation
 
 
-def add_pockets(setup, tool):
-    """A 2D pocket on the pockets Fusion recognises in the setup's model, holes the tool fits in included."""
+def add_pockets(setup, number):
+    """
+    A 2D pocket on the pockets Fusion recognises in the setup's model, holes the tool fits in included, to size:
+    Fusion's finishing pass takes the walls last.
+    """
     machining = JOB["machining"]
-    operation = add_operation(setup, "pocket2d", "Pockets", tool)
-    set_parameter(operation, "maximumStepover", f"{machining['stepover']} mm")
-    # Wood left on the walls and the floor, for a finishing pass; none: cut to size.
-    set_parameter(operation, "useStockToLeave", "true" if machining["pocketStockToLeave"] else "false")
-    if machining["pocketStockToLeave"]:
-        set_parameter(operation, "stockToLeave", f"{machining['pocketStockToLeave']} mm")
+    operation = add_operation(setup, "pocket2d", "Pockets", number)
+    set_parameter(operation, "maximumStepover", "tool_stepover")
+    set_parameter(operation, "useStockToLeave", "false")
+    set_parameter(operation, "doFinishingPasses", "true")
     value = adsk.cam.CadContours2dParameterValue.cast(operation.parameters.itemByName("pockets").value)
     selections = value.getCurveSelections()
     selections.clear()
@@ -220,11 +257,9 @@ def add_pockets(setup, tool):
     value.applyCurveSelections(selections)
 
 
-def add_outline(setup, tool):
-    """A 2D contour around the outside of the setup's model, through: JOB["machining"]["overcut"] below the stock
-    bottom, with its tabs (none when "tabs" is null)."""
-    machining = JOB["machining"]
-    operation = add_operation(setup, "contour2d", "Outline", tool)
+def add_contour(setup, name, number):
+    """A 2D contour around the outside of the setup's model, to size."""
+    operation = add_operation(setup, "contour2d", name, number)
     value = adsk.cam.CadContours2dParameterValue.cast(operation.parameters.itemByName("contours").value)
     selections = value.getCurveSelections()
     selections.clear()
@@ -233,11 +268,45 @@ def add_outline(setup, tool):
     silhouette.loopType = adsk.cam.LoopTypes.OnlyOutsideLoops
     silhouette.sideType = adsk.cam.SideTypes.AlwaysOutsideSideType
     value.applyCurveSelections(selections)
-    set_parameter(operation, "bottomHeight_mode", "'from stock bottom'")
-    set_parameter(operation, "bottomHeight_offset", f"{-machining['overcut']} mm")
     set_parameter(operation, "compensation", "'left'")
-    set_parameter(operation, "useStockToLeave", "false")  # through, to size
-    tabs = machining["tabs"]
+    set_parameter(operation, "useStockToLeave", "false")
+    return operation
+
+
+def add_rest(setup):
+    """
+    After the outline, Fusion's rest machining of the same contour with the narrowest tool: what a tool of the main
+    one's diameter leaves (sockets narrower than it, its corners), from the stock top down to JOB["machining"]["rest"]
+    ["depth"], what that tool's flutes reach. Deeper is hand work, which `pnpm cam` reports.
+    """
+    rest = JOB["machining"]["rest"]
+    if not rest:
+        return
+    operation = add_contour(setup, "Rest", rest["tool"])
+    set_parameter(operation, "useRestMachining", "true")
+    set_parameter(operation, "restMaterialCutterDiameter", f"{rest['after']} mm")
+    set_parameter(operation, "topHeight_mode", "'from stock top'")
+    set_parameter(operation, "topHeight_offset", "0 mm")
+    set_parameter(operation, "bottomHeight_mode", "'from stock top'")
+    set_parameter(operation, "bottomHeight_offset", f"{-rest['depth']} mm")
+    if rest["through"]:
+        set_tabs(operation)
+    else:
+        set_parameter(operation, "group_tabs", "false")
+
+
+def add_outline(setup, number):
+    """A 2D contour around the outside of the setup's model, through: JOB["machining"]["overcut"] below the stock
+    bottom, with its tabs (none when "tabs" is null)."""
+    operation = add_contour(setup, "Outline", number)
+    set_parameter(operation, "bottomHeight_mode", "'from stock bottom'")
+    set_parameter(operation, "bottomHeight_offset", f"{-JOB['machining']['overcut']} mm")
+    set_tabs(operation)
+
+
+def set_tabs(operation):
+    """The contour's tabs, JOB["machining"]["tabs"] (height from the cut's bottom); none when it is null."""
+    tabs = JOB["machining"]["tabs"]
     set_parameter(operation, "group_tabs", "true" if tabs else "false")  # the Tabs checkbox
     if tabs:
         set_parameter(operation, "tabShape", "'rectangular'")
@@ -255,12 +324,19 @@ def make_sheet():
     document = tagged_document()
     design = design_of(document)
     cam = cam_of(document)
-    tool = adsk.cam.Tool.createFromJson(JOB["machining"]["tool"])  # first: a bad tool fails before any change
     envelope = adsk.fusion.ArrangePlaneResultEnvelope.cast(find_sheet(design).resultEnvelopes.item(0))
     parts = [envelope.occurrences.item(k).occurrence for k in range(envelope.occurrences.count)]
-    # A proxy body's boundingBox is loose once turned: its vertices are where it is.
-    points = [vertex.geometry for part in parts for body in part.bRepBodies for vertex in body.vertices]
     sheet = envelope.boundingBox
+    x0, y0 = sheet.minPoint.x, sheet.minPoint.y
+    # Each part's box on the sheet, mm from its x-min y-min corner, [x-min, y-min, x-max, y-max]: Fusion's box along
+    # x and y (a proxy body's boundingBox is loose once turned; its vertices miss the bulge of an arc).
+    boxes = {}
+    for part in parts:
+        for body in part.bRepBodies:
+            box = app.measureManager.getOrientedBoundingBox(body, adsk.core.Vector3D.create(1, 0, 0), adsk.core.Vector3D.create(0, 1, 0))
+            c = box.centerPoint
+            boxes[part.component.name] = [round((v - o) * 10, 1) for v, o in [(c.x - box.length / 2, x0), (c.y - box.width / 2, y0), (c.x + box.length / 2, x0), (c.y + box.width / 2, y0)]]
+    parts_box = [min(b[0] for b in boxes.values()), min(b[1] for b in boxes.values()), max(b[2] for b in boxes.values()), max(b[3] for b in boxes.values())]
 
     setup_input = cam.setups.createInput(adsk.cam.OperationTypes.MillingOperation)
     setup_input.models = parts
@@ -272,26 +348,39 @@ def make_sheet():
     set_parameter(setup, "job_stockFixedZ", f"{JOB['thickness']} mm")
     # The fixed box is placed against the model's box: its left and front edges this far out from the parts'.
     set_parameter(setup, "job_stockFixedXMode", "'left'")
-    set_parameter(setup, "job_stockFixedXOffset", f"{(min(p.x for p in points) - sheet.minPoint.x) * 10:.3f} mm")
+    set_parameter(setup, "job_stockFixedXOffset", f"{parts_box[0]:.3f} mm")
     set_parameter(setup, "job_stockFixedYMode", "'front'")
-    set_parameter(setup, "job_stockFixedYOffset", f"{(min(p.y for p in points) - sheet.minPoint.y) * 10:.3f} mm")
+    set_parameter(setup, "job_stockFixedYOffset", f"{parts_box[1]:.3f} mm")
     set_parameter(setup, "job_stockFixedZMode", "'bottom'")
     set_parameter(setup, "job_stockFixedZOffset", "0 mm")
     set_parameter(setup, "wcs_origin_mode", "'stockPoint'")
     set_parameter(setup, "wcs_origin_boxPoint", "'top 1'")
-    add_pockets(setup, tool)
-    add_outline(setup, tool)
+    set_stock_material(setup)
+    add_pockets(setup, JOB["machining"]["tool"])
+    add_outline(setup, JOB["machining"]["tool"])
+    add_rest(setup)
     # Started here, generated while Fusion is idle between calls: "status" says when it is done.
     cam.generateToolpath(setup)
-    # Where the parts are on the sheet, mm from its x-min y-min corner: [x-min, y-min, x-max, y-max].
-    x0, y0 = sheet.minPoint.x, sheet.minPoint.y
-    parts_box = [min(p.x for p in points) - x0, min(p.y for p in points) - y0, max(p.x for p in points) - x0, max(p.y for p in points) - y0]
     done({
         "setup": setup.name,
         "operations": [operation.name for operation in setup.allOperations],
         "size": [round((sheet.maxPoint.x - x0) * 10, 3), round((sheet.maxPoint.y - y0) * 10, 3)],
-        "partsBox": [round(v * 10, 1) for v in parts_box],
+        "partsBox": parts_box,
+        "boxes": boxes,
     })
+
+
+def set_stock_material(setup):
+    """The setup's stock material: Fusion's library material JOB["stock"] (materials.json `stock`), if any."""
+    if not JOB.get("stock"):
+        return
+    library = adsk.cam.CAMManager.get().libraryManager.stockMaterialLibrary
+    url = library.urlByLocation(adsk.cam.LibraryLocations.Fusion360LibraryLocation)
+    materials = [library.stockMaterialAtURL(asset) for asset in library.childAssetURLs(url)]
+    found = [material for material in materials if material and material.name == JOB["stock"]]
+    if not found:
+        raise RuntimeError(f"no stock material {JOB['stock']} in Fusion's library")
+    setup.stockMaterial = found[0]
 
 
 # The separate setup of one part on a wedge (manifest `setups`): what Arrange cannot do.
@@ -399,7 +488,7 @@ def bottom_chains(faces):
     return chains
 
 
-def cut_squared_only(setup, body, tool):
+def cut_squared_only(setup, body, number):
     """
     Make the setup cut only the faces it squares: a 2D contour along their bottom edges, on the waste side, from the
     stock top to JOB["machining"]["overcut"] below their lowest point, in stepdowns, without tabs. The rest of the part
@@ -414,7 +503,7 @@ def cut_squared_only(setup, body, tool):
     bottom = min(vertex.geometry.z for face in faces for vertex in face.vertices)
     depth = (top - bottom) * 10 + JOB["machining"]["overcut"]  # mm
 
-    operation = add_operation(setup, "contour2d", "Outline", tool)
+    operation = add_operation(setup, "contour2d", "Outline", number)
     value = adsk.cam.CadContours2dParameterValue.cast(operation.parameters.itemByName("contours").value)
     selections = value.getCurveSelections()
     selections.clear()
@@ -439,7 +528,7 @@ def make_part_setup():
     document = tagged_document()
     design = design_of(document)
     cam = cam_of(document)
-    tool = adsk.cam.Tool.createFromJson(JOB["machining"]["tool"])  # first: a bad tool fails before any change
+    library_tool(JOB["machining"]["tool"])  # first: a bad tool fails before any change
     # The turned part, as a body of the design: a parametric design takes a free body only inside a base feature.
     root = design.rootComponent
     base = root.features.baseFeatures.add()
@@ -459,12 +548,14 @@ def make_part_setup():
     set_parameter(setup, "job_stockOffsetTop", "0 mm")
     set_parameter(setup, "wcs_origin_mode", "'stockPoint'")
     set_parameter(setup, "wcs_origin_boxPoint", "'top 1'")
+    set_stock_material(setup)
     squared = None
     if JOB["cut"] == "squared":
-        squared = cut_squared_only(setup, model, tool)
+        squared = cut_squared_only(setup, model, JOB["machining"]["tool"])
     else:
-        add_pockets(setup, tool)
-        add_outline(setup, tool)
+        add_pockets(setup, JOB["machining"]["tool"])
+        add_outline(setup, JOB["machining"]["tool"])
+        add_rest(setup)
     cam.generateToolpath(setup)
     done({"setup": setup.name, "operations": [operation.name for operation in setup.allOperations], "squared": squared})
 
@@ -510,11 +601,12 @@ def post():
     open_in_editor = program_input.parameters.itemByName("nc_program_openInEditor")
     if open_in_editor:
         open_in_editor.value.value = False
-    # The operations with a toolpath only: those that found nothing to cut are left out.
+    # The operations of that tool with a toolpath only: those that found nothing to cut are left out.
     operations = [setup.allOperations.item(i) for i in range(setup.allOperations.count)]
-    with_toolpath = [operation for operation in operations if operation.hasToolpath]
+    with_toolpath = [operation for operation in operations if operation.hasToolpath and operation.tool.parameters.itemByName("tool_number").value.value == JOB["tool"]]
     if not with_toolpath:
-        raise RuntimeError(f"no operation of {setup.name} has a toolpath")
+        done({"setup": setup.name, "post": None})
+        return
     program_input.operations = with_toolpath
     program = cam.ncPrograms.add(program_input)
     program.postConfiguration = configuration

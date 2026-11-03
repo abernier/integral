@@ -2,14 +2,14 @@
 // desktop app running on this machine, driven through its local MCP server: no clicks.
 //
 // The model's STEP (`.docs/<model>/<model>.step`: an assembly, one component per part) is imported into a new Fusion
-// document. Its parts are grouped by thickness (the one thing Fusion's Arrange does not do); each group is laid flat
+// document. Its parts are grouped by material and thickness (what Fusion's Arrange does not do); each group is laid flat
 // and nested by Fusion's Arrange on as many sheets as it takes; each sheet gets a milling setup (the sheet as stock,
-// the narrowest tool of scripts/cam/tools.json that cuts through it, a 2D pocket and a 2D contour with tabs), posted
-// to `.docs/<model>/cam/<model>_<thickness>mm_<n>.sbp`. A part with setups of its own in the manifest (a wedge, see
+// the narrowest tool of scripts/cam/tools.json that cuts through it, a 2D pocket, a 2D contour with tabs, the rest
+// with the narrowest tool), posted to `.docs/<model>/cam/<model>_<material>_<thickness>mm_<n>.sbp`. A part with setups of its own in the manifest (a wedge, see
 // cam/manifest.ts) gets one more file per setup, `<Part>_<setup>.sbp`. Then the document is closed, unsaved (`--keep`
 // leaves it open, to simulate the setups in Fusion). Files already there are kept (`--force` makes them again).
 //
-//   pnpm cam zigzag-chair [--sheet 2440x1220] [--tool flat-6-2f] [--only Seat,Back]
+//   pnpm cam zigzag-chair [--sheet 2440x1220] [--tool 2] [--only Seat,Back]
 //   pnpm cam zigzag-chair --force --keep   # then Simulate the setups in Fusion
 //   pnpm cam --force                       # every model, one after the other
 //   pnpm cam zigzag-chair --dry-run        # the plan, without connecting
@@ -23,7 +23,21 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync,
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { ENDPOINT, connect, runScript } from './cam/fusion.ts'
-import { TOOLS_FILE, loadTools, machiningJob, machiningProblems, pickTool, resolveMachining, type MachiningOptions, type Tool } from './cam/machining.ts'
+import {
+  MATERIALS_FILE,
+  SPACING_OVER_TOOL,
+  TOOLS_FILE,
+  loadMaterials,
+  loadTools,
+  machiningJob,
+  machiningProblems,
+  pickTool,
+  resolveMachining,
+  restTool,
+  type Machining,
+  type MachiningOptions,
+  type Tool,
+} from './cam/machining.ts'
 import { loadManifest, manifestPaths, stepParts, type Setup } from './cam/manifest.ts'
 
 const ROOT = join(import.meta.dirname, '..')
@@ -54,9 +68,9 @@ const { values: flags, positionals } = parseArgs({
 const USAGE = `usage: pnpm cam [<model>] [options]      (no model: every model, one after the other)
   --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step)
   --post <text>          the library post whose vendor/description contains it (default shopbot)
-  --tool <id>            this tool of scripts/cam/tools.json for every sheet (default: per sheet, the narrowest that reaches)
+  --tool <number>        this tool of scripts/cam/tools.json for every sheet (default: per sheet, the narrowest that reaches)
   --sheet <LxW>          the sheet, mm (default 2440x1220)
-  --spacing <mm>         between two parts on a sheet (default 12)
+  --spacing <mm>         between two parts on a sheet (default 12; at least the tool's diameter + ${SPACING_OVER_TOOL})
   --only <A,B>           these parts only
   --force                make the files again (all of them, without --only)
   --keep                 leave the document open in Fusion, unsaved, to simulate its setups
@@ -95,17 +109,18 @@ if (!existsSync(join(ROOT, model, `${model}.ts`))) fail(`no model ${model} (no $
 const step = resolve(flags.step ?? join(DOCS, model, `${model}.step`))
 if (!existsSync(step)) fail(`no STEP at ${shown(step)}: run \`nr build:parts\` first, or pass --step`)
 const { manifest, from } = loadManifest(manifestPaths(ROOT, DOCS, model))
-const tools = loadTools()
+const { library, tools } = loadTools()
+const materials = loadMaterials()
 const sheetFlag = flags.sheet?.split('x').map(Number)
 const cli: MachiningOptions = {
-  tool: flags.tool,
+  tool: flags.tool === undefined ? undefined : Number(flags.tool),
   sheet: sheetFlag as [number, number] | undefined,
   spacing: flags.spacing === undefined ? undefined : Number(flags.spacing),
 }
 const cliProblems = machiningProblems(cli)
 if (cliProblems.length) fail(`--tool/--sheet/--spacing: ${cliProblems.join('; ')}`)
 const options = resolveMachining(cli, manifest.defaults)
-if (options.tool && !tools.some((t) => t.id === options.tool)) fail(`no tool "${options.tool}" in scripts/cam/tools.json (${tools.map((t) => t.id).join(', ')})`)
+if (options.tool !== undefined && !tools.some((t) => t.number === options.tool)) fail(`no tool #${options.tool} in scripts/cam/tools.json (${tools.map((t) => t.number).join(', ')})`)
 const post = flags.post ?? manifest.defaults?.post ?? 'shopbot'
 const only = flags.only?.split(',').map((s) => s.trim())
 const out = join(DOCS, model, 'cam')
@@ -119,6 +134,10 @@ const skipped = parts.filter((name) => entryOf(name)?.skip)
 const selected = parts.filter((name) => (!only || only.includes(name)) && !entryOf(name)?.skip)
 /** The parts the manifest lays the other face up (`flip`). */
 const flip = selected.filter((name) => entryOf(name)?.flip)
+/** Each part's material: the manifest's for it, else the run's. */
+const materialOf = (name: string) => entryOf(name)?.material ?? options.material
+/** The parts kept with their grain along x, turned this many degrees more: those of a material with grain. */
+const grain = Object.fromEntries(selected.filter((name) => materials[materialOf(name)].grain).map((name) => [name, entryOf(name)?.grain ?? 0]))
 /** The parts' setups of their own (a wedge): one file each, beside the sheets. */
 const ownSetups = selected.flatMap((part) => (entryOf(part)?.setups ?? []).map((setup) => ({ part, setup })))
 
@@ -142,9 +161,10 @@ const [sheetLength, sheetWidth] = options.sheet
 if (flags['dry-run']) {
   console.log(`\nplan (nothing is sent):\n  connect ${ENDPOINT}`)
   console.log(`  import ${shown(step)}: each part's thickness, across its largest planar face`)
-  console.log(`  per thickness: arrange ${selected.join(', ')} on ${sheetLength} x ${sheetWidth} mm sheets (spacing ${options.spacing}, frame ${options.frame})${flip.length ? `, ${flip.join(', ')} the other face up` : ''}`)
-  console.log(`  per sheet: setup, pockets and outline, tool ${options.tool ?? 'the narrowest that reaches'}, post ${post}`)
-  console.log(`    -> ${shown(join(out, `${model}_<thickness>mm_<n>.sbp`))}`)
+  console.log(`  per material and thickness: arrange ${selected.map((name) => `${name} (${materialOf(name)})`).join(', ')} on ${sheetLength} x ${sheetWidth} mm sheets (spacing ${options.spacing} or the tool + ${SPACING_OVER_TOOL}, frame ${options.frame})${flip.length ? `, ${flip.join(', ')} the other face up` : ''}`)
+  console.log(`  grain along x: ${Object.keys(grain).join(', ') || 'none'}`)
+  console.log(`  per sheet: setup, pockets, outline and rest, tool ${options.tool ?? 'the narrowest that reaches'}, post ${post}`)
+  console.log(`    -> ${shown(join(out, `${model}_<material>_<thickness>mm_<n>.sbp`))}`)
   for (const { part, setup } of ownSetups) {
     console.log(`  ${part}: own setup ${setup.name}, turned [${setup.rotate ?? [0, 0, 0]}]${setup.wedge ? ` on a ${setup.wedge}° wedge` : ''}, ${setup.cut === 'squared' ? 'only the faces it squares' : 'pockets and outline'}`)
     console.log(`    -> ${shown(join(out, `${part}_${setup.name}.sbp`))}`)
@@ -183,13 +203,15 @@ type CamRecord = { version: 2; files: Record<string, unknown> }
 const previous = existsSync(RECORD) ? (JSON.parse(readFileSync(RECORD, 'utf8')) as CamRecord) : undefined
 const record: CamRecord = only && previous?.version === 2 ? previous : { version: 2, files: {} }
 const inputs = Object.fromEntries(
-  [step, from, TOOLS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
+  [step, from, TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
     .filter((file): file is string => !!file)
     .map((file) => [shown(file), sha256(file)]),
 )
 const failed: string[] = []
 /** Parts with no file: not a sheet part, no tool reaching through, larger than a sheet. */
 const unmade: string[] = []
+/** What no tool reached: per file, where, for the bench. */
+const handWork: string[] = []
 let fusionVersion = ''
 try {
   const started = performance.now()
@@ -201,53 +223,70 @@ try {
   // --force without --only makes every file again: the old ones go first, so none is left from another nesting.
   if (!only) for (const file of there) unlinkSync(join(out, file))
 
-  // The parts by thickness, thinnest first.
-  const groups = new Map<number, string[]>()
+  // The parts by material and thickness, thinnest first.
+  const groups = new Map<string, { material: string; thickness: number; names: string[] }>()
   for (const { name, thickness } of imports.parts) {
     if (!selected.includes(name)) continue
     if (thickness === null) {
       unmade.push(`${name}: not a sheet part (no planar face)`)
       continue
     }
-    groups.set(thickness, [...(groups.get(thickness) ?? []), name])
+    const material = materialOf(name)
+    const group = groups.get(`${material} ${thickness}`) ?? { material, thickness, names: [] }
+    groups.set(`${material} ${thickness}`, { ...group, names: [...group.names, name] })
   }
 
-  for (const [thickness, names] of [...groups].sort(([a], [b]) => a - b)) {
+  for (const { material, thickness, names } of [...groups.values()].sort((a, b) => a.thickness - b.thickness || a.material.localeCompare(b.material))) {
     let tool: Tool
     try {
       tool = pickTool(tools, thickness + options.overcut, options)
     } catch (error) {
-      unmade.push(`${names.join(', ')} (${thickness} mm): ${error instanceof Error ? error.message : error}`)
+      unmade.push(`${names.join(', ')} (${material}, ${thickness} mm): ${error instanceof Error ? error.message : error}`)
       continue
     }
+    const machining = { ...options, material }
+    // The outline passes between two parts: they stand more than its tool apart.
+    const spacing = Math.max(options.spacing, tool.diameter + SPACING_OVER_TOOL)
     let left = names
     for (let n = 1; left.length; n++) {
-      const name = `${model}_${thickness}mm_${n}`
+      const name = `${model}_${material}_${thickness}mm_${n}`
       try {
         const began = performance.now()
         const job = { tag, sheet: name, setup: name }
-        const { placed } = (await runScript(client, script({ ...job, op: 'arrange', parts: left, flip, size: options.sheet, spacing: options.spacing, frame: options.frame }))) as { placed: string[] }
+        const { placed } = (await runScript(client, script({ ...job, op: 'arrange', parts: left, flip, grain, size: options.sheet, spacing, frame: options.frame }))) as { placed: string[] }
         if (!placed.length) {
           unmade.push(`${left.join(', ')} (${thickness} mm): larger than a ${sheetLength} x ${sheetWidth} mm sheet`)
           break
         }
         left = left.filter((part) => !placed.includes(part))
-        const sheet = (await runScript(client, script({ ...job, op: 'sheet', thickness, machining: machiningJob(tool, options) }))) as { operations: string[]; size: number[]; partsBox: number[] }
-        console.log(`${name}: ${thickness} mm, ${tool.id}, ${placed.join(', ')}; parts within [${sheet.partsBox.join(', ')}] of ${sheet.size.join(' x ')} mm; generating`)
+        const depth = thickness + options.overcut
+        const given = machiningJob(tool, machining, depth, tools)
+        const sheet = (await runScript(client, script({ ...job, op: 'sheet', thickness, library, stock: materials[material].stock, machining: given }))) as {
+          operations: string[]
+          size: number[]
+          partsBox: number[]
+          boxes: Record<string, number[]>
+        }
+        console.log(`${name}: ${material}, ${thickness} mm, tool #${tool.number}, ${placed.join(', ')}; parts within [${sheet.partsBox.join(', ')}] of ${sheet.size.join(' x ')} mm; generating`)
         await generated(name)
-        const posted = await postFile(name, tool)
+        const posted = await postFile(name, name, tool)
+        if (!posted) throw new Error(`no toolpath with tool #${tool.number}`)
         console.log(`${name}: ${seconds(began)} s, post ${posted.post}, ${shown(join(out, `${name}.sbp`))}`)
+        await postRest(name, tool, given, thickness, sheet.boxes)
         record.files[`${name}.sbp`] = {
           sha256: sha256(join(out, `${name}.sbp`)),
+          material,
           thickness,
           sheet: n,
           parts: placed,
           flip: placed.filter((part) => flip.includes(part)),
+          grain: Object.fromEntries(placed.filter((part) => part in grain).map((part) => [part, grain[part]])),
           size: sheet.size,
           partsBox: sheet.partsBox,
-          spacing: options.spacing,
+          boxes: sheet.boxes,
+          spacing,
           frame: options.frame,
-          ...values(tool),
+          ...values(tool, machining, given),
           ...posted,
           fusion: fusionVersion,
           inputs,
@@ -269,15 +308,19 @@ try {
       // A squared setup cuts down to its faces' lowest point; any other, through the part as it lies.
       const depth = (lies.squaredDepth ?? lies.height) + options.overcut
       const tool = pickTool(tools, depth, options)
-      const made = (await runScript(client, script({ ...job, op: 'part', margin: options.margin, machining: machiningJob(tool, options) }))) as {
+      const machining = { ...options, material: materialOf(part) }
+      const given = machiningJob(tool, machining, depth, tools)
+      const made = (await runScript(client, script({ ...job, op: 'part', margin: options.margin, library, stock: materials[machining.material].stock, machining: given }))) as {
         operations: string[]
         squared: { faces: number; chains: number[]; depth: number } | null
       }
-      console.log(`${name}: turned [${job.rotate}], ${lies.height} mm high, cut ${depth.toFixed(1)} mm deep with ${tool.id}; ${made.operations.join(', ')}; generating`)
+      console.log(`${name}: turned [${job.rotate}], ${lies.height} mm high, cut ${depth.toFixed(1)} mm deep with tool #${tool.number}; ${made.operations.join(', ')}; generating`)
       if (made.squared) console.log(`${name}: squared faces only: ${made.squared.faces} faces, ${made.squared.chains.length} chains of ${made.squared.chains.join(', ')} edges`)
       await generated(name)
-      const posted = await postFile(name, tool)
+      const posted = await postFile(name, name, tool)
+      if (!posted) throw new Error(`no toolpath with tool #${tool.number}`)
       console.log(`${name}: ${seconds(began)} s, post ${posted.post}, ${shown(join(out, `${name}.sbp`))}`)
+      await postRest(name, tool, given, lies.height, { [part]: [] })
       record.files[`${name}.sbp`] = {
         sha256: sha256(join(out, `${name}.sbp`)),
         part,
@@ -288,7 +331,8 @@ try {
         height: lies.height,
         depth: +depth.toFixed(3),
         margin: options.margin,
-        ...values(tool),
+        material: machining.material,
+        ...values(tool, machining, given),
         ...posted,
         fusion: fusionVersion,
         inputs,
@@ -305,6 +349,7 @@ try {
   if (fusionVersion) writeFileSync(RECORD, `${JSON.stringify(record, null, 2)}\n`)
 }
 if (unmade.length) console.log(`cam: no file for:\n  ${unmade.join('\n  ')}`)
+if (handWork.length) console.log(`cam: deeper than the narrowest tool reaches, by hand (mm from the sheet's zero):\n  ${handWork.join('\n  ')}`)
 if (failed.length) {
   console.error(`cam: ${failed.length} failed:\n  ${failed.join('\n  ')}`)
   process.exit(1)
@@ -312,10 +357,80 @@ if (failed.length) {
 console.log('cam: simulate every .sbp (Fusion, ShopBot Previewer) before cutting')
 process.exit(0)
 
-/** The values a file was made with, for the record: the tool and what Fusion was given. */
-function values(tool: Tool) {
-  const { tool: _fusionTool, ...given } = machiningJob(tool, options)
-  return { tool: tool.id, toolNumber: tool.number, reach: options.reach, ...given }
+/** The values a file was made with, for the record: the tools and what Fusion was given. */
+function values(tool: Tool, machining: Machining, given: ReturnType<typeof machiningJob>) {
+  const rest = restTool(tools, tool)
+  return { ...given, tool: tool.description, toolNumber: tool.number, restTool: rest?.description, reach: machining.reach, tabsLeave: machining.tabs || null }
+}
+
+/**
+ * The rest pass of setup `name`, if Fusion found any rest, to its own file `<name>_rest.sbp` (its own tool: Fusion for
+ * Personal Use posts no tool change), recorded, and what it leaves for the bench reported.
+ */
+async function postRest(name: string, tool: Tool, given: ReturnType<typeof machiningJob>, thickness: number, boxes: Record<string, number[]>) {
+  const rest = given.rest
+  const narrow = rest && tools.find((t) => t.number === rest.tool)
+  if (!rest || !narrow) return
+  const file = `${name}_rest`
+  const posted = await postFile(name, file, narrow)
+  if (!posted) return
+  const byHand = leftForHand(join(out, `${file}.sbp`), rest, thickness, boxes, narrow.diameter / 2)
+  for (const at of byHand) handWork.push(`${file}: ${at.part}, ${at.depth.join(' to ')} mm deep, within [${at.within.join(', ')}]`)
+  console.log(`${file}: what tool #${tool.number} leaves, tool #${narrow.number} down to ${rest.depth} mm${byHand.length ? `, ${byHand.length} places by hand below` : ''}, ${shown(join(out, `${file}.sbp`))}`)
+  record.files[`${file}.sbp`] = {
+    sha256: sha256(join(out, `${file}.sbp`)),
+    after: `${name}.sbp`,
+    tool: narrow.description,
+    toolNumber: narrow.number,
+    restAfterDiameter: tool.diameter,
+    depth: rest.depth,
+    handWork: byHand,
+    ...posted,
+    fusion: fusionVersion,
+    inputs,
+  }
+}
+
+/**
+ * Where the rest pass stopped short of the wood's bottom: the places it cut (its passes below the top, merged when
+ * they overlap, `radius` around the tool's centre), from its bottom down through the wood, each with the part it lies
+ * by. None when it went through.
+ */
+function leftForHand(file: string, rest: { depth: number; through: boolean }, thickness: number, boxes: Record<string, number[]>, radius: number) {
+  if (rest.through) return []
+  const passes: number[][] = []
+  let at = [0, 0, 0]
+  let pass: number[] | undefined
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const move = /^(?:[MJ]3|[MJ]2|[MJ]Z|CG)\s*,(.*)$/.exec(line)
+    if (!move) continue
+    const fields = move[1].split(',').map((f) => f.trim())
+    const command = line.slice(0, 2)
+    const value = (i: number, current: number) => (fields[i] !== undefined && fields[i] !== '' ? Number(fields[i]) : current)
+    if (command === 'CG') at = [value(1, at[0]), value(2, at[1]), at[2]]
+    else if (command[1] === 'Z') at = [at[0], at[1], value(0, at[2])]
+    else at = [value(0, at[0]), value(1, at[1]), command[1] === '3' ? value(2, at[2]) : at[2]]
+    if (at[2] < 0) {
+      pass = pass ? [Math.min(pass[0], at[0]), Math.min(pass[1], at[1]), Math.max(pass[2], at[0]), Math.max(pass[3], at[1])] : [at[0], at[1], at[0], at[1]]
+    } else if (pass) {
+      passes.push(pass)
+      pass = undefined
+    }
+  }
+  if (pass) passes.push(pass)
+  const merged: number[][] = []
+  for (const [x0, y0, x1, y1] of passes) {
+    const box = [x0 - radius, y0 - radius, x1 + radius, y1 + radius]
+    const overlapping = merged.find((m) => box[0] <= m[2] && box[2] >= m[0] && box[1] <= m[3] && box[3] >= m[1])
+    if (overlapping) overlapping.splice(0, 4, Math.min(overlapping[0], box[0]), Math.min(overlapping[1], box[1]), Math.max(overlapping[2], box[2]), Math.max(overlapping[3], box[3]))
+    else merged.push(box)
+  }
+  const near = (box: number[]) => {
+    const [cx, cy] = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2]
+    const distance = (b: number[]) => Math.hypot(Math.max(b[0] - cx, 0, cx - b[2]), Math.max(b[1] - cy, 0, cy - b[3]))
+    return Object.entries(boxes).sort(([, a], [, b]) => distance(a) - distance(b))[0]?.[0] ?? '?'
+  }
+  return merged.map((box) => ({ part: near(box), depth: [rest.depth, thickness], within: box.map((v) => +v.toFixed(1)) }))
 }
 
 /** Wait while Fusion generates the setup's toolpaths, asking every 2 s; 10 minutes at most. */
@@ -333,16 +448,20 @@ async function generated(setup: string) {
   }
 }
 
-/** Post the setup to `<setup>.sbp`; check the file is new and cuts no deeper than the tool's flutes. */
-async function postFile(setup: string, tool: Tool) {
-  const file = join(out, `${setup}.sbp`)
+/**
+ * Post the setup's operations with `tool` to `<name>.sbp`; check the file is new and cuts no deeper than the tool's
+ * flutes. Undefined when none of them has a toolpath.
+ */
+async function postFile(setup: string, name: string, tool: Tool) {
+  const file = join(out, `${name}.sbp`)
   const posting = Date.now()
-  const posted = (await runScript(client, script({ op: 'post', tag, setup, post, folder: out, file: setup }))) as { post: string; postVersion: string }
+  const posted = (await runScript(client, script({ op: 'post', tag, setup, tool: tool.number, post, folder: out, file: name }))) as { post: string | null; postVersion: string }
+  if (!posted.post) return undefined
   if (!existsSync(file) || statSync(file).mtimeMs < posting - 1000) throw new Error(`posted with ${posted.post}, but no new ${shown(file)}`)
   const deepest = -deepestCut(file)
   if (deepest > tool.fluteLength) {
     unlinkSync(file)
-    throw new Error(`cuts ${deepest.toFixed(1)} mm deep, more than ${tool.id}'s ${tool.fluteLength} mm flutes (file removed)`)
+    throw new Error(`cuts ${deepest.toFixed(1)} mm deep, more than tool #${tool.number}'s ${tool.fluteLength} mm flutes (file removed)`)
   }
   return { post: posted.post, postVersion: posted.postVersion, deepest: +deepest.toFixed(3) }
 }

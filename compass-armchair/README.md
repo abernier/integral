@@ -58,17 +58,17 @@ pnpm cam compass-armchair --force
 
 Or ask an agent: "make the ShopBot files of the compass armchair" (skill `cam`). Prerequisites, parameters, tools: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam). Files and the run's record (`cam.json`) in `.docs/compass-armchair/cam/`, out of git. Simulate before cutting.
 
-One file per thickness, every part of it nested by Fusion on a 2440 x 1220 mm sheet, the narrowest tool that cuts through; in the workshop: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam#in-the-workshop).
+Teak (manifest `material`): one file per thickness, every part of it nested by Fusion on a 2440 x 1220 mm sheet, each part's grain along its length, the narrowest tool that cuts through; then, where that tool is wider than the narrowest, a `_rest.sbp` with the 6 mm for what it left, down to 26 mm. In the workshop: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam#in-the-workshop).
 
 | File | Parts | Tool | Pockets |
 |---|---|---|---|
-| `compass-armchair_10mm_1.sbp` | rail tenons ×4 | 6 mm | – |
-| `compass-armchair_12mm_1.sbp` | ArmTenon ×2 | 6 mm | – |
-| `compass-armchair_16mm_1.sbp` | Spline ×2 | 6 mm | – |
-| `compass-armchair_25mm_1.sbp` | SideRail ×2 | 8 mm | yes |
-| `compass-armchair_30mm_1.sbp` | FrontLeg ×2, RearLeg ×2, Armrest ×2, BackPost ×2, FrontRail | 8 mm | yes |
-| `compass-armchair_35mm_1.sbp` | LowBackRail, HighBackRail | 12 mm | – |
-| `compass-armchair_40mm_1.sbp` | RearRail | 12 mm | – |
+| `compass-armchair_teak_10mm_1.sbp` | rail tenons ×4 | 6 mm | – |
+| `compass-armchair_teak_12mm_1.sbp` | ArmTenon ×2 | 6 mm | – |
+| `compass-armchair_teak_16mm_1.sbp` | Spline ×2 | 6 mm | – |
+| `compass-armchair_teak_25mm_1.sbp` | SideRail ×2 | 6 mm | yes |
+| `compass-armchair_teak_30mm_1.sbp`, `_rest` | FrontLeg ×2, RearLeg ×2, Armrest ×2, BackPost ×2, FrontRail | 8 mm, then 6 mm | yes |
+| `compass-armchair_teak_35mm_1.sbp`, `_rest` | LowBackRail, HighBackRail | 8 mm (42 mm flutes), then 6 mm | – |
+| `compass-armchair_teak_40mm_1.sbp`, `_rest` | RearRail | 8 mm (42 mm flutes), then 6 mm | – |
 
-Each part lies largest face down, its pockets up. Faces a tool from the top cannot reach (the dovetail sockets' 9° walls) are not reported: simulate, finish by hand. Canes: woven, skipped. All values are the defaults. Manifest: [cam.config.json](https://github.com/abernier/integral/blob/main/compass-armchair/cam.config.json).
+Each part lies largest face down, its pockets up; mortises cut to size, their corners round to the tool (4 mm radius). By hand, as the run lists (`cam.json` `handWork`): below 26 mm, the FrontRail's and RearRail's sockets between their twin tails and the inside corners of the rails' and back posts' shoulders. Not reported: faces a tool from the top cannot reach (the dovetail sockets' 9° walls in the SideRails and BackPosts): simulate, finish by hand. Canes: woven, skipped. All other values are the defaults. Manifest: [cam.config.json](https://github.com/abernier/integral/blob/main/compass-armchair/cam.config.json).
 

@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "defaults": { "material": "teak" },
   "parts": [
     { "part": "SeatCane", "skip": true, "note": "woven cane on its frame, not milled" },
     { "part": "BackCane", "skip": true, "note": "woven cane on its frame, not milled" }
