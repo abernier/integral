@@ -21,7 +21,7 @@ if (!process.argv.includes('--parts-only')) {
     stdio: 'inherit',
   })
   // The built files, at the URLs the pages link them by.
-  cpSync(MDX, DIST, { recursive: true, filter: (path) => path === MDX || !path.endsWith('.mdx') })
+  cpSync(MDX, DIST, { recursive: true, filter: (path) => path === MDX || !path.endsWith('README.md') })
   console.log(`site: ${DIST}`)
 }
 
