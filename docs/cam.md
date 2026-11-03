@@ -17,7 +17,7 @@ The code only prepares Fusion's job. It groups the parts by material and thickne
 ## Prerequisites
 
 - [ ] Fusion desktop (macOS or Windows), signed in. Fusion for Personal Use is enough: it posts ShopBot OpenSBP, but its rapids run at the cutting feed, and with no tool change each tool gets its own file.
-- [ ] Fusion's MCP server on: Preferences > General > API > *Fusion MCP Server (runs locally on this device)*. On another port, set `FUSION_MCP_URL`. `pnpm cam --list-tools` checks the connection.
+- [ ] Fusion's MCP server on: Preferences > General > API > *Fusion MCP Server (runs locally on this device)*. On another port, set `FUSION_MCP_URL`. `pnpm cam --list-tools` checks the connection. The repo's `.mcp.json` declares the same server to Claude Code as `fusion`.
 - [ ] No command dialog open in Fusion during a run.
 - [ ] The model's STEP at `.docs/<model>/<model>.step`, one component per part: `nr build:parts` makes it.
 - [ ] The tools of [`tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam/tools.json) match the cutters on your ShopBot, and their presets match your wood.
