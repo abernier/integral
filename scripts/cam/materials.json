@@ -3,8 +3,6 @@
   "materials": {
     "hardwood": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
     "cherry": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
-    "teak": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
-    "plywood": { "grain": false, "preset": "Plywood", "note": "cross-plied: as strong any way in the sheet; the face veneer's look is not kept" },
-    "mdf": { "grain": false, "preset": "MDF" }
+    "teak": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" }
   }
 }

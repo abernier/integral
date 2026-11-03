@@ -11,7 +11,9 @@
     "build:parts": "node scripts/build.ts --parts-only",
     "cam": "node scripts/cam.ts",
     "dev": "node scripts/dev.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'scripts/**/*.test.ts'",
+    "lgtm": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@classcad/mcp": "0.6.1",
