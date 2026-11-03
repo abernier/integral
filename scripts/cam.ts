@@ -14,12 +14,14 @@
 //
 //   pnpm cam zigzag-chair [--template integral-19mm-6mm] [--post shopbot] [--only Seat]
 //   pnpm cam zigzag-chair --only Seat --force --keep   # then Simulate the setups in Fusion
+//   pnpm cam --force                       # every model, one after the other
 //   pnpm cam zigzag-chair --dry-run        # the plan, without connecting
 //   pnpm cam --list-tools                  # what Fusion's MCP server offers
 //
 // Simulate every .sbp before cutting.
 
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { ENDPOINT, connect, runScript } from './cam/fusion.ts'
@@ -40,6 +42,7 @@ const { values: flags, positionals } = parseArgs({
     template: { type: 'string' },
     post: { type: 'string' },
     margin: { type: 'string' },
+    'max-depth': { type: 'string' },
     only: { type: 'string' },
     force: { type: 'boolean', default: false },
     keep: { type: 'boolean', default: false },
@@ -49,11 +52,12 @@ const { values: flags, positionals } = parseArgs({
   },
 })
 
-const USAGE = `usage: pnpm cam <model> [options]
+const USAGE = `usage: pnpm cam [<model>] [options]      (no model: every model, one after the other)
   --step <file>          the STEP to read the boards from (default .docs/<model>/<model>.step)
   --template <name>      CAM template: scripts/cam/templates/<name>.f3dhsm-template, else by name in your Fusion library (default integral-19mm-6mm)
   --post <text>          the library post whose vendor/description contains it (default shopbot)
   --margin <mm>          stock around each board's box (default 5)
+  --max-depth <mm>       deepest cut allowed below the stock top, what the tool reaches (default 25)
   --only <A,B>           these boards only
   --force                make files already there again
   --keep                 leave the document open in Fusion, unsaved, to simulate its setups
@@ -75,8 +79,17 @@ if (flags['list-tools']) {
 
 const model = positionals[0]
 if (!model) {
-  console.error(USAGE)
-  process.exit(2)
+  // Every model (a folder with its <name>.ts, as the build finds them), each in its own run with the same flags.
+  const models = readdirSync(ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(ROOT, entry.name, `${entry.name}.ts`)))
+    .map((entry) => entry.name)
+  const failed = models.filter((name) => {
+    console.log(`\n== ${name}`)
+    const run = spawnSync(process.execPath, [import.meta.filename, name, ...process.argv.slice(2)], { stdio: 'inherit' })
+    return run.status !== 0
+  })
+  if (failed.length) fail(`failed: ${failed.join(', ')}`)
+  process.exit(0)
 }
 if (!existsSync(join(ROOT, model, `${model}.ts`))) fail(`no model ${model} (no ${model}/${model}.ts)`)
 
@@ -88,6 +101,7 @@ const defaults = {
   post: flags.post ?? manifest.defaults?.post ?? 'shopbot',
   margin: Number(flags.margin ?? manifest.defaults?.margin ?? 5),
 }
+const maxDepth = Number(flags['max-depth'] ?? 25)
 const only = flags.only?.split(',').map((s) => s.trim())
 const out = join(DOCS, model, 'cam')
 
@@ -207,6 +221,12 @@ try {
       if (!existsSync(job.file) || statSync(job.file).mtimeMs < posting - 1000) {
         throw new Error(`posted with ${posted.post}, but no new ${shown(job.file)}`)
       }
+      // A board that does not lie flat (no manifest setup turns it) is as thick as its box is tall: no file for it.
+      const depth = -deepestCut(job.file)
+      if (depth > maxDepth) {
+        unlinkSync(job.file)
+        throw new Error(`cuts ${depth.toFixed(1)} mm deep, more than --max-depth ${maxDepth} mm: does the board lie flat? (file removed; turn it with wcs.rotate in the manifest)`)
+      }
       console.log(`${name}: ${seconds(began)} s, post ${posted.post}, ${shown(job.file)}`)
     } catch (error) {
       failed.push(`${name}: ${error instanceof Error ? error.message : error}`)
@@ -236,6 +256,16 @@ async function generated(job: Job) {
     if (Date.now() > until) throw new Error(`toolpaths still generating after 10 min: ${status.generating.join(', ')}`)
     await new Promise((r) => setTimeout(r, 2000))
   }
+}
+
+/** The lowest Z of an OpenSBP file's moves (M3, J3), in its units: mm below the stock top. */
+function deepestCut(file: string) {
+  let lowest = 0
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    const move = /^[MJ]3\s*,\s*([^,]*),\s*([^,]*),\s*([^,\s]*)/.exec(line)
+    if (move && move[3] !== '') lowest = Math.min(lowest, Number(move[3]))
+  }
+  return lowest
 }
 
 function seconds(since: number) {

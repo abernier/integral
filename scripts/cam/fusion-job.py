@@ -80,14 +80,23 @@ def import_step():
         raise RuntimeError(f"Fusion could not import {JOB['step']}")
     design = design_of(document)
     design.attributes.add("integral", "cam", JOB["tag"])
-    # Fusion names the bodies Body1, Body2, …: give each the name of the STEP solid with the same box (mm).
+    # Fusion names the bodies Body1, Body2, …: give each the name of a STEP solid whose box (mm) fits it. A solid's box
+    # is the box of its vertices, inside the body's true box: equal for a board of flat faces, smaller where a curve
+    # bulges past its end points. So: the solids whose box is inside the body's, the closest of them, each one once.
     bodies = [design.rootComponent.bRepBodies.item(i) for i in range(design.rootComponent.bRepBodies.count)]
     named = []
     for body in bodies:
         box = box_mm(body)
-        name, gap = min(((s["name"], max(abs(a - b) for a, b in zip(box, s["box"]))) for s in JOB["solids"]), key=lambda hit: hit[1])
-        if gap > 0.1:
-            raise RuntimeError(f"no STEP solid has the box of Fusion's {body.name} (closest: {name}, {gap:.2f} mm off)")
+        fits = [
+            (sum(abs(a - b) for a, b in zip(box, s["box"])), s["name"])
+            for s in JOB["solids"]
+            if s["name"] not in named
+            and all(s["box"][i] >= box[i] - 0.1 for i in range(3))
+            and all(s["box"][i] <= box[i] + 0.1 for i in range(3, 6))
+        ]
+        if not fits:
+            raise RuntimeError(f"no STEP solid fits the box of Fusion's {body.name}: {[round(v, 2) for v in box]}")
+        gap, name = min(fits)
         body.name = name
         named.append(name)
     cam_of(document)
