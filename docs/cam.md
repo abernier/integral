@@ -63,7 +63,7 @@ A part with no flat face, too thick for every tool, or larger than the sheet get
 
 The files cut in 2.5D, from the top only: vertical walls, inside corners rounded to the tool's radius. Bevels, sloped walls, square corners, and whatever the rest pass cannot reach are hand work. Each model's page lists them; `--only <part> --keep` lets you Simulate one in Fusion.
 
-With Claude Code, [`/cam`](https://github.com/abernier/integral/tree/main/.claude/skills/cam) runs, checks and simulates the files in Fusion.
+With Claude Code, [`/cam`](https://github.com/abernier/integral/tree/main/.claude/skills/cam) runs, checks and simulates the files in Fusion. Its Fusion tools come from the `fusion` server of the repo's [`.mcp.json`](https://github.com/abernier/integral/blob/main/.mcp.json): the same local MCP server, `FUSION_MCP_URL` included. Approve it once when Claude Code asks.
 
 ## Machining values
 
