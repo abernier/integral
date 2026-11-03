@@ -53,7 +53,11 @@ export const schema = {
 
 type Values = { [K in keyof typeof schema]: number }
 
-/** The chair, one named cherry mesh per board, in three's coordinates (Y up), standing on the floor at y = 0. */
+/**
+ * The chair, one named cherry mesh per board, in three's coordinates (Y up), standing on the floor at y = 0.
+ *
+ * @param values The sliders to change, keyed by the names in `schema`; a missing key takes its default.
+ */
 export async function build(values: Record<string, number>): Promise<THREE.Object3D> {
   const v: Values = { ...defaults(), ...values }
   const { T, W_NOSE, W_FOOT, W_BASE_FRONT, SEAT_TOP, BASE_LENGTH, CLEAT } = v

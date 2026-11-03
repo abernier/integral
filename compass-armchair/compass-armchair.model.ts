@@ -399,12 +399,15 @@ function toGeometryData(part: Part) {
       at += 3
     }
   }
-  return { position, normal }
+  // Without normals from the kernel, the caller computes them from the triangles.
+  return { position, normal, hasNormals: meshes.every((m) => m.normals) }
 }
 
 /**
  * Builds the chair from the masters in `values` (missing ones take their default, extra ones are ignored). It
  * returns a Group of 24 named meshes, in mm, standing on y = 0, facing +z, x = 0 its middle.
+ *
+ * @param values The masters to change, keyed by the names in `schema`; a missing key takes its default.
  */
 export async function build(values: Record<string, number> = {}): Promise<THREE.Object3D> {
   const p = { ...MASTERS }
@@ -414,10 +417,11 @@ export async function build(values: Record<string, number> = {}): Promise<THREE.
   const bodies = scope(() => model(d).map(({ part, name }) => ({ name, ...toGeometryData(part) })))
   const chair = new THREE.Group()
   chair.name = 'compass armchair'
-  for (const { name, position, normal } of bodies) {
+  for (const { name, position, normal, hasNormals } of bodies) {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3))
-    geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3))
+    if (hasNormals) geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3))
+    else geometry.computeVertexNormals()
     const color = name.includes('cane') ? CANE_COLOR : TEAK
     const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, roughness: 0.7 }))
     mesh.name = name

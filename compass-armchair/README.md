@@ -17,6 +17,6 @@ Each side is two tapered boards in a V and an armrest on edge, one plane, one th
 | Wood | teak, 30 mm boards; cane seat and back |
 | Size | 480 × 553.1 × 794.7 mm |
 | Joints | 6 loose tenons; 8 through dovetails |
-| Model | ClassCAD part, 24 named bodies |
+| Model | ClassCAD part, 24 named bodies; the site also runs it in the browser (smlibwasm) |
 | Source | [smlibpy's `compass_armchair.py`](https://github.com/abernier/smlibpy/pull/11) |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |

@@ -46,6 +46,7 @@ async function copyText(text: string) {
   }
 }
 
+/** The configurator page: the part named by `?part=`, rebuilt as its sliders move. */
 export function App() {
   const [model, setModel] = useState<Model>()
   const [error, setError] = useState<string>()
@@ -65,8 +66,8 @@ export function App() {
   )
 }
 
-function Message({ children, color = '#b00020' }: { children: string; color?: string }) {
-  return <div style={{ position: 'fixed', left: 16, bottom: 16, padding: '8px 12px', background: '#fff', borderRadius: 6, color }}>{children}</div>
+function Message({ children, color = '#b00020', bottom = 16 }: { children: string; color?: string; bottom?: number }) {
+  return <div style={{ position: 'fixed', left: 16, bottom, padding: '8px 12px', background: '#fff', borderRadius: 6, color }}>{children}</div>
 }
 
 function Configurator({ model }: { model: Model }) {
@@ -141,7 +142,7 @@ function Configurator({ model }: { model: Model }) {
         <OrbitControls makeDefault />
       </Canvas>
       {error && <Message>{error}</Message>}
-      {toast && <Message color="#111">{toast}</Message>}
+      {toast && <Message color="#111" bottom={error ? 64 : 16}>{toast}</Message>}
     </>
   )
 }

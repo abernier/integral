@@ -2,7 +2,8 @@
 //
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
 // ClassCAD, and a README.md.
-// Building it writes `<folder>.ofb`, `<folder>.step` and `<folder>.png` into `.docs/<folder>/`. The MDX folder also
+// Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`;
+// `buildConfigurator` builds the configurator app into `.docs/configurator/`, and each part's page embeds it. The MDX folder also
 // gets one page per README, where the sidebar wants it: the root one as `integral/introduction.mdx`, each part's
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things").
 //
@@ -103,8 +104,8 @@ export async function buildConfigurator(watch = false) {
  */
 function views(part: string, alt: string) {
   const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
-  const frame = (src: string, title: string, height: number) =>
-    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen; clipboard-write" />`
+  const frame = (src: string, title: string, height: number, allow = 'fullscreen') =>
+    `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="${allow}" />`
   return [
     // syncKey: the pick is kept in localStorage, the same on every part's page.
     '<Tabs defaultValue="render" syncKey="part-view">',
@@ -114,7 +115,7 @@ function views(part: string, alt: string) {
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '</TabsList>',
     `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
-    `<TabsContent value="3d">${frame(`${PAGES_URL}/configurator/index.html?part=${part}`, `${alt}, configurator`, 600)}</TabsContent>`,
+    `<TabsContent value="3d">${frame(`${PAGES_URL}/configurator/index.html?part=${part}`, `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     '</Tabs>',
   ].join('\n')

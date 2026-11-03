@@ -12,14 +12,13 @@
     "dev": "node scripts/dev.ts",
     "typecheck": "tsc --noEmit",
     "dev:configurator": "vite --config configurator/vite.config.ts",
-    "build:configurator": "vite build --config configurator/vite.config.ts"
+    "test": "node --test configurator/models.test.ts"
   },
   "dependencies": {
     "@classcad/mcp": "0.6.1",
     "@classcad/renderer": "0.1.0",
     "@classcad/script": "0.2.0",
     "@classcad/skill": "0.0.8",
-    "@classcad/smlibpy-three": "^0.6.2",
     "@classcad/smlibwasm": "^0.6.2",
     "@pmndrs/docs": "4.26.0",
     "@react-three/drei": "^10.7.9",

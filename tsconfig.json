@@ -10,26 +10,10 @@
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "jsx": "react-jsx",
-    "lib": [
-      "esnext",
-      "dom",
-      "dom.iterable"
-    ]
+    "lib": ["esnext", "dom", "dom.iterable"]
   },
-  "include": [
-    "scripts",
-    "*/*.ts",
-    "configurator/**/*.ts",
-    "configurator/**/*.tsx"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".docs",
-    ".pmndrs-docs"
-  ]
+  "include": ["scripts", "*/*.ts", "configurator/**/*.ts", "configurator/**/*.tsx"],
+  "exclude": ["node_modules", "dist", ".docs", ".pmndrs-docs"]
 }

@@ -20,9 +20,6 @@ importers:
       '@classcad/skill':
         specifier: 0.0.8
         version: 0.0.8
-      '@classcad/smlibpy-three':
-        specifier: ^0.6.2
-        version: 0.6.2(three@0.187.0)
       '@classcad/smlibwasm':
         specifier: ^0.6.2
         version: 0.6.2
@@ -176,12 +173,6 @@ packages:
 
   '@classcad/skill@0.0.8':
     resolution: {integrity: sha512-RwsXaoAdTV4420cQ4c+w2iuKBli7NmfKihwrCXAcRKsZxAZ9ewvOHYaQ+gvDdpZZHwZzLrO+TYKPty02jwnZcA==}
-
-  '@classcad/smlibpy-three@0.6.2':
-    resolution: {integrity: sha512-H9wTOjkzPnpjYX6fNCLAWmhsr34MAUBL49JQKTpea/sXGnT9vg3YchO+9fkNfgQUhidq13UgtdF+p6ZmyxC1+w==}
-    engines: {node: '>=22.18'}
-    peerDependencies:
-      three: '>=0.186'
 
   '@classcad/smlibwasm@0.6.2':
     resolution: {integrity: sha512-JDHQDdX13u1DiXJvNMfAWG7iyUVPpCVIL8Sfuw+p0CZq1E5sqN9VBFeuj+mEGbSFbZ+6/8ftRn6wnwlMWBu3SQ==}
@@ -4128,11 +4119,6 @@ snapshots:
       - utf-8-validate
 
   '@classcad/skill@0.0.8': {}
-
-  '@classcad/smlibpy-three@0.6.2(three@0.187.0)':
-    dependencies:
-      '@classcad/smlibwasm': 0.6.2
-      three: 0.187.0
 
   '@classcad/smlibwasm@0.6.2': {}
 
