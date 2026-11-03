@@ -73,8 +73,8 @@ export async function buildPart(engine: Engine, part: string) {
 }
 
 /**
- * A part's render, as the site shows it: tabs with a 3D viewer of its GLB, the part open in Buerligons, and the
- * render itself. On GitHub the README shows the render alone (it prints iframes as text).
+ * A part's render, as the site shows it: tabs with the render itself, a 3D viewer of its GLB, and the part open in
+ * Buerligons. On GitHub the README shows the render alone (it prints iframes as text).
  */
 function views(part: string, alt: string) {
   const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
@@ -82,15 +82,15 @@ function views(part: string, alt: string) {
     `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="fullscreen" />`
   return [
     // syncKey: the pick is kept in localStorage, the same on every part's page.
-    '<Tabs defaultValue="3d" syncKey="part-view">',
+    '<Tabs defaultValue="render" syncKey="part-view">',
     '<TabsList>',
-    '<TabsTrigger value="3d">3D</TabsTrigger>',
-    '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '<TabsTrigger value="render">Render</TabsTrigger>',
+    '<TabsTrigger value="3d">Model</TabsTrigger>',
+    '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '</TabsList>',
+    `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     `<TabsContent value="3d">${frame(`${PAGES_URL}/viewer.html?src=${part}/${part}.glb`, `${alt}, 3D`, 480)}</TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
-    `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     '</Tabs>',
   ].join('\n')
 }
