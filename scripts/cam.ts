@@ -189,6 +189,11 @@ process.on('SIGINT', () => void finish().then(() => process.exit(130)))
 /**
  * The record of this run, beside the files (`cam.json`): for each file made, every value it was made with, the parts
  * on it, and the hashes of what made it, so that a file can be made again the same.
+ *
+ * Per file: its sha256, the tool and every value given to Fusion, the deepest cut, the post and its version, the
+ * Fusion version, the sha256 of every input (`inputs`). A sheet adds its material, thickness and number, its parts
+ * and their grain turn, where they lie (`partsBox`, and `boxes` per part, mm from the corner), its size, spacing and
+ * frame. A wedge setup adds its turn, depth and margin; a `_rest` file its tool and depth.
  */
 const RECORD = join(out, 'cam.json')
 type CamRecord = { version: 2; files: Record<string, unknown> }

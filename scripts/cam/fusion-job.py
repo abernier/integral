@@ -358,6 +358,7 @@ def make_sheet():
     set_parameter(setup, "job_stockFixedZOffset", "0 mm")
     set_parameter(setup, "wcs_origin_mode", "'stockPoint'")
     set_parameter(setup, "wcs_origin_boxPoint", "'top 1'")
+    set_part_position(setup)
     set_stock_material(setup)
     add_pockets(setup, JOB["machining"]["tool"])
     add_outline(setup, JOB["machining"]["tool"])
@@ -371,6 +372,14 @@ def make_sheet():
         "partsBox": parts_box,
         "boxes": boxes,
     })
+
+
+def set_part_position(setup):
+    """Where Simulate with Machine lays the setup on the machine's table: by its stock's bottom centre, the same point
+    for every model. Fusion's default, the fixture's point, falls back to the model's box, which moves with the parts.
+    No effect on the toolpaths or the posted file."""
+    set_parameter(setup, "job_positionReference_origin_mode", "'stockPoint'")
+    set_parameter(setup, "job_positionReference_origin_boxPoint", "'bottom center'")
 
 
 def set_stock_material(setup):
@@ -558,6 +567,7 @@ def make_part_setup():
     set_parameter(setup, "job_stockOffsetTop", "0 mm")
     set_parameter(setup, "wcs_origin_mode", "'stockPoint'")
     set_parameter(setup, "wcs_origin_boxPoint", "'top 1'")
+    set_part_position(setup)
     set_stock_material(setup)
     squared = None
     if JOB["cut"] == "squared":
