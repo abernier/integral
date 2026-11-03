@@ -17,13 +17,13 @@ Each side is two tapered boards in a V and an armrest on edge, one plane, one th
 | Wood | teak, 30 mm boards; cane seat and back |
 | Size | 480 × 553.1 × 794.7 mm |
 | Joints | 6 loose tenons; 8 through dovetails |
-| Model | ClassCAD assembly, 24 parts |
+| Model | ClassCAD part, 24 named bodies |
 | Source | [smlibpy's `compass_armchair.py`](https://github.com/abernier/smlibpy/pull/11) |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
 
 ## Parameters
 
-In the `Params` part, mm. Edit, then recalculate.
+In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole chair rebuilds.
 
 | Name | Default | Meaning |
 |---|---|---|
@@ -74,7 +74,7 @@ Teak 7.95 kg at 0.65 g/cm³.
 
 ## Notes
 
-- \+ Parameters in Buerligons, a recalc in seconds; STEP for any CAD
+- \+ Parameters in Buerligons: change one, the whole chair rebuilds; STEP for any CAD
 - \+ Every board a box (or a cylinder band) cut by half-spaces, one side mirrored to the other
 - − ClassCAD's own mass properties under-read the arched parts (back rails −9 to −12 %, cane −0.3 %); the STEP is exact
 - − No assembly-order or overlap checks, which smlibpy runs; no machining files or exploded views

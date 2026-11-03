@@ -17,12 +17,12 @@ Four boards in a Z: seat, slant and base mitred at 45° on glued cleats, the bac
 | Wood | cherry, 19 mm boards |
 | Size | 370 × 480 × 742.6 mm |
 | Joints | 45° mitres with glued cleats; 6 through dovetails |
-| Model | ClassCAD assembly, 6 parts |
+| Model | ClassCAD part, 6 named bodies |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
 
 ## Parameters
 
-In the `Params` part, mm. Edit, then recalculate.
+In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole chair rebuilds.
 
 | Name | Default | Meaning |
 |---|---|---|

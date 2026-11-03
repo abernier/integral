@@ -13,7 +13,7 @@ import { wasmOptionsFromEnv } from '@classcad/mcp/dist/engine/wasm.js'
 import { buildScene, sceneToGlb } from '@classcad/mcp/dist/viewer/scene.js'
 import { buildScriptApi } from '@classcad/script'
 import { renderSession } from '@classcad/renderer/node'
-import type { Api } from '../zigzag-chair/zigzag-chair.ts'
+import type { Api } from './part.ts'
 
 const registry = createRequire(import.meta.url)('@classcad/skill/method-registry.json')
 
