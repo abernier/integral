@@ -4,7 +4,8 @@
 // ClassCAD, and a README.md.
 // Building it writes `<folder>.ofb`, `<folder>.step` and `<folder>.png` into `.docs/<folder>/`. The MDX folder also
 // gets one page per README, where the sidebar wants it: the root one as `integral/introduction.mdx`, each part's
-// as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things").
+// as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things"), and one per
+// `docs/<name>.md`, a page that belongs to no part (how a tool works), as `integral/<name>.mdx`.
 //
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
 // for a local site those URLs are rewritten to the local servers, for a built site to root-relative paths.
@@ -49,6 +50,17 @@ function buerligonsUrl(shared: string, path: string) {
 
 /** A part's page, under "Things" in the sidebar. */
 const partPage = (part: string) => `things/${part}`
+
+/** The pages of no part: `docs/<name>.md`, under "Integral" in the sidebar, after the introduction. */
+const DOCS = join(ROOT, 'docs')
+function docPages() {
+  if (!existsSync(DOCS)) return []
+  return readdirSync(DOCS)
+    .filter((file) => file.endsWith('.md'))
+    .sort()
+    .map((file) => file.replace(/\.md$/, ''))
+}
+const docPage = (name: string) => `integral/${name}`
 
 export function parts() {
   return readdirSync(ROOT, { withFileTypes: true })
@@ -101,7 +113,7 @@ function views(part: string, alt: string) {
  * A part's page also gets its source, its render as the page's image, and the render's tabs (`views`).
  */
 function page(readme: string, nav: number, urls: Urls, part?: string) {
-  const edit = `https://github.com/abernier/integral/edit/main/${part ? `${part}/` : ''}README.md`
+  const edit = `https://github.com/abernier/integral/edit/main/${relative(ROOT, readme)}`
   const source = readFileSync(readme, 'utf8')
   const title = source.match(/^# (.+)$/m)?.[1] ?? 'Untitled'
   // The line under the heading: short, shown under the title; the <Intro> after it says more.
@@ -125,7 +137,7 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
   // A page link goes to the site, any other link to the site's files to where the files are served, Buerligons'
   // `?url=` to the absolute URL. A link's root-relative URL (markdown or `<a href>`) loses the base path: Next.js
   // puts it back; an `src` keeps it.
-  const pages = [HOME, ...parts().map((p) => `/${partPage(p)}`)]
+  const pages = [HOME, ...docPages().map((d) => `/${docPage(d)}`), ...parts().map((p) => `/${partPage(p)}`)]
   const linked = body.replace(new RegExp(`(\\]\\(|href="|\\?url=)?${PAGES_URL.replaceAll('.', '\\.')}(/[^\\s)"']*)`, 'g'), (_, before = '', path: string) => {
     if (before === '?url=') return `${before}${buerligonsUrl(urls.shared, path)}`
     const url = `${pages.includes(path) ? urls.site : urls.files}${path}`
@@ -171,6 +183,9 @@ export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, sha
   copyFileSync(join(ROOT, 'scripts', 'viewer.html'), join(MDX, 'viewer.html'))
   mkdirSync(join(MDX, 'integral'), { recursive: true })
   writeFileSync(join(MDX, 'integral', 'introduction.mdx'), page(join(ROOT, 'README.md'), 0, urls))
+  docPages().forEach((name, i) => {
+    writeFileSync(join(MDX, `${docPage(name)}.mdx`), page(join(DOCS, `${name}.md`), i + 1, urls))
+  })
   mkdirSync(join(MDX, 'things'), { recursive: true })
   parts().forEach((part, i) => {
     writeFileSync(join(MDX, `${partPage(part)}.mdx`), page(join(ROOT, part, 'README.md'), i + 1, urls, part))

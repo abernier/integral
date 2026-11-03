@@ -5,15 +5,15 @@ description: Make, check and explain the ShopBot .sbp files of this repo's model
 
 # CAM: ShopBot files
 
-Everything about the tool is in `scripts/cam/README.md` (prerequisites, parameters, tools, manifest, `cam.json`). Read it first; this skill is how to drive it.
+The tool is documented on the site page `docs/cam.md` (prerequisites, run, parameters, catalogs, manifest, `cam.json`, in the workshop). Read it first, and explain the files from its "In the workshop"; this skill is only how an agent drives it.
 
-Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the rest machining, the feeds (its tool library's presets); the code groups parts by material and thickness, turns each part's grain along the sheet, picks the tool and keeps the wedge setups. Do not add orientation, nesting or feed logic: change a value, the manifest, the tool library or `materials.json`.
+Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the rest machining, the feeds (its tool library's presets). Do not add orientation, nesting or feed logic: change a value, the manifest, `tools.json` or `materials.json`.
 
 ## Run
 
-1. `pnpm cam --list-tools`. No answer: Fusion is closed, or its MCP server is off (Preferences > General > API > Fusion MCP Server); ask the user to fix it, that is theirs.
+1. `pnpm cam --list-tools`. No answer: Fusion is closed, or its MCP server is off; ask the user to fix it, that is theirs.
 2. `pnpm cam <model> --force` (no model: every model). `--only <Part>` for some parts, `--keep` to leave the document open in Fusion.
-3. Read the output: `no file for:` lists parts without a file (not a sheet part, no tool reaching, larger than the sheet); `nothing to cut for Pockets` is normal on a sheet without pockets. Report both.
+3. Read the output: `no file for:` lists parts without a file; `nothing to cut for Pockets` is normal on a sheet without pockets. Report both.
 
 ## Check, before saying a file is good
 
@@ -22,33 +22,15 @@ Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the
 - Grain: in `cam.json` `boxes`, each part of a material with grain is longer along x than y (unless the manifest turns it). The grain must cross every joint edge (tails, fingers, a loose tenon's length): a near-square part or a tenon needs a manifest `grain`.
 - A part whose pockets are missing may lie the wrong face up: `"flip": true` in the manifest, rerun.
 - Anything on a wedge: open it with `--keep`, screenshot it (`fusion_mcp_read` screenshot), look at it.
-- The files cut 2.5D from the top only: bevels, sloped walls, square corners and what lies below the rest pass are hand work, listed on the model page. Check them with `pnpm cam <model> --only <part> --keep` and Fusion's Simulate; keep the page's list in step.
+- Hand work (bevels, sloped walls, square corners, below the rest pass): check with `--only <part> --keep` and Fusion's Simulate; keep the model page's "By hand" list in step.
 - Say what was not simulated. Never claim a file is safe to cut.
-
-## In the workshop
-
-How to explain the files to someone at the machine, in plain words:
-
-- A sheet is one stock board clamped on the ShopBot, by default 2440 x 1220 mm, of one thickness.
-- One `.sbp` per sheet, with every part of that material and thickness nested by Fusion, grain along the sheet: `<model>_<material>_<thickness>mm_<n>.sbp`, `n` the next sheet when one is full.
-- Then its `_rest.sbp`, if any, same sheet and zero, with the narrowest tool: what the first was too wide for. Deeper than it reaches: by hand, as the model page lists.
-- Zero: the top of the sheet at its front-left corner.
-- Parts stay held by tabs: cut them free, sand the stubs.
-- A wedge file (`<Part>_<setup>.sbp`) is a second pass on a part already cut from its sheet, laid on its wedge; its zero is the top of the part as it lies there, 5 mm out from the front-left corner of its box.
-- Simulate, then air-cut, before cutting wood.
 
 ## Change how parts are milled
 
-Edit `<model>/cam.config.json` (`skip`, `flip`, `material`, `grain`, wedge `setups`, `defaults`: material, sheet, spacing, tabs, ...), `scripts/cam/materials.json` (grain, preset per material), or the cutters and feeds in `scripts/cam/tools.json`, a Fusion tool library edited in Fusion:
-
-1. Manufacture > Manage > Tool Library: right-click a local folder, Import, `scripts/cam/tools.json`.
-2. Edit the tools and their presets (one per material, named as in `materials.json`).
-3. Right-click the library, Export, over `scripts/cam/tools.json`.
-
-Values are resolved in `scripts/cam.ts` / `machining.ts`; `fusion-job.py` only applies them. Rerun, compare `cam.json`; unchanged inputs give byte-identical files.
+Edit `<model>/cam.config.json`, `scripts/cam/materials.json`, or `scripts/cam/tools.json` (through Fusion, as the page says; never by hand). Values are resolved in `scripts/cam.ts` / `machining.ts`; `fusion-job.py` only applies them. Rerun, compare `cam.json`; unchanged inputs give byte-identical files.
 
 ## Rules
 
+- One home per fact: a skip, turn, wedge or material's reason goes in the manifest's `note`, a value in its JSON or `machining.ts`. A model page names the command and links the manifest; it keeps only its hand-work list. Never copy files, tools, sheets or values onto a page.
 - Fusion steps go one small Python script per MCP call. Never wait or loop inside Fusion (no `doEvents`, no sleep): it crashed Fusion. Poll from Node.
 - Never touch a Fusion document the run did not create; close yours unsaved.
-- Keep the model page's "ShopBot files" section in step with its manifest.

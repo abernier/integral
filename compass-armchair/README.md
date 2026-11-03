@@ -56,25 +56,10 @@ In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole c
 pnpm cam compass-armchair --force
 ```
 
-Or ask an agent: "make the ShopBot files of the compass armchair" (skill `cam`). Prerequisites, parameters, tools: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam). Files and the run's record (`cam.json`) in `.docs/compass-armchair/cam/`, out of git. Simulate before cutting.
-
-Teak (manifest `material`): one file per thickness, every part of it nested by Fusion on a 2440 x 1220 mm sheet, each part's grain along its length (the loose tenons' across their joint: `grain: 90`), the narrowest tool that cuts through; then, where that tool is wider than the narrowest, a `_rest.sbp` with the 6 mm for what it left, down to 26 mm. In the workshop: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam#in-the-workshop).
-
-| File | Parts | Tool | Pockets |
-|---|---|---|---|
-| `compass-armchair_teak_10mm_1.sbp` | rail tenons ×4 | 6 mm | – |
-| `compass-armchair_teak_12mm_1.sbp` | ArmTenon ×2 | 6 mm | – |
-| `compass-armchair_teak_16mm_1.sbp` | Spline ×2 | 6 mm | – |
-| `compass-armchair_teak_25mm_1.sbp` | SideRail ×2 | 6 mm | yes |
-| `compass-armchair_teak_30mm_1.sbp`, `_rest` | FrontLeg ×2, RearLeg ×2, Armrest ×2, BackPost ×2, FrontRail | 8 mm, then 6 mm | yes |
-| `compass-armchair_teak_35mm_1.sbp`, `_rest` | LowBackRail, HighBackRail | 8 mm (42 mm flutes), then 6 mm | – |
-| `compass-armchair_teak_40mm_1.sbp`, `_rest` | RearRail | 8 mm (42 mm flutes), then 6 mm | – |
-
-Each part lies largest face down, its pockets up; mortises cut to size. Canes: woven, skipped.
+How it works, in the workshop: [CAM](https://abernier.github.io/integral/integral/cam). What is cut how, per part (skips, the loose tenons' grain): [cam.config.json](https://github.com/abernier/integral/blob/main/compass-armchair/cam.config.json). The files and what each holds: `.docs/compass-armchair/cam/cam.json`, out of git.
 
 By hand (the files cut square, from the top):
 
-- the inside corners at the tool's radius: the mortises' (3 mm on the 25 mm sheet, 4 mm on the 30 mm), the shoulders' of the rails and back posts (3 mm after the rest pass): chisel square, or round the tenons;
+- the inside corners at the tool's radius: the mortises', the shoulders' of the rails and back posts: chisel square, or round the tenons;
 - the dovetail sockets' walls in the SideRails and BackPosts, 9° through the board, not cut: pare to the line;
-- below 26 mm, where the 6 mm stops: the sockets between the FrontRail's and RearRail's twin tails (4 and 14 mm of wood left), and the shoulders' corners below it: saw and chisel. All other values are the defaults. Manifest: [cam.config.json](https://github.com/abernier/integral/blob/main/compass-armchair/cam.config.json).
-
+- below the rest pass's depth: the sockets between the FrontRail's and RearRail's twin tails, and the shoulders' corners below it: saw and chisel.
