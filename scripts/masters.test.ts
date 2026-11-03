@@ -8,8 +8,8 @@ import { test } from 'node:test'
 import { defaultValues, loadValues, valuesSchema, variantHash } from './masters.ts'
 
 const masters = {
-  T: { value: 19, min: 12, max: 30, hint: 'board thickness' },
-  BACK_LEAN: { value: 8, min: 0, max: 20, hint: "the back's lean" },
+  T: { value: 19, min: 12, max: 30, step: 0.5, hint: 'board thickness' },
+  BACK_LEAN: { value: 8, min: 0, max: 20, step: 0.5, hint: "the back's lean" },
 }
 const schema = valuesSchema('zigzag-chair', masters)
 const file = { $schema: 'https://example.com/s.json', model: 'zigzag-chair', values: { T: 19, BACK_LEAN: 10 } }

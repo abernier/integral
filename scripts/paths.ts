@@ -20,7 +20,12 @@ export function parts() {
     .map((entry) => entry.name)
 }
 
-/** Where the build writes a model's variant, built with other values: `.docs/<model>/variants/<name>/`, its hash's 8 first hex digits. */
+/** Where the build writes a model's variant, built with other values: `.docs/<model>/variants/<name>/`, the first 8 hex digits of its hash. */
 export function variantDir(model: string, name: string) {
   return join(MDX, model, 'variants', name)
+}
+
+/** The JSON Schema of a model's values files (masters.ts), beside the model's own files whatever the variant: the configurator's files point at it. */
+export function valuesSchemaFile(model: string) {
+  return join(MDX, model, `${model}.values.schema.json`)
 }

@@ -16,16 +16,14 @@ import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as z from 'zod'
+import type { Control } from '../configurator/src/models.ts'
 import { ROOT } from './paths.ts'
 
-/** A master as the values need it: its default, its range and what it means (a configurator `Control`). */
-export type Master = { value: number; min: number; max: number; hint: string }
-
 /**
- * The schema of a values file for `model`, from its masters: every master a number in its range, no other key, the
- * model named.
+ * The schema of a values file for `model`, from its masters (each a configurator `Control`): every master a number
+ * in its range, no other key, the model named.
  */
-export function valuesSchema<M extends Record<string, Master>>(model: string, masters: M) {
+export function valuesSchema<M extends Record<string, Control>>(model: string, masters: M) {
   const values = Object.fromEntries(Object.entries(masters).map(([name, { min, max, hint }]) => [name, z.number().min(min).max(max).describe(hint)]))
   return z.strictObject({
     $schema: z.string().optional(),
@@ -35,10 +33,10 @@ export function valuesSchema<M extends Record<string, Master>>(model: string, ma
 }
 
 /** A values file of the model whose masters are `M`. */
-export type ValuesFile<M extends Record<string, Master> = Record<string, Master>> = z.infer<ReturnType<typeof valuesSchema<M>>>
+export type ValuesFile<M extends Record<string, Control> = Record<string, Control>> = z.infer<ReturnType<typeof valuesSchema<M>>>
 
 /** Every master's value of the model whose masters are `M`: what its `build` and `CAM` are given. */
-export type Values<M extends Record<string, Master> = Record<string, Master>> = ValuesFile<M>['values']
+export type Values<M extends Record<string, Control> = Record<string, Control>> = ValuesFile<M>['values']
 
 /** A model's masters module: `<model>/<model>.masters.ts`. */
 export function mastersFile(model: string) {
@@ -47,12 +45,12 @@ export function mastersFile(model: string) {
 
 /** The MASTERS export of a model's masters module. */
 export async function loadMasters(model: string) {
-  const { MASTERS } = (await import(pathToFileURL(mastersFile(model)).href)) as { MASTERS?: Record<string, Master> }
+  const { MASTERS } = (await import(pathToFileURL(mastersFile(model)).href)) as { MASTERS?: Record<string, Control> }
   if (!MASTERS) throw new Error(`${model}/${model}.masters.ts exports no MASTERS`)
   return MASTERS
 }
 
-/** A model's values file schema as JSON Schema, for editors: the build writes it as `<model>.values.schema.json`. */
+/** A model's values file schema as JSON Schema, for editors: the build writes it as `<model>.values.schema.json` (paths.ts valuesSchemaFile). */
 export async function valuesJsonSchema(model: string) {
   return z.toJSONSchema(valuesSchema(model, await loadMasters(model)))
 }
@@ -67,15 +65,14 @@ export async function defaultValues(model: string): Promise<Values> {
  * A variant's identity: the sha256 of its values as JSON, keys in the masters' order, numbers as JSON numbers. Its
  * first 8 hex digits name its folder (`variantDir`).
  */
-export function variantHash(masters: Record<string, Master>, values: Values) {
+export function variantHash(masters: Record<string, Control>, values: Values) {
   const canonical = JSON.stringify(Object.fromEntries(Object.keys(masters).map((name) => [name, values[name]])))
   return createHash('sha256').update(canonical).digest('hex')
 }
 
 /**
  * A model's values file, checked: the file, its variant's hash and name (`variantHash`), every master's value.
- * Throws on a file that cannot be read, is not JSON, or that
- * the model's schema refuses.
+ * Throws on a file that cannot be read, is not JSON, or that the model's schema refuses.
  */
 export async function loadValues(model: string, file: string) {
   const masters = await loadMasters(model)

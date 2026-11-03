@@ -31,7 +31,7 @@ import {
   type Tool,
 } from './cam/machining.ts'
 import { configFile, loadConfig } from './cam/config.ts'
-import { type ValuesFile, defaultValues, loadValues, mastersFile } from './masters.ts'
+import { type Values, defaultValues, loadValues, mastersFile } from './masters.ts'
 import { MDX, ROOT, parts, variantDir } from './paths.ts'
 import { stepParts } from './step-assembly.ts'
 
@@ -62,12 +62,14 @@ const { values: flags, positionals } = parseArgs({
 const USAGE = `usage: pnpm cam [<model>] [options]      (no model: every model, one after the other)
   --values <file.json>   the model made with the values of this file (the configurator's "Copy values"): its STEP built
                          first if missing (or with --force), its files into .docs/<model>/variants/<values' hash>/cam/
-  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step, or the variant's)
+  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step, or the variant's;
+                         cam.json then records no values)
   --post <text>          the library post whose vendor/description contains it (default ${DEFAULT_POST})
   --tool <number>        this tool of scripts/cam/tools.json for every sheet (default: per sheet, the narrowest that reaches)
   --sheet <LxW>          the sheet, mm (default ${MACHINING_DEFAULTS.sheet.join('x')})
   --spacing <mm>         between two parts on a sheet (default ${MACHINING_DEFAULTS.spacing}; at least the tool's diameter + ${SPACING_OVER_TOOL})
-  --only <A,B>           these parts only, into .docs/<model>/cam/only/ with its own cam.json (the full run's files stay)
+  --only <A,B>           these parts only, into .docs/<model>/cam/only/ (the variant's with --values) with its own
+                         cam.json (the full run's files stay)
   --force                make the files again: the folder's old .sbp go first (and a --values STEP)
   --keep                 leave the document open in Fusion, unsaved, to simulate its setups
   --dry-run              print the plan, send nothing to Fusion
@@ -105,7 +107,7 @@ const variant = flags.values === undefined ? undefined : await loadValues(model,
 const values = variant?.values ?? (await defaultValues(model))
 /** The model's built files: its own folder, or its variant's. */
 const built = variant ? variantDir(model, variant.name) : join(MDX, model)
-if (variant) console.log(`cam: ${model} variant ${variant.hash}, in ${shown(built)}`)
+if (variant) console.log(`cam: ${model} variant ${variant.hash}, the values of ${shown(variant.file)}, in ${shown(built)}`)
 
 const step = resolve(flags.step ?? join(built, `${model}.step`))
 if (variant && !flags.step && (flags.force || !existsSync(step))) {
@@ -151,7 +153,6 @@ const grain = Object.fromEntries(selected.filter((name) => materials[materialOf(
 /** The parts' setups of their own (a wedge): one file each, beside the sheets. */
 const ownSetups = selected.flatMap((part) => (entryOf(part)?.setups ?? []).map((setup) => ({ part, setup })))
 
-if (variant) console.log(`cam: ${model} made with the values of ${shown(variant.file)}`)
 console.log(`cam: ${model}, ${selected.length} parts from ${shown(step)}, ${config.parts || config.defaults ? `CAM config from ${shown(source)}` : 'no CAM config'}`)
 if (skipped.length) console.log(`cam: skipping ${skipped.join(', ')}`)
 
@@ -210,7 +211,8 @@ process.on('SIGINT', () => void finish().then(() => process.exit(130)))
 /**
  * The record of this run, beside the files (`cam.json`): the model, every master's value it was made with (`values`,
  * the defaults or a `--values` file's), and the variant's `hash`, and for each file made, every value it was made with, the parts on it, and the
- * hashes of what made it, so that a file can be made again the same.
+ * hashes of what made it, so that a file can be made again the same. With `--step` the geometry is the file's, not
+ * the build's, so the record names no values and no hash.
  *
  * Per file: its sha256, the tool and every value given to Fusion, the deepest cut, the post and its version, the
  * Fusion version, the sha256 of every input (`inputs`). A sheet adds its material, thickness and number, its parts
@@ -218,12 +220,13 @@ process.on('SIGINT', () => void finish().then(() => process.exit(130)))
  * frame. A wedge setup adds its turn, depth and margin; a `_rest` file its tool and depth.
  */
 const RECORD = join(out, 'cam.json')
-type CamRecord = Omit<ValuesFile, '$schema'> & { version: 3; hash?: string; files: Record<string, unknown> }
-const record: CamRecord = { version: 3, model, hash: variant?.hash, values, files: {} }
+type CamRecord = { version: 3; model: string; hash?: string; values?: Values; files: Record<string, unknown> }
+// The values and the hash only when the STEP is the build's: another file may hold another geometry.
+const record: CamRecord = flags.step === undefined ? { version: 3, model, hash: variant?.hash, values, files: {} } : { version: 3, model, files: {} }
 // The inputs' hashes: the STEP, the model's module (its `CAM` config; also its geometry, already in the STEP), its
-// masters and the values file, the catalogs and the code.
+// masters, the catalogs and the code.
 const inputs = Object.fromEntries(
-  [step, source, mastersFile(model), ...(variant ? [variant.file] : []), TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
+  [step, source, mastersFile(model), TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
     .map((file) => [shown(file), sha256(file)]),
 )
 const failed: string[] = []

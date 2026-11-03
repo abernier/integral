@@ -19,7 +19,7 @@ The code only prepares Fusion's job. It groups the parts by material and thickne
 - [ ] Fusion desktop (macOS or Windows), signed in. Fusion for Personal Use is enough: it posts ShopBot OpenSBP, but its rapids run at the cutting feed, and with no tool change each tool gets its own file.
 - [ ] Fusion's MCP server on: Preferences > General > API > *Fusion MCP Server (runs locally on this device)*. On another port, set `FUSION_MCP_URL`. `pnpm cam --list-tools` checks the connection.
 - [ ] No command dialog open in Fusion during a run.
-- [ ] The model's STEP at `.docs/<model>/<model>.step`, one component per part: `nr build:parts` makes it.
+- [ ] The model's STEP at `.docs/<model>/<model>.step`, one component per part: `nr build:parts` makes it (a `--values` run builds its variant's STEP itself).
 - [ ] The tools of [`tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam/tools.json) match the cutters on your ShopBot, and their presets match your wood.
 
 ## Run
@@ -94,7 +94,7 @@ Everything else is fixed by [`fusion-job.py`](https://github.com/abernier/integr
 
 ## Config
 
-What Fusion cannot know from the STEP (parts to skip, grain turns, flips, wedge setups, the model's material and post) is the optional `CAM` export of the model's module, typed `CamConfig` in [`config.ts`](https://github.com/abernier/integral/blob/main/scripts/cam/config.ts). Examples: [zigzag chair](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts), [compass armchair](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts).
+What Fusion cannot know from the STEP (parts to skip, grain turns, flips, wedge setups, the model's material and post) is the optional `CAM(values)` function of the model's module, returning a `CamConfig` (type in [`config.ts`](https://github.com/abernier/integral/blob/main/scripts/cam/config.ts)): a wedge follows the angle the part was built with. Examples: [zigzag chair](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts), [compass armchair](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts).
 
 ## The record: `cam.json`
 
@@ -105,13 +105,15 @@ Each run writes it beside the files. It says what each file is, which tool it us
 A sheet is one board clamped on the ShopBot, of one material and thickness (its size is in `cam.json`), its grain along its length, the x axis. Its zero is its top, at the front-left corner (x-min, y-min).
 
 ```text
-.docs/<model>/cam/
-├── cam.json                      # the record of the run
-├── <model>_oak_18mm_1.sbp        # every 18 mm oak part that fits on sheet 1, with the sheet's tool
-├── <model>_oak_18mm_1_rest.sbp   # the same sheet, same zero, with the narrowest tool: what the first was too wide for
-├── <model>_oak_18mm_2.sbp        # the rest of the 18 mm oak parts, on sheet 2
-├── Leg_wedge10.sbp               # a second pass on the Leg, cut out and laid on its wedge
-└── only/                         # --only runs
+.docs/<model>/
+├── cam/
+│   ├── cam.json                      # the record of the run
+│   ├── <model>_oak_18mm_1.sbp        # every 18 mm oak part that fits on sheet 1, with the sheet's tool
+│   ├── <model>_oak_18mm_1_rest.sbp   # the same sheet, same zero, with the narrowest tool: what the first was too wide for
+│   ├── <model>_oak_18mm_2.sbp        # the rest of the 18 mm oak parts, on sheet 2
+│   ├── Leg_wedge10.sbp               # a second pass on the Leg, cut out and laid on its wedge
+│   └── only/                         # --only runs
+└── variants/<h>/cam/                 # --values runs, <h> the values' hash: the same files
 ```
 
 A wedge file's zero is the top of the part on its wedge, `margin` out from the front-left corner of its box.

@@ -20,7 +20,7 @@ import { join, relative } from 'node:path'
 import { build as vite } from 'vite'
 import { type Engine, glb, render, run, save } from './classcad.ts'
 import { type Values, defaultValues, valuesJsonSchema } from './masters.ts'
-import { MDX, ROOT, parts } from './paths.ts'
+import { MDX, ROOT, parts, valuesSchemaFile } from './paths.ts'
 
 export const DIST = join(ROOT, 'dist')
 
@@ -84,7 +84,7 @@ export async function buildPart(engine: Engine, part: string, values?: Values, o
   const model = await glb(engine, join(out, `${part}.glb`))
   await render(engine, join(out, `${part}.png`))
   // Beside the model's own files, whatever `out`: the configurator's values files point at it.
-  writeFileSync(join(MDX, part, `${part}.values.schema.json`), `${JSON.stringify(await valuesJsonSchema(part), null, 2)}\n`)
+  writeFileSync(valuesSchemaFile(part), `${JSON.stringify(await valuesJsonSchema(part), null, 2)}\n`)
   const seconds = ((performance.now() - started) / 1000).toFixed(1)
   console.log(`${relative(MDX, out)}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
 }

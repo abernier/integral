@@ -79,11 +79,6 @@ function Message({ children, color = '#b00020', bottom = 16 }: { children: strin
 function Configurator({ model }: { model: Model }) {
   // A problem stays longer than a confirmation, in red.
   const [toast, setToast] = useState<{ text: string; problem?: boolean }>()
-  /** The sliders' values now, read when a button is clicked. */
-  const current = () => {
-    const value = get as unknown as (name: string) => number
-    return Object.fromEntries(Object.keys(model.schema).map((name) => [name, value(name)]))
-  }
   const [values, set, get] = useControls(() => ({
     'Copy link': button(async () => {
       const params = changedParams(model.schema, current(), part)
@@ -105,7 +100,8 @@ function Configurator({ model }: { model: Model }) {
       if ('problems' in parsed) {
         const shown = parsed.problems.slice(0, 3).join('; ')
         const more = parsed.problems.length > 3 ? ` (and ${parsed.problems.length - 3} more)` : ''
-        return setToast({ text: `Not imported: ${shown}${more}`, problem: true })
+        setToast({ text: `Not imported: ${shown}${more}`, problem: true })
+        return
       }
       set(parsed.values)
       setToast({ text: 'Values imported' })
@@ -114,6 +110,11 @@ function Configurator({ model }: { model: Model }) {
     // The schema entries go through as they are: leva shows each control's `hint` on hover.
     ...withQueryValues(model.schema, query),
   }))
+  /** The sliders' values now, read when a button is clicked. */
+  function current() {
+    const value = get as unknown as (name: string) => number
+    return Object.fromEntries(Object.keys(model.schema).map((name) => [name, value(name)]))
+  }
   const numbers = values as unknown as Record<string, number>
   useEffect(() => {
     if (!toast) return
@@ -173,7 +174,7 @@ function Configurator({ model }: { model: Model }) {
       {!shape && !error && <Message color="#555">Building the model…</Message>}
       {error && <Message>{error}</Message>}
       {toast && (
-        <Message color={toast.problem ? undefined : '#111'} bottom={error ? 64 : 16}>
+        <Message color={toast.problem ? '#b00020' : '#111'} bottom={error ? 64 : 16}>
           {toast.text}
         </Message>
       )}
