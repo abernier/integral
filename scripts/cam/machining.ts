@@ -4,15 +4,18 @@
 //
 // The values are, from the strongest: the CLI's, the model's manifest's (`defaults`), these defaults.
 //
-// The tool: the one numbered `tool`, else the narrowest of the library whose flutes reach the cut: the sheet's
-// thickness, `overcut` below it, and `reach` more to spare. Feeds, speeds, stepdown and stepover are the tool's
+// The tool: the one numbered `tool`, else the narrowest of the library that reaches the cut (the sheet's thickness and
+// `overcut` below it): its flutes `reach` more, its stickout `nutClearance` more. Feeds, speeds, stepdown and stepover are the tool's
 // preset named in materials.json for the sheet's material: Fusion's, not ours.
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-/** A tool of the library, as the selection rule sees it: its number (`&Tool = <number>`) and size, mm. */
-export type Tool = { number: number; description: string; diameter: number; fluteLength: number }
+/**
+ * A tool of the library, as the selection rule sees it: its number (`&Tool = <number>`) and size, mm. `stickout`: its
+ * length out of the collet (Fusion's `assemblyGaugeLength`).
+ */
+export type Tool = { number: number; description: string; diameter: number; fluteLength: number; stickout: number }
 
 /** A material of materials.json: whether its parts keep their grain along their length, its tool preset's name. */
 export type Material = { grain: boolean; preset: string; stock?: string; note?: string }
@@ -38,6 +41,8 @@ export type MachiningOptions = {
   overcut?: number
   /** Flute length to spare beyond the deepest cut, when choosing the tool. */
   reach?: number
+  /** Tool length out of the collet to spare beyond the deepest cut: the collet nut stays this far above the cut's bottom. */
+  nutClearance?: number
   /** The outline's holding tabs, given in part (the rest from the defaults), or false for none. */
   tabs?: Partial<Tabs> | false
 }
@@ -50,6 +55,9 @@ export const MACHINING_DEFAULTS = {
   margin: 5,
   overcut: 0.3,
   reach: 1,
+  // 5 mm keeps the nut clear of the stock top through what the cut depth does not see: a sheet thicker than its
+  // nominal size or not flat, a Z zero off by a millimetre or two, chips on the surface, the nut's own chamfer.
+  nutClearance: 5,
   tabs: { count: 4, width: 6, height: 3 } as Tabs,
 }
 
@@ -57,10 +65,12 @@ export const MACHINING_DEFAULTS = {
 export const SPACING_OVER_TOOL = 4
 /** Holes taken as pockets: those the tool fits in, with this much more (mm) across. */
 const HOLE_CLEARANCE = 0.5
+/** Shank length (mm) a collet must hold at least: about 2/3 of an ER20/ER25 collet's bore. */
+const MINIMUM_GRIP = 20
 /** Pockets of any corner radius (mm). */
 const CORNER_RADIUS = [0, 1000]
 
-export const MACHINING_KEYS = ['tool', 'material', 'sheet', 'spacing', 'frame', 'margin', 'overcut', 'reach', 'tabs'] as const
+export const MACHINING_KEYS = ['tool', 'material', 'sheet', 'spacing', 'frame', 'margin', 'overcut', 'reach', 'nutClearance', 'tabs'] as const
 const TAB_KEYS = ['count', 'width', 'height'] as const
 
 /** The problems with a manifest's (or the CLI's) machining values, as messages; none when they are right. */
@@ -68,7 +78,7 @@ export function machiningProblems(options: Record<string, unknown>) {
   const problems: string[] = []
   const positive = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0
   if (options.margin !== undefined && !positive(options.margin)) problems.push('margin must be a number of mm above 0')
-  for (const key of ['spacing', 'frame', 'overcut', 'reach'] as const) {
+  for (const key of ['spacing', 'frame', 'overcut', 'reach', 'nutClearance'] as const) {
     const value = options[key]
     if (value !== undefined && !(typeof value === 'number' && Number.isFinite(value) && value >= 0)) problems.push(`${key} must be a number of mm, 0 or more`)
   }
@@ -102,6 +112,7 @@ export function resolveMachining(...layers: (MachiningOptions | undefined)[]) {
     margin: (pick('margin') as number | undefined) ?? MACHINING_DEFAULTS.margin,
     overcut: (pick('overcut') as number | undefined) ?? MACHINING_DEFAULTS.overcut,
     reach: (pick('reach') as number | undefined) ?? MACHINING_DEFAULTS.reach,
+    nutClearance: (pick('nutClearance') as number | undefined) ?? MACHINING_DEFAULTS.nutClearance,
     tabs: tabs === false ? (false as const) : { ...MACHINING_DEFAULTS.tabs, ...tabs },
   }
 }
@@ -114,9 +125,15 @@ export const MATERIALS_FILE = join(import.meta.dirname, 'materials.json')
 /** The library as Fusion wrote it (sent as is to Fusion), and its tools as the selection rule sees them. */
 export function loadTools(file = TOOLS_FILE) {
   const library = readFileSync(file, 'utf8')
-  const { data } = JSON.parse(library) as { data?: { description: string; geometry: { DC: number; LCF: number }; 'post-process': { number: number } }[] }
+  const { data } = JSON.parse(library) as {
+    data?: { description: string; geometry: { DC: number; LCF: number; OAL: number; assemblyGaugeLength: number }; 'post-process': { number: number } }[]
+  }
   if (!Array.isArray(data) || !data.length) throw new Error(`${file}: no tools (a Fusion tool library, exported as JSON)`)
-  const tools: Tool[] = data.map((t) => ({ number: t['post-process'].number, description: t.description, diameter: t.geometry.DC, fluteLength: t.geometry.LCF }))
+  const tools: Tool[] = data.map((t) => {
+    const { DC, LCF, OAL, assemblyGaugeLength } = t.geometry
+    if (assemblyGaugeLength > OAL - MINIMUM_GRIP) throw new Error(`${file}: tool #${t['post-process'].number} sticks out ${assemblyGaugeLength} mm, more than its ${OAL} mm less the ${MINIMUM_GRIP} mm a collet must hold`)
+    return { number: t['post-process'].number, description: t.description, diameter: DC, fluteLength: LCF, stickout: assemblyGaugeLength }
+  })
   return { library, tools }
 }
 
@@ -126,22 +143,30 @@ export function loadMaterials(file = MATERIALS_FILE) {
   return list.materials
 }
 
+/** How deep `tool` may cut, mm: its flutes less `reach`, its stickout less `nutClearance`, the shorter. */
+export function toolReach(tool: Tool, machining: Machining) {
+  return Math.min(tool.fluteLength - machining.reach, tool.stickout - machining.nutClearance)
+}
+
+/** Why `tool` may cut so deep, for a message. */
+const reachOf = (tool: Tool, machining: Machining) =>
+  `${tool.fluteLength} mm flutes less ${machining.reach} to spare, ${tool.stickout} mm out of the collet less ${machining.nutClearance} for the nut`
+
 /**
- * The tool for a cut `depth` mm deep: the one `machining.tool` numbers, else the narrowest whose flutes reach it (the
- * shorter of two as narrow). Throws when none does.
+ * The tool for a cut `depth` mm deep: the one `machining.tool` numbers, else the narrowest that reaches it (the shorter
+ * of two as narrow). Throws when none does.
  */
 export function pickTool(tools: Tool[], depth: number, machining: Machining) {
-  const needed = depth + machining.reach
   if (machining.tool !== undefined) {
     const tool = tools.find((t) => t.number === machining.tool)
     if (!tool) throw new Error(`no tool #${machining.tool} in scripts/cam/tools.json (${tools.map((t) => t.number).join(', ')})`)
-    if (tool.fluteLength < needed) throw new Error(`tool #${tool.number} reaches ${tool.fluteLength} mm, the cut needs ${needed.toFixed(1)} mm (${depth.toFixed(1)} deep, ${machining.reach} to spare)`)
+    if (toolReach(tool, machining) < depth) throw new Error(`tool #${tool.number} cuts ${toolReach(tool, machining)} mm deep at most (${reachOf(tool, machining)}), the cut is ${depth.toFixed(1)} mm deep`)
     return tool
   }
-  const reaching = tools.filter((t) => t.fluteLength >= needed).sort((a, b) => a.diameter - b.diameter || a.fluteLength - b.fluteLength)
+  const reaching = tools.filter((t) => toolReach(t, machining) >= depth).sort((a, b) => a.diameter - b.diameter || a.fluteLength - b.fluteLength)
   if (!reaching.length) {
-    const longest = Math.max(...tools.map((t) => t.fluteLength))
-    throw new Error(`no tool reaches ${needed.toFixed(1)} mm (${depth.toFixed(1)} deep, ${machining.reach} to spare): the longest flutes in scripts/cam/tools.json are ${longest} mm`)
+    const deepest = tools.reduce((a, b) => (toolReach(b, machining) > toolReach(a, machining) ? b : a))
+    throw new Error(`no tool cuts ${depth.toFixed(1)} mm deep: the deepest in scripts/cam/tools.json, tool #${deepest.number}, cuts ${toolReach(deepest, machining)} mm (${reachOf(deepest, machining)})`)
   }
   return reaching[0]
 }
@@ -155,7 +180,7 @@ export function restTool(tools: Tool[], main: Tool) {
 /** What fusion-job.py reads in JOB["machining"]: every value resolved, in mm. */
 export function machiningJob(tool: Tool, machining: Machining, depth: number, tools: Tool[]) {
   const rest = restTool(tools, tool)
-  const restDepth = rest ? +Math.min(depth, rest.fluteLength - machining.reach).toFixed(3) : 0
+  const restDepth = rest ? +Math.min(depth, toolReach(rest, machining)).toFixed(3) : 0
   return {
     tool: tool.number,
     preset: loadMaterials()[machining.material].preset,
@@ -164,7 +189,7 @@ export function machiningJob(tool: Tool, machining: Machining, depth: number, to
     tabs: machining.tabs === false ? null : { ...machining.tabs, height: +(machining.tabs.height + machining.overcut).toFixed(3) },
     minimumHoleDiameter: tool.diameter + HOLE_CLEARANCE,
     cornerRadius: CORNER_RADIUS,
-    // After the outline, what this tool leaves (narrow sockets, corners): the narrowest tool, as deep as its flutes reach.
+    // After the outline, what this tool leaves (narrow sockets, corners): the narrowest tool, as deep as it reaches.
     rest: rest ? { tool: rest.number, after: tool.diameter, depth: restDepth, through: restDepth >= +depth.toFixed(3) } : null,
   }
 }

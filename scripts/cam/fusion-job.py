@@ -571,11 +571,13 @@ def status():
     setup = find_setup(cam_of(tagged_document()))
     operations = [setup.allOperations.item(i) for i in range(setup.allOperations.count)]
     generating = [operation.name for operation in operations if operation.isGenerating]
+    generated = [operation for operation in operations if not operation.isGenerating]
     # An operation that finds nothing to cut (e.g. pockets on a sheet without any) ends with no toolpath and a
-    # warning ("Generated toolpath is empty"), not an error: it is left out, not failed.
-    failed = [f"{operation.name}: {operation.error or 'no toolpath'}" for operation in operations if not operation.isGenerating and (operation.hasError or (not operation.hasToolpath and not operation.hasWarning))]
-    empty = [operation.name for operation in operations if not operation.isGenerating and not operation.hasError and not operation.hasToolpath and operation.hasWarning]
-    done({"generating": generating, "failed": failed, "empty": empty})
+    # warning ("Generated toolpath is empty"), not an error: it is left out, not failed. Any other warning fails.
+    empty = [operation for operation in generated if not operation.hasError and not operation.hasToolpath and operation.hasWarning and "empty" in operation.warning.lower()]
+    failed = [f"{operation.name}: {operation.error or 'no toolpath'}" for operation in generated if operation.hasError or (not operation.hasToolpath and not operation.hasWarning)]
+    warned = [f"{setup.name}: {operation.name}: {operation.warning}" for operation in generated if operation.hasWarning and not operation.hasError and operation not in empty]
+    done({"generating": generating, "failed": failed, "warned": warned, "empty": [operation.name for operation in empty]})
 
 
 def find_post():

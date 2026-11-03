@@ -3,7 +3,7 @@
         {
             "BMC": "carbide",
             "GRADE": "Mill Generic",
-            "description": "CMT 191 6x27x70 upcut spiral, 2 flutes, shank 6",
+            "description": "CMT 191 6x27x70 upcut spiral, 2 flutes, shank 6; 50 out of the collet: 70 long less the 20 mm of shank an ER20/ER25 collet must hold (about 2/3 of its bore)",
             "geometry": {
                 "CSP": false,
                 "DC": 6,
@@ -17,7 +17,7 @@
                 "SFDM": 6,
                 "TA": 0,
                 "TP": 0,
-                "assemblyGaugeLength": 27,
+                "assemblyGaugeLength": 50,
                 "shoulder-diameter": 6,
                 "shoulder-length": 27,
                 "thread-profile-angle": 60,
@@ -130,7 +130,7 @@
         {
             "BMC": "carbide",
             "GRADE": "Mill Generic",
-            "description": "CMT 191 8x32x80 upcut spiral, 2 flutes, shank 8",
+            "description": "CMT 191 8x32x80 upcut spiral, 2 flutes, shank 8; 60 out of the collet: 80 long less the 20 mm of shank an ER20/ER25 collet must hold (about 2/3 of its bore)",
             "geometry": {
                 "CSP": false,
                 "DC": 8,
@@ -144,7 +144,7 @@
                 "SFDM": 8,
                 "TA": 0,
                 "TP": 0,
-                "assemblyGaugeLength": 32,
+                "assemblyGaugeLength": 60,
                 "shoulder-diameter": 8,
                 "shoulder-length": 32,
                 "thread-profile-angle": 60,
@@ -257,7 +257,7 @@
         {
             "BMC": "carbide",
             "GRADE": "Mill Generic",
-            "description": "CMT 191 8x42x90 upcut spiral, 2 flutes, shank 8",
+            "description": "CMT 191 8x42x90 upcut spiral, 2 flutes, shank 8; 70 out of the collet: 90 long less the 20 mm of shank an ER20/ER25 collet must hold (about 2/3 of its bore)",
             "geometry": {
                 "CSP": false,
                 "DC": 8,
@@ -271,7 +271,7 @@
                 "SFDM": 8,
                 "TA": 0,
                 "TP": 0,
-                "assemblyGaugeLength": 42,
+                "assemblyGaugeLength": 70,
                 "shoulder-diameter": 8,
                 "shoulder-length": 42,
                 "thread-profile-angle": 60,
@@ -384,7 +384,7 @@
         {
             "BMC": "carbide",
             "GRADE": "Mill Generic",
-            "description": "CMT 191 12x52x100 upcut spiral, 2 flutes, shank 12",
+            "description": "CMT 191 12x52x100 upcut spiral, 2 flutes, shank 12; 80 out of the collet: 100 long less the 20 mm of shank an ER20/ER25 collet must hold (about 2/3 of its bore)",
             "geometry": {
                 "CSP": false,
                 "DC": 12,
@@ -398,7 +398,7 @@
                 "SFDM": 12,
                 "TA": 0,
                 "TP": 0,
-                "assemblyGaugeLength": 52,
+                "assemblyGaugeLength": 80,
                 "shoulder-diameter": 12,
                 "shoulder-length": 52,
                 "thread-profile-angle": 60,

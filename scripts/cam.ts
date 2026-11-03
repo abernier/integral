@@ -357,7 +357,7 @@ process.exit(0)
 /** The values a file was made with, for the record: the tools and what Fusion was given. */
 function values(tool: Tool, machining: Machining, given: ReturnType<typeof machiningJob>) {
   const rest = restTool(tools, tool)
-  return { ...given, tool: tool.description, toolNumber: tool.number, restTool: rest?.description, reach: machining.reach, tabsLeave: machining.tabs || null }
+  return { ...given, tool: tool.description, toolNumber: tool.number, restTool: rest?.description, reach: machining.reach, nutClearance: machining.nutClearance, tabsLeave: machining.tabs || null }
 }
 
 /**
@@ -385,13 +385,14 @@ async function postRest(name: string, tool: Tool, given: ReturnType<typeof machi
   }
 }
 
-/** Wait while Fusion generates the setup's toolpaths, asking every 2 s; 10 minutes at most. */
+/** Wait while Fusion generates the setup's toolpaths, asking every 2 s; 10 minutes at most. Fails on an error or a warning. */
 async function generated(setup: string) {
   const until = Date.now() + 10 * 60_000
   for (;;) {
-    const status = (await runScript(client, script({ op: 'status', tag, setup }), { readOnly: true })) as { generating: string[]; failed: string[]; empty: string[] }
+    const status = (await runScript(client, script({ op: 'status', tag, setup }), { readOnly: true })) as { generating: string[]; failed: string[]; warned: string[]; empty: string[] }
     if (!status.generating.length) {
       if (status.failed.length) throw new Error(`toolpaths failed: ${status.failed.join('; ')}`)
+      if (status.warned.length) throw new Error(`toolpaths with warnings: ${status.warned.join('; ')}`)
       if (status.empty.length) console.log(`${setup}: nothing to cut for ${status.empty.join(', ')}, left out`)
       return
     }
