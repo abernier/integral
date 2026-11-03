@@ -50,28 +50,6 @@ In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole c
 | `SLOPE` | 1/6 | Dovetail slope |
 | `SEAT_PIN_EDGE`, `SEAT_PIN_MID`, `BACK_TAIL_SHOULDER` | 6, 6, 2 | Pins, shoulder |
 
-## Volumes
-
-cm³, from the STEP, equal to smlibpy's to 1e-7, here and with `W` 520, `SEAT_TAILS` 3.
-
-| Part | × | Volume |
-|---|---|---|
-| Front leg | 2 | 1295.3 |
-| Rear leg | 2 | 1269.6 |
-| Armrest | 2 | 1252.1 |
-| Side rail | 2 | 632.6 |
-| Front rail | 1 | 716.5 |
-| Rear rail | 1 | 955.3 |
-| Back post | 2 | 302.2 |
-| Back rail | 2 | 422.9 |
-| Spline | 2 | 48.6 |
-| Arm tenon | 2 | 27.4 |
-| Rail tenon | 4 | 14.0 |
-| Seat cane | 1 | 1181.0 |
-| Back cane | 1 | 663.7 |
-
-Teak 7.95 kg at 0.65 g/cm³.
-
 ## Notes
 
 - \+ Parameters in Buerligons: change one, the whole chair rebuilds; STEP for any CAD
