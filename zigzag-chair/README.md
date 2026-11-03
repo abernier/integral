@@ -4,7 +4,7 @@ Rietveld's 1934 Zig-Zag chair, parametric, in cherry.
 
 <Intro>
 
-Four boards in a Z: seat, slant and base mitred at 45° on glued cleats, the back dovetailed through the seat. Every dimension below is a parameter: change one in Buerligons, the chair rebuilds.
+Four boards in a Z: seat, slant and base mitred at 45° on glued cleats, the back dovetailed through the seat. Every dimension is a parameter: change one in the model or in Buerligons, the chair rebuilds.
 
 </Intro>
 
@@ -19,24 +19,3 @@ Four boards in a Z: seat, slant and base mitred at 45° on glued cleats, the bac
 | Joints | 45° mitres with glued cleats; 6 through dovetails |
 | Model | ClassCAD part, 6 named bodies |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
-
-## Parameters
-
-In the part's Expressions panel (`fx`), mm. Change one, press Enter: the whole chair rebuilds.
-
-| Name | Default | Meaning |
-|---|---|---|
-| `T` | 19 | Board thickness |
-| `W_NOSE` | 370 | Width at the nose |
-| `W_FOOT` | 330 | Width at the foot (taper) |
-| `W_BASE_FRONT` | 300 | Base top, front edge |
-| `SEAT_TOP` | 430 | Seat height |
-| `SEAT_LEN` | 436.43 | Seat, nose to back's rear face |
-| `BACK_H` | 313.04 | Back above the seat |
-| `BACK_LEAN` | 8 | Back lean, degrees |
-| `BASE_LENGTH` | 418 | Base underside |
-| `CLEAT` | 30 | Cleat legs |
-| `TAILS` | 6 | Dovetail count |
-| `SLOPE` | 1/6 | Dovetail slope |
-| `PIN`, `HALF_PIN` | 20, 20 | Pins at the rear face |
-| `GRIP`, `GRIP_HIGH`, `GRIP_DEEP`, `GRIP_BELOW` | 140, 20, 10, 20 | Grip pocket |
