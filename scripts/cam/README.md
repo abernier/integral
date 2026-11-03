@@ -27,7 +27,7 @@ Each step is a Python script ([`fusion-job.py`](fusion-job.py)) run in Fusion by
 2. for each board and setup: a milling setup on the board (box stock, `--margin` mm on its sides, nothing above; WCS at the stock's top, x-min y-min corner), the template, its toolpaths started;
 3. the toolpaths waited for, between calls, while Fusion is idle;
 4. an NC program posted with the Fusion library post whose vendor or description contains `--post` (`shopbot`: ShopBot OpenSBP), straight into `.docs/<model>/cam/`;
-5. the imported document closed without saving, also on Ctrl-C. Documents open before are not touched.
+5. the imported document closed without saving, also on Ctrl-C (`--keep` leaves it open to simulate its setups in Fusion: Manufacture workspace, right-click a setup, *Simulate*). Documents open before are not touched.
 
 A file already there is skipped (`--force` makes it again).
 

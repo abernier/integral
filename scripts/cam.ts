@@ -6,9 +6,11 @@
 // on the board (box stock, `--margin` mm around; WCS at the stock's top corner; the board first turned by the
 // setup's `wcs.rotate`, for a wedge), the CAM template `--template`, its toolpaths, an NC program posted with the
 // Fusion library post matching `--post` to `.docs/<model>/cam/<Board>_<setup>.sbp`. Then the document is closed,
-// unsaved. A file already there is kept (`--force` makes it again).
+// unsaved (`--keep` leaves it open, to simulate the setups in Fusion). A file already there is kept (`--force` makes
+// it again).
 //
 //   pnpm cam zigzag-chair [--template integral-19mm-6mm] [--post shopbot] [--only Seat]
+//   pnpm cam zigzag-chair --only Seat --force --keep   # then Simulate the setups in Fusion
 //   pnpm cam zigzag-chair --dry-run        # the plan, without connecting
 //   pnpm cam --list-tools                  # what Fusion's MCP server offers
 //
@@ -37,6 +39,7 @@ const { values: flags, positionals } = parseArgs({
     margin: { type: 'string' },
     only: { type: 'string' },
     force: { type: 'boolean', default: false },
+    keep: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
     'list-tools': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
@@ -50,6 +53,7 @@ const USAGE = `usage: pnpm cam <model> [options]
   --margin <mm>          stock around each board's box (default 5)
   --only <A,B>           these boards only
   --force                make files already there again
+  --keep                 leave the document open in Fusion, unsaved, to simulate its setups
   --dry-run              print the plan, connect to nothing
   --list-tools           list the tools of Fusion's MCP server (${ENDPOINT}), then stop`
 
@@ -137,7 +141,7 @@ if (flags['dry-run']) {
     console.log(`  fusion-job.py ${plain(steps.status(job))}, until generated`)
     console.log(`  fusion-job.py ${plain(steps.post(job))}\n    -> ${shown(job.file)}`)
   }
-  console.log(`  fusion-job.py ${plain(steps.close())}`)
+  if (!flags.keep) console.log(`  fusion-job.py ${plain(steps.close())}`)
   process.exit(0)
 }
 
@@ -147,7 +151,9 @@ const client = await connect()
 let imported = false
 const finish = async () => {
   // Only the document this run imported, found by its tag; never one that was open before.
-  if (imported) {
+  if (imported && flags.keep) {
+    console.log('fusion: document left open, unsaved: Manufacture workspace, right-click a setup, Simulate')
+  } else if (imported) {
     try {
       await runScript(client, script(steps.close()))
       console.log('fusion: document closed, unsaved')
