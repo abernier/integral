@@ -200,8 +200,11 @@ def status():
     setup = find_setup(cam_of(tagged_document()))
     operations = [setup.allOperations.item(i) for i in range(setup.allOperations.count)]
     generating = [operation.name for operation in operations if operation.isGenerating]
-    failed = [f"{operation.name}: {operation.error or 'no toolpath'}" for operation in operations if not operation.isGenerating and (operation.hasError or not operation.hasToolpath)]
-    done({"generating": generating, "failed": failed, "operations": len(operations)})
+    # An operation whose geometry the template finds nothing for on this board (e.g. pockets on a board without any)
+    # ends with no toolpath and a warning ("Generated toolpath is empty"), not an error: it is skipped, not failed.
+    failed = [f"{operation.name}: {operation.error or 'no toolpath'}" for operation in operations if not operation.isGenerating and (operation.hasError or (not operation.hasToolpath and not operation.hasWarning))]
+    empty = [operation.name for operation in operations if not operation.isGenerating and not operation.hasError and not operation.hasToolpath and operation.hasWarning]
+    done({"generating": generating, "failed": failed, "empty": empty, "operations": len(operations)})
 
 
 def find_post():
@@ -212,7 +215,8 @@ def find_post():
     hits = [post for post in posts if want in f"{post.vendor} {post.description}".lower()]
     if not hits:
         raise RuntimeError(f'no post matching "{JOB["post"]}" among the {len(posts)} Fusion library posts')
-    return hits[0]
+    # The most generic match: "shopbot" finds "ShopBot OpenSBP" and "ShopBot Tools Handibot OpenSBP"; take the former.
+    return min(hits, key=lambda post: len(post.description))
 
 
 def post():
@@ -226,7 +230,12 @@ def post():
     open_in_editor = program_input.parameters.itemByName("nc_program_openInEditor")
     if open_in_editor:
         open_in_editor.value.value = False
-    program_input.operations = [setup]
+    # The operations with a toolpath only: those the template found nothing for on this board are left out.
+    operations = [setup.allOperations.item(i) for i in range(setup.allOperations.count)]
+    with_toolpath = [operation for operation in operations if operation.hasToolpath]
+    if not with_toolpath:
+        raise RuntimeError(f"no operation of {setup.name} has a toolpath")
+    program_input.operations = with_toolpath
     program = cam.ncPrograms.add(program_input)
     program.postConfiguration = configuration
     if not program.postProcess(adsk.cam.NCProgramPostProcessOptions.create()):

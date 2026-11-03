@@ -198,9 +198,10 @@ process.exit(0)
 async function generated(job: Job) {
   const until = Date.now() + 10 * 60_000
   for (;;) {
-    const status = (await runScript(client, script(steps.status(job)), { readOnly: true })) as { generating: string[]; failed: string[] }
+    const status = (await runScript(client, script(steps.status(job)), { readOnly: true })) as { generating: string[]; failed: string[]; empty: string[] }
     if (!status.generating.length) {
       if (status.failed.length) throw new Error(`toolpaths failed: ${status.failed.join('; ')}`)
+      if (status.empty.length) console.log(`${setupName(job)}: nothing to cut for ${status.empty.join(', ')} on this board, left out`)
       return
     }
     if (Date.now() > until) throw new Error(`toolpaths still generating after 10 min: ${status.generating.join(', ')}`)
