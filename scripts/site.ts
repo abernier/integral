@@ -11,7 +11,7 @@
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
 // for a local site those URLs are rewritten to the local servers, for a built site to root-relative paths.
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
 import { type Engine, glb, render, run, save } from './classcad.ts'
@@ -178,6 +178,9 @@ export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, sha
   writeFileSync(join(MDX, 'integral', 'introduction.mdx'), page(join(ROOT, 'README.md'), 0, urls))
   docPages().forEach((name, i) => {
     writeFileSync(join(MDX, `${docPage(name)}.mdx`), page(join(DOC_PAGES, `${name}.md`), i + 1, urls))
+    // The page's own files (`docs/<name>/`, its images), served beside it.
+    const files = join(DOC_PAGES, name)
+    if (existsSync(files)) cpSync(files, join(MDX, docPage(name)), { recursive: true })
   })
   mkdirSync(join(MDX, 'things'), { recursive: true })
   parts().forEach((part, i) => {
