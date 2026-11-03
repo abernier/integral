@@ -119,6 +119,9 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
     .replace(/^# .+\n+/m, '')
     .replace(description ? `${description}\n` : '', '')
     .replace(/^!\[([^\]]*)\]\((\S+)\)$/m, (image, alt, src) => (part && src === render ? views(part, alt) : image))
+    // The parts table's thumbnails: a fixed size the table can't squeeze, and a small radius (the theme's is 2xl).
+    // GitHub reads `width`; the site, the style.
+    .replaceAll(`width="${THUMB}" />`, `width="${THUMB}" style={{ width: '${THUMB / 16}rem', minWidth: '${THUMB / 16}rem', height: 'auto', borderRadius: '0.375rem' }} />`)
   // A page link goes to the site, any other link to the site's files to where the files are served, Buerligons'
   // `?url=` to the absolute URL. A link's root-relative URL (markdown or `<a href>`) loses the base path: Next.js
   // puts it back; an `src` keeps it.
@@ -136,13 +139,16 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
  * under its heading with a link to the page. Taken from the parts' READMEs, so the table is never edited by hand:
  * `writePages` rewrites the `## Parts` section of README.md when a part changes.
  */
+/** The parts table's thumbnail width, in px. */
+const THUMB = 72
+
 function partsTable() {
   const rows = parts().map((part) => {
     const source = readFileSync(join(ROOT, part, 'README.md'), 'utf8')
     const title = source.match(/^# (.+)$/m)?.[1] ?? part
     const description = source.match(/^# .+\n+([^<\n].*)\n/m)?.[1] ?? ''
     const page = `${PAGES_URL}/${partPage(part)}`
-    const image = `<a href="${page}"><img src="${PAGES_URL}/${part}/${part}.png" alt="${title}" width="72" /></a>`
+    const image = `<a href="${page}"><img src="${PAGES_URL}/${part}/${part}.png" alt="${title}" width="${THUMB}" /></a>`
     return `| ${image} | **[${title}](${page})**: ${description} |`
   })
   return ['| | Part |', '|---|---|', ...rows].join('\n')
