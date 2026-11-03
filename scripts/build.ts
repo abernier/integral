@@ -5,7 +5,8 @@ import { cpSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { openEngine } from './classcad.ts'
-import { DIST, MDX, ROOT, buildConfigurator, buildPart, docsEnv, parts, writePages } from './site.ts'
+import { MDX, ROOT, parts } from './paths.ts'
+import { DIST, buildConfigurator, buildPart, docsEnv, writePages } from './site.ts'
 
 rmSync(MDX, { recursive: true, force: true })
 const engine = await openEngine()

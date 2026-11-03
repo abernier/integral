@@ -19,3 +19,17 @@ Four boards in a Z: seat, slant and base mitred at 45° on glued cleats, the bac
 | Joints | 45° mitres with glued cleats; 6 through dovetails |
 | Model | ClassCAD part, 6 named bodies; the site also runs it in the browser (smlibwasm) |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
+
+## ShopBot files
+
+```sh
+pnpm cam zigzag-chair --force
+```
+
+How it works, in the workshop: [CAM](https://abernier.github.io/integral/integral/cam). What is cut how, per part (skips, grain, the Seat's wedge pass): `CAM` in [zigzag-chair.ts](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts). The files and what each holds: `.docs/zigzag-chair/cam/cam.json`, out of git.
+
+By hand (the files cut square, from the top):
+
+- the mitres, the Seat's nose, the Slant's two ends, the Base's foot, and the Base's planed sides: saw or plane to the line;
+- the Back's bottom edge, 8° to its faces, and its tails' flanks, 1 in 6 through the board, left at their widest: pare to the line;
+- the inside corners at the tool's radius: the roots of the Back's tails and of the Seat's sockets: chisel square.

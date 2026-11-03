@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "materials": {
+    "hardwood": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
+    "cherry": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
+    "teak": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" }
+  }
+}

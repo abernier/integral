@@ -9,10 +9,12 @@
   "scripts": {
     "build": "node scripts/build.ts",
     "build:parts": "node scripts/build.ts --parts-only",
+    "cam": "node scripts/cam.ts",
     "dev": "node scripts/dev.ts",
     "typecheck": "tsc --noEmit",
     "dev:configurator": "vite --config configurator/vite.config.ts",
-    "test": "node --test configurator/models.test.ts"
+    "test": "node --test 'scripts/**/*.test.ts' 'configurator/**/*.test.ts'",
+    "lgtm": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@classcad/mcp": "0.6.1",
@@ -20,6 +22,7 @@
     "@classcad/script": "0.2.0",
     "@classcad/skill": "0.0.8",
     "@classcad/smlibwasm": "^0.6.2",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@pmndrs/docs": "4.26.0",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
