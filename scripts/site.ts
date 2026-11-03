@@ -78,6 +78,9 @@ export async function buildConfigurator(watch = false) {
   await vite({
     configFile: join(ROOT, 'configurator', 'vite.config.ts'),
     logLevel: 'warn',
+    // Absolute for the site: Vercel's clean URLs redirect configurator/index.html to /configurator, where relative
+    // URLs would resolve one level up. `dev` serves with clean URLs off, so the file's relative base stays.
+    ...(watch ? {} : { base: `${BASE_PATH}/configurator/` }),
     build: { outDir: join(MDX, 'configurator'), emptyOutDir: true, watch: watch ? {} : null },
   })
 }

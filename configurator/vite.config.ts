@@ -1,5 +1,5 @@
 // The configurator: a Vite app, built into the docs site's MDX folder (`nr build`) or served on its own (`nr dev`).
-// `base: './'` makes its URLs relative, so it loads from wherever the site is served.
+// `base: './'` is for `nr dev`; the site build sets an absolute one (see `buildConfigurator`).
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
