@@ -1,12 +1,11 @@
-// How `pnpm cam` cuts a board: the tool, chosen per board from the repo's tool list (`scripts/cam/tools.json`), and
-// the machining values sent with it to Fusion (fusion-job.py applies them and has none of its own).
+// How `pnpm cam` cuts a sheet: the tool, chosen per sheet from the repo's tool list (`scripts/cam/tools.json`), and
+// the values sent with it to Fusion (fusion-job.py applies them and has none of its own).
 //
-// The values are, from the strongest: the CLI's (`--tool`, `--margin`), the board's in the manifest (`parts[]`), the
-// model's (`defaults`), these defaults. A value left out of a stronger one comes from the next.
+// The values are, from the strongest: the CLI's, the model's manifest's (`defaults`), these defaults.
 //
-// The tool: the one named (`tool`), else the narrowest of the list whose flutes reach the cut: the board's height as
-// it lies, `overcut` below it, and `reach` more to spare. The feeds, speeds and stepdowns are the tool's preset's,
-// unless `stepdown` or `stepover` are given.
+// The tool: the one named (`tool`), else the narrowest of the list whose flutes reach the cut: the sheet's thickness,
+// `overcut` below it, and `reach` more to spare. The feeds, speeds and stepdowns are the tool's preset's, unless
+// `stepdown` or `stepover` are given.
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -39,11 +38,17 @@ export type Tool = {
 /** Holding tabs on the outline: how many per contour, how wide and how high (mm). */
 export type Tabs = { count: number; width: number; height: number }
 
-/** The machining values a manifest (for a model, for a board) or the CLI may set. Lengths in mm. */
+/** The values a manifest's `defaults` or the CLI may set. Lengths in mm. */
 export type MachiningOptions = {
-  /** A tool's id in tools.json, instead of the one chosen by depth. */
+  /** A tool's id in tools.json for every sheet, instead of the one chosen by thickness. */
   tool?: string
-  /** Stock around the board's box, on its sides. */
+  /** The sheet, [length along x, width along y]. */
+  sheet?: [number, number]
+  /** Space between two parts on a sheet. */
+  spacing?: number
+  /** Space kept free along the sheet's edges. */
+  frame?: number
+  /** Stock around a part in a setup of its own (a wedge), on its sides. */
   margin?: number
   /** How far the outline cuts below the stock's bottom, into the spoilboard. */
   overcut?: number
@@ -60,6 +65,9 @@ export type MachiningOptions = {
 }
 
 export const MACHINING_DEFAULTS = {
+  sheet: [2440, 1220] as [number, number],
+  spacing: 12,
+  frame: 10,
   margin: 5,
   overcut: 0.3,
   reach: 1,
@@ -72,7 +80,7 @@ const HOLE_CLEARANCE = 0.5
 /** Pockets of any corner radius (mm). */
 const CORNER_RADIUS = [0, 1000]
 
-export const MACHINING_KEYS = ['tool', 'margin', 'overcut', 'reach', 'stepdown', 'stepover', 'pocketStockToLeave', 'tabs'] as const
+export const MACHINING_KEYS = ['tool', 'sheet', 'spacing', 'frame', 'margin', 'overcut', 'reach', 'stepdown', 'stepover', 'pocketStockToLeave', 'tabs'] as const
 const TAB_KEYS = ['count', 'width', 'height'] as const
 
 /** The problems with a manifest's (or the CLI's) machining values, as messages; none when they are right. */
@@ -82,10 +90,12 @@ export function machiningProblems(options: Record<string, unknown>) {
   for (const key of ['margin', 'stepdown', 'stepover'] as const) {
     if (options[key] !== undefined && !positive(options[key])) problems.push(`${key} must be a number of mm above 0`)
   }
-  for (const key of ['overcut', 'reach', 'pocketStockToLeave'] as const) {
+  for (const key of ['spacing', 'frame', 'overcut', 'reach', 'pocketStockToLeave'] as const) {
     const value = options[key]
     if (value !== undefined && !(typeof value === 'number' && Number.isFinite(value) && value >= 0)) problems.push(`${key} must be a number of mm, 0 or more`)
   }
+  const sheet = options.sheet
+  if (sheet !== undefined && !(Array.isArray(sheet) && sheet.length === 2 && sheet.every(positive))) problems.push('sheet must be [length, width] in mm')
   if (options.tool !== undefined && typeof options.tool !== 'string') problems.push('tool must be a tool id of scripts/cam/tools.json')
   const tabs = options.tabs
   if (tabs !== undefined && tabs !== false) {
@@ -100,12 +110,15 @@ export function machiningProblems(options: Record<string, unknown>) {
   return problems
 }
 
-/** The machining values of one board: each from the strongest of `layers` (strongest first) that has it. */
+/** The machining values of a run: each from the strongest of `layers` (strongest first) that has it. */
 export function resolveMachining(...layers: (MachiningOptions | undefined)[]) {
   const pick = <K extends keyof MachiningOptions>(key: K) => layers.find((layer) => layer?.[key] !== undefined)?.[key]
   const tabs = pick('tabs')
   return {
     tool: pick('tool') as string | undefined,
+    sheet: (pick('sheet') as [number, number] | undefined) ?? MACHINING_DEFAULTS.sheet,
+    spacing: (pick('spacing') as number | undefined) ?? MACHINING_DEFAULTS.spacing,
+    frame: (pick('frame') as number | undefined) ?? MACHINING_DEFAULTS.frame,
     margin: (pick('margin') as number | undefined) ?? MACHINING_DEFAULTS.margin,
     overcut: (pick('overcut') as number | undefined) ?? MACHINING_DEFAULTS.overcut,
     reach: (pick('reach') as number | undefined) ?? MACHINING_DEFAULTS.reach,

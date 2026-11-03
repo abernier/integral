@@ -1,30 +1,13 @@
 {
   "version": 1,
-  "defaults": { "post": "shopbot", "margin": 5 },
+  "defaults": { "post": "shopbot" },
   "parts": [
     {
-      "body": "Seat",
-      "thickness": 19,
-      "setups": [
-        { "name": "main" },
-        { "name": "wedge8", "wedge": 8, "wcs": { "rotate": [8, 0, 0] }, "cut": "squared" }
-      ],
-      "note": "wedge8: the tails are square to the back, which leans 8 degrees (BACK_LEAN): turned 8 degrees about x, the tool comes along their walls; it cuts only those (cut: squared), the rest is cut in main"
+      "part": "Seat",
+      "setups": [{ "name": "wedge8", "wedge": 8, "rotate": [8, 0, 0], "cut": "squared" }],
+      "note": "wedge8: the tails are square to the back, which leans 8 degrees (BACK_LEAN): once the seat is cut on its sheet, it goes on an 8 degree wedge, turned 8 degrees about x, and the tool comes along their walls; it cuts only those (cut: squared)"
     },
-    {
-      "body": "Back",
-      "thickness": 19,
-      "setups": [{ "name": "main", "wcs": { "rotate": [-82, 0, 0] } }],
-      "note": "the back leans 8 degrees from the vertical: turned -82 degrees about x it lies rear face up (sockets and grip from the rear)"
-    },
-    {
-      "body": "Slant",
-      "thickness": 19,
-      "setups": [{ "name": "main", "wcs": { "rotate": [45, 0, 0] } }],
-      "note": "at 45 degrees in the chair: turned 45 degrees about x it lies front face up"
-    },
-    { "body": "Base", "thickness": 19 },
-    { "body": "SeatCleat", "skip": true, "note": "a triangular cleat: the table saw" },
-    { "body": "FootCleat", "skip": true, "note": "a triangular cleat: the table saw" }
+    { "part": "SeatCleat", "skip": true, "note": "a triangular cleat: the table saw" },
+    { "part": "FootCleat", "skip": true, "note": "a triangular cleat: the table saw" }
   ]
 }

@@ -58,18 +58,17 @@ pnpm cam compass-armchair --force
 
 Or ask an agent: "make the ShopBot files of the compass armchair" (skill `cam`). Prerequisites, parameters, tools: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam). Files and the run's record (`cam.json`) in `.docs/compass-armchair/cam/`, out of git. Simulate before cutting.
 
-Each part laid flat on its largest face, one `<Part>_main.sbp`, the narrowest tool that cuts through:
+One file per thickness, every part of it nested by Fusion on a 2440 x 1220 mm sheet, the narrowest tool that cuts through; in the workshop: [scripts/cam](https://github.com/abernier/integral/tree/main/scripts/cam#in-the-workshop).
 
-| Parts | Thickness | Tool | Not reachable from the top |
+| File | Parts | Tool | Pockets |
 |---|---|---|---|
-| ArmTenon ×2, Spline ×2, rail tenons ×4 | 10–16 | 6 mm | – |
-| FrontLeg ×2, RearLeg ×2 | 30 | 8 mm | the seam's tenon slot |
-| Armrest ×2 | 30 | 8 mm | the post mortise underneath |
-| BackPost ×2 | 30 | 8 mm | dovetail sockets, 9° |
-| SideRail ×2 | 25 | 8 mm | dovetail sockets, 9° |
-| FrontRail | 30 | 8 mm | – |
-| RearRail | 40 | 12 mm | – |
-| LowBackRail, HighBackRail | 35 | 12 mm | – |
+| `compass-armchair_10mm_1.sbp` | rail tenons ×4 | 6 mm | – |
+| `compass-armchair_12mm_1.sbp` | ArmTenon ×2 | 6 mm | – |
+| `compass-armchair_16mm_1.sbp` | Spline ×2 | 6 mm | – |
+| `compass-armchair_25mm_1.sbp` | SideRail ×2 | 8 mm | yes |
+| `compass-armchair_30mm_1.sbp` | FrontLeg ×2, RearLeg ×2, Armrest ×2, BackPost ×2, FrontRail | 8 mm | yes |
+| `compass-armchair_35mm_1.sbp` | LowBackRail, HighBackRail | 12 mm | – |
+| `compass-armchair_40mm_1.sbp` | RearRail | 12 mm | – |
 
-What is not reachable is left for hand work. Canes: woven, skipped. All values are the defaults. Manifest: [cam.config.json](https://github.com/abernier/integral/blob/main/compass-armchair/cam.config.json).
+Each part lies largest face down, its pockets up. Faces a tool from the top cannot reach (the dovetail sockets' 9° walls) are not reported: simulate, finish by hand. Canes: woven, skipped. All values are the defaults. Manifest: [cam.config.json](https://github.com/abernier/integral/blob/main/compass-armchair/cam.config.json).
 
