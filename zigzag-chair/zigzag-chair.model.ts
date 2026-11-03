@@ -9,7 +9,7 @@
 //
 // Not ported: the Python's `check` and `assembly_order` (volume, contact and assembly assertions).
 
-import { Align, Box, Plane, Polygon, Slot, type Part, type Sketch } from '@classcad/smlibwasm'
+import { Align, Box, Plane, Polygon, Slot, scope, type Part, type Sketch } from '@classcad/smlibwasm'
 import * as THREE from 'three'
 
 const DEG = Math.PI / 180
@@ -57,7 +57,7 @@ type Values = { [K in keyof typeof schema]: number }
 export async function build(values: Record<string, number>): Promise<THREE.Object3D> {
   const v: Values = { ...defaults(), ...values }
   const { T, W_NOSE, W_FOOT, W_BASE_FRONT, SEAT_TOP, BASE_LENGTH, CLEAT } = v
-  const { TAILS, SLOPE, PIN, HALF_PIN, GRIP, GRIP_HIGH, GRIP_DEEP, GRIP_BELOW } = v
+  const { TAILS, SLOPE, GRIP, GRIP_HIGH, GRIP_DEEP, GRIP_BELOW } = v
   const BIG = 3000
 
   // Derived: the depth and height come from the seat length, the back height and its lean.
@@ -113,6 +113,15 @@ export async function build(values: Record<string, number>): Promise<THREE.Objec
   // The back is not tapered: as wide as the seat at its front face, at the seat's mid-thickness.
   const W_BACK = 2 * seatHalf(front(SEAT_TOP - T / 2))
   // The tails at the back's rear face (widest) and at its front face, where the pins are 2 T / 6 wider.
+  // Narrow boards with many tails and a steep slope leave no room for the pins asked for: a tail would end up
+  // narrower than TAIL_MIN at its front face, or even negative. The pins and half pins then shrink together, just
+  // enough to give every tail at least TAIL_MIN at its front, so any combination of the sliders builds.
+  const TAIL_MIN = 2
+  const pinRoom = W_BACK - TAILS * (TAIL_MIN + 2 * T * SLOPE) // what the pins and half pins may take in all
+  const pinWant = 2 * v.HALF_PIN + (TAILS - 1) * v.PIN
+  const squeeze = Math.min(1, pinRoom / pinWant)
+  const PIN = v.PIN * squeeze
+  const HALF_PIN = v.HALF_PIN * squeeze
   const TAIL_REAR = (W_BACK - 2 * HALF_PIN - (TAILS - 1) * PIN) / TAILS
   const TAIL_FRONT = TAIL_REAR - 2 * T * SLOPE
 
@@ -138,11 +147,6 @@ export async function build(values: Record<string, number>): Promise<THREE.Objec
     }
     return body
   }
-
-  // The seat's sides are vertical; the slant's contain its normal (0, 1, 1).
-  const seatSides = sides(new Plane([0, Y_NOSE, 0], [1, 0, 0], [0, 0, 1]), (s) => seatHalf(Y_NOSE + s))
-  const slantSides = sides(new Plane([0, ...NOSE], [1, 0, 0], [0, 1, 1]), (s) => W_NOSE / 2 - RATE * s)
-  const baseSidesBody = baseSides()
 
   /** The back's own frame: x across the chair, y through the back (front face 0, rear face T); its origin on the
    * front face at the seat's underside, `along` it upward. */
@@ -174,24 +178,33 @@ export async function build(values: Record<string, number>): Promise<THREE.Objec
     return Slot(GRIP, GRIP_HIGH).on(backPlane(T - GRIP_DEEP, along, ACROSS)).extrude(GRIP_DEEP)
   }
 
-  const dovetails = tails()
-  const seat = sidePrism(SEAT).intersect(seatSides).fuse(dovetails)
-  const back = sidePrism(BACK, W_BACK).cut(dovetails).cut(grip())
-  // A cleat is flush with the narrower board's sides: each half of it takes that board's side planes.
-  const boards: [string, Part][] = [
-    ['seat', seat],
-    ['back', back],
-    ['slant', sidePrism(SLANT_BOARD).intersect(slantSides)],
-    ['base', sidePrism(BASE).intersect(baseSidesBody)],
-    ['seat cleat', sidePrism(TOP_CLEAT).intersect(seatSides).intersect(slantSides)],
-    ['foot cleat', sidePrism(FOOT_CLEAT).intersect(baseSidesBody).intersect(slantSides)],
-  ]
+  // The kernel's bodies are freed once their triangles are copied out; only the geometries leave the scope.
+  const meshes = scope(() => {
+    // The seat's sides are vertical; the slant's contain its normal (0, 1, 1).
+    const seatSides = sides(new Plane([0, Y_NOSE, 0], [1, 0, 0], [0, 0, 1]), (s) => seatHalf(Y_NOSE + s))
+    const slantSides = sides(new Plane([0, ...NOSE], [1, 0, 0], [0, 1, 1]), (s) => W_NOSE / 2 - RATE * s)
+    const baseSidesBody = baseSides()
+
+    const dovetails = tails()
+    const seat = sidePrism(SEAT).intersect(seatSides).fuse(dovetails)
+    const back = sidePrism(BACK, W_BACK).cut(dovetails).cut(grip())
+    // A cleat is flush with the narrower board's sides: each half of it takes that board's side planes.
+    const boards: [string, Part][] = [
+      ['seat', seat],
+      ['back', back],
+      ['slant', sidePrism(SLANT_BOARD).intersect(slantSides)],
+      ['base', sidePrism(BASE).intersect(baseSidesBody)],
+      ['seat cleat', sidePrism(TOP_CLEAT).intersect(seatSides).intersect(slantSides)],
+      ['foot cleat', sidePrism(FOOT_CLEAT).intersect(baseSidesBody).intersect(slantSides)],
+    ]
+    return boards.map(([name, part]) => ({ name, geometry: geometryOf(part) }))
+  })
 
   const chair = new THREE.Group()
   chair.name = 'zigzag-chair'
   const cherry = new THREE.MeshStandardMaterial({ color: '#a8603a', roughness: 0.6, side: THREE.DoubleSide })
-  for (const [name, part] of boards) {
-    const mesh = new THREE.Mesh(geometryOf(part), cherry)
+  for (const { name, geometry } of meshes) {
+    const mesh = new THREE.Mesh(geometry, cherry)
     mesh.name = name
     chair.add(mesh)
   }

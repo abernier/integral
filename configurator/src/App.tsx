@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Bounds, Grid, OrbitControls } from '@react-three/drei'
 import { button, Leva, useControls } from 'leva'
-import type { Object3D } from 'three'
+import { Mesh, type Object3D } from 'three'
 import { type Model, models } from './models.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
@@ -51,9 +51,9 @@ export function App() {
   const [error, setError] = useState<string>()
 
   useEffect(() => {
-    const load = models[part]
-    if (!load) return setError(`Unknown part: ${JSON.stringify(part)}`)
-    load().then(setModel, (e) => setError(String(e)))
+    // hasOwn: a plain lookup would also find inherited members such as `constructor`.
+    if (!Object.hasOwn(models, part)) return setError(`Unknown part: ${JSON.stringify(part)}`)
+    models[part]().then(setModel, (e) => setError(String(e)))
   }, [])
 
   return (
@@ -113,6 +113,20 @@ function Configurator({ model }: { model: Model }) {
       clearTimeout(timer)
     }
   }, [model, key])
+
+  // <primitive> does not dispose objects it did not create: free the replaced (or unmounted) shape ourselves.
+  useEffect(() => {
+    if (!shape) return
+    return () => {
+      const disposed = new Set<{ dispose(): void }>()
+      shape.traverse((object) => {
+        if (!(object instanceof Mesh)) return
+        disposed.add(object.geometry)
+        for (const material of [object.material].flat()) disposed.add(material)
+      })
+      disposed.forEach((resource) => resource.dispose())
+    }
+  }, [shape])
 
   return (
     <>

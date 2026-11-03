@@ -1,4 +1,4 @@
-// `nr build`: build every part with ClassCAD and the configurator, then the docs site into dist/, the built files beside its pages.
+// `nr build`: build every part with ClassCAD, then the configurator and the docs site into dist/, the built files beside its pages.
 // `nr build:parts` (`--parts-only`): the parts alone, into .docs/.
 
 import { cpSync, rmSync } from 'node:fs'
@@ -11,9 +11,9 @@ rmSync(MDX, { recursive: true, force: true })
 const engine = await openEngine()
 for (const part of parts()) await buildPart(engine, part)
 engine.client.close()
-await buildConfigurator()
 
 if (!process.argv.includes('--parts-only')) {
+  await buildConfigurator()
   writePages()
   rmSync(DIST, { recursive: true, force: true })
   execFileSync(join(ROOT, 'node_modules', '.bin', 'pmndrs-docs'), ['build', MDX, DIST, '--format', 'website'], {

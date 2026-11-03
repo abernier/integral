@@ -6,7 +6,10 @@
 // three's y up at the very end (x, y, z -> x, z, -y), so it faces +z and stands on y = 0, in mm.
 //
 // `schema` is a leva schema (`{ NAME: { value, min, max, step } }`) with one entry per master. The ranges keep every
-// joint valid (a tenon in its mortise, a tail in its socket), so a slider cannot break the chair.
+// joint valid (a tenon in its mortise, a tail in its socket): `build` does not throw for any combination of values
+// inside them, W and BOW included (a shallow bow on a wide chair is a long, flat arc, which the span must reach).
+// Checked on the all-min and all-max corners, W max x BOW min, and 600 random in-range combinations. Values outside
+// the ranges are not guaranteed.
 
 import * as THREE from 'three'
 import {
@@ -26,7 +29,6 @@ import {
 
 const TEAK = '#9b6a3c'
 const CANE_COLOR = '#e6d2a0'
-const BIG = 3000
 
 /** The parameters a maker changes, in mm (angles in degrees): the ClassCAD part's MASTERS. */
 export const MASTERS = {
@@ -222,10 +224,12 @@ function tilt<T extends Part>(d: Dims, shape: T): T {
   return Pos(0, d.POST_Y, d.SEAT_TOP).mul(Rot(-d.BACK_TILT).mul(shape)) as T
 }
 
-/** The back's curve between two radii, from post to post: concave toward the sitter. */
+/** The back's curve between two radii, from post to post: concave toward the sitter. The span reaches up to the
+ * outer radius, past the whole band: the arc is shallow (radius ~ X_POST^2 / 2 BOW, over 3 m for a wide chair with a
+ * slight bow), so a fixed height would stop short of it and leave nothing. */
 function arcBand(d: Dims, rOut: number, rIn: number): Sketch {
   const band = Circle(rOut).cut(Circle(rIn)).translate(0, d.ARC_Y, 0)
-  const span = Rectangle(2 * d.X_POST, BIG, { align: [Align.CENTER, Align.MIN] }).translate(0, d.ARC_Y, 0)
+  const span = Rectangle(2 * d.X_POST, rOut, { align: [Align.CENTER, Align.MIN] }).translate(0, d.ARC_Y, 0)
   return band.intersect(span)
 }
 

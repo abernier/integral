@@ -73,15 +73,27 @@ export async function buildPart(engine: Engine, part: string) {
   console.log(`${part}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
 }
 
-/** Build the configurator (a Vite app) into the MDX folder, where the pages' iframes load it; `watch` rebuilds it as its files change. */
+/**
+ * Build the configurator (a Vite app) into the MDX folder, where the pages' iframes load it; `watch` rebuilds it as
+ * its files change. Resolves once the (first) build is done, so that what follows can serve its files.
+ */
 export async function buildConfigurator(watch = false) {
-  await vite({
+  const result = await vite({
     configFile: join(ROOT, 'configurator', 'vite.config.ts'),
     logLevel: 'warn',
     // Absolute for the site: Vercel's clean URLs redirect configurator/index.html to /configurator, where relative
     // URLs would resolve one level up. `dev` serves with clean URLs off, so the file's relative base stays.
     ...(watch ? {} : { base: `${BASE_PATH}/configurator/` }),
     build: { outDir: join(MDX, 'configurator'), emptyOutDir: true, watch: watch ? {} : null },
+  })
+  if (!watch) return
+  // In watch mode vite returns as soon as the watcher exists, before the first build ran: wait for its end.
+  const watcher = result as Extract<typeof result, { on: unknown }>
+  await new Promise<void>((done) => {
+    watcher.on('event', (event) => {
+      if (event.code === 'ERROR') console.error(String(event.error))
+      if (event.code === 'END' || event.code === 'ERROR') done()
+    })
   })
 }
 
