@@ -88,9 +88,6 @@ export async function buildConfigurator(watch = false) {
   const result = await vite({
     configFile: join(ROOT, 'configurator', 'vite.config.ts'),
     logLevel: 'warn',
-    // Absolute for the site: Vercel's clean URLs redirect configurator/index.html to /configurator, where relative
-    // URLs would resolve one level up. `dev` serves with clean URLs off, so the file's relative base stays.
-    ...(watch ? {} : { base: `${BASE_PATH}/configurator/` }),
     // In watch mode the folder is being served: a rebuild must not empty it (stale hashed chunks are harmless in dev).
     build: { outDir: join(MDX, 'configurator'), emptyOutDir: !watch, watch: watch ? {} : null },
   })
@@ -122,7 +119,9 @@ function views(part: string, alt: string) {
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '</TabsList>',
     `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
-    `<TabsContent value="3d">${frame(`${PAGES_URL}/configurator/index.html?part=${part}`, `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
+    // The directory URL, not index.html: Vercel's clean URLs redirect the file to its directory, and the app's
+    // relative base resolves against the trailing slash on every host.
+    `<TabsContent value="3d">${frame(`${PAGES_URL}/configurator/?part=${part}`, `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     '</Tabs>',
   ].join('\n')
