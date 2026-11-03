@@ -1,6 +1,6 @@
 # integral
 
-Tangible objects, made by integrating technologies.
+We integrate others' work into things.
 
 <Intro>
 
