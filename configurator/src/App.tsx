@@ -1,6 +1,6 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
-import { useEffect, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { type RefObject, useEffect, useRef, useState } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
 import { Bounds, OrbitControls } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
@@ -77,6 +77,8 @@ function Page() {
   const color = useRoleColor()
   const [model, setModel] = useState<Model>()
   const [error, setError] = useState<string>()
+  // Holds the leva panel (a fixed box, the wrapper has no size of its own): the canvas measures it.
+  const panel = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // hasOwn: a plain lookup would also find inherited members such as `constructor`.
@@ -86,8 +88,10 @@ function Page() {
 
   return (
     <>
-      <Leva titleBar={{ title: part }} theme={levaTheme(color)} />
-      {model && <Configurator model={model} />}
+      <div ref={panel} style={{ display: 'contents' }}>
+        <Leva titleBar={{ title: part }} theme={levaTheme(color)} />
+      </div>
+      {model && <Configurator model={model} panel={panel} />}
       {error && !model && <Message>{error}</Message>}
       {!error && !model && <Message color="var(--md-sys-color-on-surface-variant)">Loading…</Message>}
     </>
@@ -99,7 +103,24 @@ function Message({ children, color = 'var(--md-sys-color-error)', bottom = 16 }:
   return <div style={{ position: 'fixed', left: 16, bottom, padding: '8px 12px', background, borderRadius: 6, color }}>{children}</div>
 }
 
-function Configurator({ model }: { model: Model }) {
+/**
+ * The leva panel covers the right of the canvas: the camera's view is offset so that the model sits centered in the
+ * space left of it, and orbits there. An offset of the projection, in pixels (three's `setViewOffset`), so that
+ * zooming and rotating keep it where it is; no offset on a page so narrow that the panel covers over half of it.
+ */
+function ViewOffset({ panel }: { panel: RefObject<HTMLDivElement | null> }) {
+  const { camera, size } = useThree()
+  useEffect(() => {
+    const box = panel.current?.firstElementChild
+    const free = box ? box.getBoundingClientRect().left : size.width
+    if (free < size.width / 2) camera.clearViewOffset()
+    else camera.setViewOffset(free, size.height, 0, 0, size.width, size.height)
+    return () => camera.clearViewOffset()
+  }, [camera, size, panel])
+  return null
+}
+
+function Configurator({ model, panel }: { model: Model; panel: RefObject<HTMLDivElement | null> }) {
   const color = useRoleColor()
   const [toast, setToast] = useState<string>()
   // leva's `get`, `set` and `values` address an input by its own key, in a folder too (`W`, not `Details.W`).
@@ -170,6 +191,7 @@ function Configurator({ model }: { model: Model }) {
           {shape && <primitive object={shape} />}
         </Bounds>
         <OrbitControls makeDefault />
+        <ViewOffset panel={panel} />
       </Canvas>
       {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
       {!shape && !error && <Message color="var(--md-sys-color-on-surface-variant)">Building the model…</Message>}
