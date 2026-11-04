@@ -1,14 +1,16 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
 import { type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { MathUtils, Mesh, type Object3D, Sphere, Spherical, Vector3 } from 'three'
-import { useDebounceValue, useResizeObserver } from 'usehooks-ts'
+import { Sphere, Spherical, Vector3 } from 'three'
+import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
 import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
+import { type Built, createBuilds } from './App.build.ts'
+import { fitDistance, focalShift, pictureShift } from './App.camera.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
 const DEBOUNCE_MS = 200
@@ -22,7 +24,20 @@ const FOV = 15
  */
 const SMOOTH_TIME = 0.125
 
+/** The leva panel's box, at the right edge: leva's default root width (280) plus its margin. */
+const PANEL_WIDTH = 290
+
+/** The gap between the leva panel and the window's top and right edges. */
+const PANEL_GAP = 10
+
 const { ACTION } = CameraControlsImpl
+
+/** The last few builds, by their values: the build on screen and the one rendering in its place may differ. */
+const build = createBuilds(3)
+
+/** Scratch objects for the frame loop: nothing allocated per frame. */
+const spherical = new Spherical()
+const focalOffset = new Vector3()
 
 const query = new URLSearchParams(location.search)
 const part = query.get('part') ?? ''
@@ -89,11 +104,7 @@ function Page() {
   const color = useRoleColor()
   const [model, setModel] = useState<Model>()
   const [error, setError] = useState<string>()
-  // The leva panel's box, at the right edge, its margin included: measured, since leva shows the panel only once its
-  // inputs are registered. The canvas shifts its picture by half of it. (`null!`: usehooks-ts types the ref as never null.)
-  const panel = useRef<HTMLDivElement>(null!)
-  const { width: panelWidth = 0 } = useResizeObserver({ ref: panel, box: 'border-box' })
-  // Collapsed, the panel covers next to nothing: no shift.
+  // The leva panel fills a box of a fixed width at the right edge: the canvas shifts its picture by half of it. Collapsed, the panel covers next to nothing: no shift.
   const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
@@ -105,10 +116,11 @@ function Page() {
   return (
     <>
       {/* zIndex: the canvas, fixed too and later in the DOM, would cover the panel. */}
-      <div ref={panel} style={{ position: 'fixed', top: 10, right: 0, zIndex: 1, width: 290, paddingRight: 10, boxSizing: 'border-box' }}>
+      <div style={{ position: 'fixed', top: PANEL_GAP, right: 0, zIndex: 1, width: PANEL_WIDTH, paddingRight: PANEL_GAP, boxSizing: 'border-box' }}>
+        {/* No drag: leva would move its panel by a CSS transform, away from our box, and the shift would aim at the wrong space. */}
         <Leva fill collapsed={{ collapsed, onChange: setCollapsed }} titleBar={{ title: part, drag: false }} theme={levaTheme(color)} />
       </div>
-      {model && <Configurator model={model} shift={collapsed ? 0 : panelWidth / 2} />}
+      {model && <Configurator model={model} shift={collapsed ? 0 : PANEL_WIDTH / 2} />}
       <Messages>
         {error && !model && <Message>{error}</Message>}
         {!error && !model && <Message color="var(--md-sys-color-on-surface-variant)">Loading…</Message>}
@@ -127,51 +139,7 @@ function Message({ children, color = 'var(--md-sys-color-error)' }: { children: 
   return <div style={{ padding: '8px 12px', background, borderRadius: 6, color }}>{children}</div>
 }
 
-/** A build's outcome. A build that throws keeps the last good shape on screen, with its error. */
-type Built = { shape?: Object3D; error?: string }
-
-/**
- * The last few builds, by their values, for `use()`: the build on screen and the one rendering in its place may
- * differ. A build pushed out is disposed, `<primitive>` frees nothing it did not create; three uploads it again
- * should it still be drawn.
- */
-const KEPT = 3
-const builds = new Map<string, Promise<Built>>()
-let lastGood: Object3D | undefined
-
-function build(model: Model, key: string) {
-  const kept = builds.get(key)
-  if (kept) return kept
-  // `Promise.resolve().then`: a `build` that throws at once rejects like one that rejects later.
-  const built: Promise<Built> = Promise.resolve()
-    .then(() => model.build(JSON.parse(key)))
-    .then(
-      (shape) => ({ shape: (lastGood = shape) }),
-      (e) => ({ shape: lastGood, error: e instanceof Error ? e.message : String(e) }),
-    )
-  builds.set(key, built)
-  for (const [oldKey, old] of builds) {
-    if (builds.size <= KEPT) break
-    builds.delete(oldKey)
-    // A failed build only borrows the last good shape: nothing of its own to free.
-    old.then(({ shape, error }) => shape && !error && dispose(shape))
-  }
-  return built
-}
-
-/** Frees a shape's geometries and materials. */
-function dispose(shape: Object3D) {
-  const disposed = new Set<{ dispose(): void }>()
-  shape.traverse((object) => {
-    if (!(object instanceof Mesh)) return
-    disposed.add(object.geometry)
-    for (const material of [object.material].flat()) disposed.add(material)
-  })
-  disposed.forEach((resource) => resource.dispose())
-}
-
 function Configurator({ model, shift }: { model: Model; shift: number }) {
-  const color = useRoleColor()
   const [toast, setToast] = useState<string>()
   // leva's `get`, `set` and `values` address an input by its own key, in a folder too (`W`, not `Details.W`).
   const [values, set, get] = useControls(() => ({
@@ -202,8 +170,11 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
     <>
       <Canvas camera={{ position: [600, 500, 700], fov: FOV, near: 1, far: 100000 }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
         {/* Nothing until the first shape: the scene mounts already fitted to it, so that nothing is drawn, then moved. */}
+        {/* The R3F root renders outside any transition: the scene does not blank on each rebuild only because BuildError,
+            under the deferred value, holds the main commit until the same promise settles, so that Scene's `use()` finds it
+            fulfilled. Keep them on the same promise. */}
         <Suspense fallback={null}>
-          <Scene built={built} color={color} shift={shift} />
+          <Scene built={built} shift={shift} />
         </Suspense>
       </Canvas>
       <Messages>
@@ -221,34 +192,46 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
  * The scene, once the build is done: the shape, lit, on a grid, fitted at first, the orbit around that fit; its
  * picture shifted left by `shift` pixels.
  */
-function Scene({ built, color, shift }: { built: Promise<Built>; color: (role: Role) => string; shift: number }) {
+function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
+  // R3F bridges the Mtb context into the Canvas.
+  const color = useRoleColor()
   const { shape } = use(built)
+  const size = useThree((state) => state.size)
   const controls = useRef<ComponentRef<typeof CameraControls>>(null)
-  // Frames the first shape, before it is drawn: the orbit around its center, pulled back to its bounding sphere with some
-  // margin, the camera's direction kept. Later shapes keep the camera where the user left it: the deps are left out on purpose.
+  // Our part of the focal offset, as last applied: see the frame loop below.
+  const applied = useRef<number>(undefined)
+  // Frames the first shape, before it is drawn, into the space the panel leaves free: the orbit around the center of its
+  // bounding sphere, pulled back to fit that sphere, with some margin, the camera's direction kept. The first shape, not
+  // the mount: a first build that fails and a later good one still gets framed. Later shapes keep the camera where the
+  // user left it.
+  const fitted = useRef(false)
   useLayoutEffect(() => {
-    if (!shape) return
+    const current = controls.current
+    if (!shape || !current || fitted.current) return
+    fitted.current = true
     const sphere = CameraControlsImpl.createBoundingSphere(shape, new Sphere())
     sphere.radius *= 1.1
-    controls.current?.fitToSphere(sphere, false)
-  }, [])
+    const pixels = pictureShift(shift, size.width, size.height)
+    current.moveTo(sphere.center.x, sphere.center.y, sphere.center.z, false)
+    current.dollyTo(fitDistance(sphere.radius, FOV, size.width, size.height, pixels), false)
+    // As camera-controls' fitToSphere: no focal offset left over; the frame loop applies our shift from zero.
+    current.setFocalOffset(0, 0, 0, false)
+    applied.current = undefined
+  }, [shape])
   // The leva panel covers the right of the canvas: the orbit's center sits in the middle of the pixels left of it,
-  // through camera-controls' focal offset, so that a change (the panel collapsed, a phone turned) is smoothed. The offset
-  // is in world units at the orbit's center, so it is proportional to the distance: taken from the distance the
-  // controls head for, and damped at the same pace as a dolly (`SMOOTH_TIME` for both), it stays proportional all the
-  // way, frame by frame, and a dolly does not move the shape. Only our part of it is applied, as a delta: the pan, which
-  // shares the focal offset, keeps its own. On a portrait canvas (a phone), no shift: the panel overlaps the picture
-  // instead. Priority -2: before drei's own update of the controls (-1), so that the first frame is shifted already.
-  const applied = useRef<number>(undefined)
+  // through camera-controls' focal offset, so that a change (the panel collapsed, a phone turned) is smoothed. Taken from
+  // the distance the controls head for, and damped at the same pace as a dolly (`SMOOTH_TIME` for both), it stays
+  // proportional to the distance all the way, and a dolly does not move the shape. Only our part of it is applied, as a
+  // delta: the pan, which shares the focal offset, keeps its own. Priority -2: before drei's own update of the controls
+  // (-1), so that the first frame is shifted already.
   useFrame(({ size }) => {
     const current = controls.current
     if (!current) return
-    const pixels = size.width < size.height ? 0 : shift
-    const distance = current.getSpherical(new Spherical(), true).radius
-    // The view is `2 * distance * tan(fov / 2)` world units tall at the orbit's center.
-    const wanted = (pixels * 2 * distance * Math.tan(MathUtils.degToRad(FOV) / 2)) / size.height
+    const pixels = pictureShift(shift, size.width, size.height)
+    const distance = current.getSpherical(spherical, true).radius
+    const wanted = focalShift(pixels, distance, FOV, size.height)
     if (wanted === applied.current) return
-    const offset = current.getFocalOffset(new Vector3(), true)
+    const offset = current.getFocalOffset(focalOffset, true)
     offset.x += wanted - (applied.current ?? 0)
     // The first one at once: the first frame is drawn in place.
     current.setFocalOffset(offset.x, offset.y, offset.z, applied.current !== undefined)
