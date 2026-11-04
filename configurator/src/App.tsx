@@ -1,10 +1,10 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
 import { useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { Bounds, Grid, OrbitControls } from '@react-three/drei'
-import { button, Leva, useControls } from 'leva'
+import { Bounds, OrbitControls } from '@react-three/drei'
+import { button, folder, Leva, useControls } from 'leva'
 import { Mesh, type Object3D } from 'three'
-import { type Model, models } from './models.ts'
+import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
@@ -35,6 +35,19 @@ async function copyText(text: string) {
   }
 }
 
+/** The schema as leva takes it, `main` left out: the main masters at the top level, every other one in a collapsed Details folder. */
+function panelSchema(schema: Model['schema']) {
+  const main: Record<string, Omit<Control, 'main'>> = {}
+  const details: Record<string, Omit<Control, 'main'>> = {}
+  for (const [name, { main: isMain, ...control }] of Object.entries(schema)) {
+    if (isMain) main[name] = control
+    else details[name] = control
+  }
+  // A model that marks no master main keeps one flat list: no empty top level, no folder holding everything.
+  if (Object.keys(main).length === 0) return details
+  return { ...main, Details: folder(details, { collapsed: true }) }
+}
+
 /** The configurator page: the part named by `?part=`, rebuilt as its sliders move. */
 export function App() {
   const [model, setModel] = useState<Model>()
@@ -62,6 +75,7 @@ function Message({ children, color = '#b00020', bottom = 16 }: { children: strin
 
 function Configurator({ model }: { model: Model }) {
   const [toast, setToast] = useState<string>()
+  // leva's `get`, `set` and `values` address an input by its own key, in a folder too (`W`, not `Details.W`).
   const [values, set, get] = useControls(() => ({
     'Copy link': button(async () => {
       const current = get as unknown as (name: string) => number
@@ -71,8 +85,8 @@ function Configurator({ model }: { model: Model }) {
       setToast(copied ? 'Link copied' : 'Could not copy the link')
     }),
     Reset: button(() => set(Object.fromEntries(Object.entries(model.schema).map(([name, control]) => [name, control.value])))),
-    // The schema entries go through as they are: leva shows each control's `hint` on hover.
-    ...withQueryValues(model.schema, query),
+    // leva shows each control's `hint` on hover.
+    ...panelSchema(withQueryValues(model.schema, query)),
   }))
   const numbers = values as unknown as Record<string, number>
   useEffect(() => {
@@ -119,12 +133,13 @@ function Configurator({ model }: { model: Model }) {
 
   return (
     <>
-      <Canvas camera={{ position: [600, 500, 700], near: 1, far: 20000 }} style={{ position: 'fixed', inset: 0 }}>
+      <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000 }} style={{ position: 'fixed', inset: 0 }}>
         <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
         <directionalLight position={[300, 600, 400]} intensity={2.4} />
-        <Grid args={[4000, 4000]} cellSize={50} sectionSize={250} fadeDistance={5000} infiniteGrid />
-        {/* Fitted to the first shape only, so that the camera stays where the user left it. */}
-        <Bounds key={shape ? 'shape' : 'none'} fit observe={false}>
+        <gridHelper args={[2000, 40, '#bbb', '#ddd']} />
+        {/* Fitted to the first shape only, so that the camera stays where the user left it; at once, with no
+            animation (maxDuration 0: drei's Bounds reaches its goal on the next frame). */}
+        <Bounds key={shape ? 'shape' : 'none'} fit observe={false} maxDuration={0}>
           {shape && <primitive object={shape} />}
         </Bounds>
         <OrbitControls makeDefault />

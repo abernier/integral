@@ -1,5 +1,5 @@
 // Zigzag chair, a parametric ClassCAD part. `nr build` calls this module's default export with the ClassCAD
-// script API (`api.v1`, as the ClassCAD MCP's run_script gives it), on an empty drawing.
+// script API (`api.v1`, as the ClassCAD MCP's run_script gives it), on an empty drawing, and the masters' values.
 //
 // Four cherry boards 19 mm thick, after Rietveld's 1934 Zig-Zag: the seat, the slant and the base tapered and
 // mitred at 45 degrees with a glued cleat in each mitre's acute angle, the base's sides planed flush with the
@@ -12,27 +12,31 @@
 
 import { type Api, created, nameSolids } from '../scripts/part.ts'
 import type { CamConfig } from '../scripts/cam/config.ts'
-import { MASTERS } from './zigzag-chair.masters.ts'
+import type { Values } from '../scripts/masters.ts'
+import type { MASTERS } from './zigzag-chair.masters.ts'
 
 const CHERRY: [number, number, number] = [168, 96, 58] // #a8603a
 
-/** The masters as ClassCAD sees them: a name and its default value, from zigzag-chair.masters.ts. */
-const MASTER_VALUES = Object.entries(MASTERS).map(([name, { value }]) => [name, value] as const)
+/** The masters' values, one per name of zigzag-chair.masters.ts. */
+type ChairValues = Values<typeof MASTERS>
 
-/** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. */
-export const CAM = {
-  defaults: { material: 'cherry' },
-  parts: {
-    // The tails are square to the back, which leans: once cut on its sheet, the seat goes on a wedge of the back's
-    // lean, turned as much about x, and the tool comes along the tails' walls; it cuts only those.
-    Seat: { setups: [{ name: `wedge${MASTERS.BACK_LEAN.value}`, wedge: MASTERS.BACK_LEAN.value, rotate: [MASTERS.BACK_LEAN.value, 0, 0], cut: 'squared' }] },
-    // Near square, wider than high: its grain runs up its height, across its tails, not along its longest side.
-    Back: { grain: 90 },
-    // The triangular cleats: the table saw.
-    SeatCleat: { skip: true },
-    FootCleat: { skip: true },
-  },
-} satisfies CamConfig
+/** How `pnpm cam` cuts the parts of the chair made with `values` (see CamConfig): what Fusion cannot know from the STEP. */
+export function CAM(values: ChairValues): CamConfig {
+  const lean = values.BACK_LEAN
+  return {
+    defaults: { material: 'cherry' },
+    parts: {
+      // The tails are square to the back, which leans: once cut on its sheet, the seat goes on a wedge of the back's
+      // lean, turned as much about x, and the tool comes along the tails' walls; it cuts only those.
+      Seat: { setups: [{ name: `wedge${lean}`, wedge: lean, rotate: [lean, 0, 0], cut: 'squared' }] },
+      // Near square, wider than high: its grain runs up its height, across its tails, not along its longest side.
+      Back: { grain: 90 },
+      // The triangular cleats: the table saw.
+      SeatCleat: { skip: true },
+      FootCleat: { skip: true },
+    },
+  }
+}
 
 // Everything else, derived. The slant is fixed at 45 degrees, both mitres bisect it (22.5 degrees).
 const DERIVED = {
@@ -205,12 +209,13 @@ async function grip(api: Api, part: number) {
 /**
  * Build the chair: one part whose expressions drive every board, each board a named body in it; returns the part,
  * the boards' feature ids and their volumes.
+ * @param values Every master's value: the masters are the part's first expressions.
  */
-export default async function build(api: Api) {
+export default async function build(api: Api, values: ChairValues) {
   const part = await created(api.v1.part.create({ name: 'ZigzagChair' }))
   await api.v1.part.expression({
     id: part,
-    toCreate: [...MASTER_VALUES, ...Object.entries(DERIVED)].map(([name, value]) => ({ name, value })),
+    toCreate: [...Object.entries(values), ...Object.entries(DERIVED)].map(([name, value]) => ({ name, value })),
   })
 
   const boards: Record<string, number> = {}

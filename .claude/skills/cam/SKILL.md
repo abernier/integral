@@ -12,7 +12,7 @@ Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the
 ## Run
 
 1. `pnpm cam --list-tools`. An answer means Fusion and its MCP server are up. No answer: Fusion is closed, its MCP server is off, or a dialog is open; [FUSION.md](FUSION.md) says which you can fix.
-2. `pnpm cam <model> --force`, with `--keep` when anything is to be simulated, `--only <Part>` for some parts (into `cam/only/`). Long runs go in the background. The model is the one the user named; none named, ask which: checking and simulating go model by model. Every model at once (no `<model>`) only after a change they all share: a catalog or the CAM code.
+2. `pnpm cam <model> --force`, with `--keep` when anything is to be simulated, `--only <Part>` for some parts (into `cam/only/`), `'<link>'` in place of `<model>` for a model made with other values than its defaults (the configurator's "Copy link"; its STEP is built first, the files go to `cam/` as usual). Long runs go in the background. The model is the one the user named; none named, ask which: checking and simulating go model by model. Every model at once (no `<model>`) only after a change they all share: a catalog or the CAM code.
 3. Read the whole output. `no file for:` lists parts without a file; `nothing to cut for Pockets` is normal on a sheet without pockets; `toolpaths with warnings` are Fusion's own. Report each as it is.
 
 Done when every part of the model has a file or is named in `no file for:`.
@@ -30,10 +30,10 @@ Report what was simulated and what was not. The user decides a file is safe to c
 
 ## Change how parts are milled
 
-Edit the `CAM` export of `<model>/<model>.ts` (typed `CamConfig` in `scripts/cam/config.ts`), `materials.json`, or `tools.json` (exported from Fusion's Tool Library, as the page says). Values resolve in `scripts/cam.ts` and `machining.ts`; `fusion-job.py` applies them. Rerun and compare `cam.json`: unchanged inputs give byte-identical files.
+Edit the `CAM(values)` function of `<model>/<model>.ts` (returning `CamConfig`, typed in `scripts/cam/config.ts`), `materials.json`, or `tools.json` (exported from Fusion's Tool Library, as the page says). Values resolve in `scripts/cam.ts` and `machining.ts`; `fusion-job.py` applies them. Rerun and compare `cam.json`: unchanged inputs give byte-identical files.
 
 ## Rules
 
-- One home per fact: a skip, turn, wedge or material's reason is a comment on its `CAM` entry; a value lives in `CAM`, a catalog JSON or `machining.ts`; a value the model's `MASTERS` holds is read from there. A model page names the command, links its `.ts`, and keeps its hand-work list only.
+- One home per fact: a skip, turn, wedge or material's reason is a comment on its `CAM` entry; a value lives in `CAM`, a catalog JSON or `machining.ts`; a value a master holds is read from `CAM`'s `values` argument, never hard-coded. A model page names the command, links its `.ts`, and keeps its hand-work list only.
 - Fusion steps go one small Python script per MCP call, and Node polls between them. Fusion stays idle while it generates: a wait or a loop inside a script (`doEvents`, sleep) crashed it.
 - The run's documents are yours, closed unsaved or left open with `--keep`. Every other Fusion document is the user's: read it, change nothing in it.

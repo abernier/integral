@@ -41,9 +41,9 @@ nr build      # parts + configurator + site into dist/
 </Steps>
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
-- Configurator: `configurator/` (Vite + r3f + leva, the "Model" tab; `nr dev:configurator` runs it alone, `nr test` checks each model's schema and builds it, plus the query-string helpers); a part is picked up from `<folder>/<folder>.model.ts` (`schema`, `build`), nothing to register; its parameters (default, range, hint) live in `<folder>/<folder>.masters.ts`, shared with the ClassCAD part
+- Configurator: `configurator/` (Vite + r3f + leva, the "Configurator" tab; `nr dev:configurator` runs it alone, `nr test` checks each model's schema and builds it, plus the query-string helpers, the masters' defaults and a link's values, and the CAM config following the values); a part is picked up from `<folder>/<folder>.model.ts` (`schema`, `build`), nothing to register; its parameters (default, range, hint; `main` puts a slider at the top, the rest go under Details) live in `<folder>/<folder>.masters.ts`, shared with the ClassCAD part; "Copy link" gives the link `pnpm cam` takes
 - Engine key: local ClassCAD sign-in; in CI, the `CLASSCAD_TOKEN` secret
-- CAM: `pnpm cam <folder>`, see [CAM](https://abernier.github.io/integral/integral/cam)
+- CAM: `pnpm cam <folder>`, or `pnpm cam '<link>'` for the values of a configurator link, see [CAM](https://abernier.github.io/integral/integral/cam)
 - Deploy: every push to `main`, GitHub Pages; every pull request, a Vercel preview (`vercel.json`, the engine key in its `CLASSCAD_TOKEN` variable)
 
 ## Pipeline
@@ -60,7 +60,9 @@ flowchart TD
   cfg --> site
   out --> bl["Buerligons<br/>edit online"]
   out -->|pnpm cam| fusion["Fusion desktop<br/>local MCP server"]
-  ts -->|CAM export<br/>skips, wedge setups| fusion
+  cfg -->|Copy link| link["configurator link<br/>part, the values off the defaults"]
+  link -->|"pnpm cam 'link'<br/>STEP built by ClassCAD, then CAM"| fusion
+  ts -->|"CAM(values)<br/>skips, wedge setups"| fusion
   tools["tools.json, materials.json<br/>cutters, feeds, materials"] --> fusion
   fusion -->|Arrange: parts nested<br/>by material and thickness| sheets["sheets per material<br/>and thickness, as many as it takes"]
   sheets -->|CAM + ShopBot post| sbp[".sbp per sheet<br/>+ cam.json"]

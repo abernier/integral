@@ -1,5 +1,5 @@
 // Compass armchair, a parametric ClassCAD part. `nr build` calls this module's default export with the ClassCAD
-// script API (`api.v1`, as the ClassCAD MCP's run_script gives it), on an empty drawing.
+// script API (`api.v1`, as the ClassCAD MCP's run_script gives it), on an empty drawing, and the masters' values.
 //
 // A teak and cane armchair on compass legs, after the 1955 Chandigarh office chair, measured from a side view (the
 // smlibpy example `examples/compass_armchair.py`, whose dimensions and joinery this follows). Each side is two
@@ -16,27 +16,33 @@
 
 import { type Api, created, nameSolids } from '../scripts/part.ts'
 import type { CamConfig } from '../scripts/cam/config.ts'
-import { MASTERS } from './compass-armchair.masters.ts'
+import type { Values } from '../scripts/masters.ts'
+import type { MASTERS } from './compass-armchair.masters.ts'
 
 const TEAK: [number, number, number] = [155, 106, 60] // #9b6a3c
 const CANE: [number, number, number] = [230, 210, 160] // #e6d2a0
 
-/** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. */
-export const CAM = {
-  defaults: { material: 'teak' },
-  parts: {
-    // The loose tenons: their grain across the joint, along their length into both members, not their height.
-    FrontRailTenonLeft: { grain: 90 },
-    FrontRailTenonRight: { grain: 90 },
-    RearRailTenonLeft: { grain: 90 },
-    RearRailTenonRight: { grain: 90 },
-    ArmTenonLeft: { grain: 90 },
-    ArmTenonRight: { grain: 90 },
-    // Woven cane on its frame, not milled.
-    SeatCane: { skip: true },
-    BackCane: { skip: true },
-  },
-} satisfies CamConfig
+/** The masters' values, one per name of compass-armchair.masters.ts. */
+type ChairValues = Values<typeof MASTERS>
+
+/** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. None depends on the values. */
+export function CAM(_values: ChairValues): CamConfig {
+  return {
+    defaults: { material: 'teak' },
+    parts: {
+      // The loose tenons: their grain across the joint, along their length into both members, not their height.
+      FrontRailTenonLeft: { grain: 90 },
+      FrontRailTenonRight: { grain: 90 },
+      RearRailTenonLeft: { grain: 90 },
+      RearRailTenonRight: { grain: 90 },
+      ArmTenonLeft: { grain: 90 },
+      ArmTenonRight: { grain: 90 },
+      // Woven cane on its frame, not milled.
+      SeatCane: { skip: true },
+      BackCane: { skip: true },
+    },
+  }
+}
 
 // Everything else, derived. The armrest's underside is z = U0 - K y.
 const DERIVED = {
@@ -318,13 +324,14 @@ const BOARDS: Record<string, Builder> = {
 /**
  * Build the chair: one part whose expressions drive every board, each board a named body in it; returns the part,
  * the boards' feature ids and their volumes.
+ * @param values Every master's value: the masters are the part's first expressions.
  */
-export default async function build(api: Api) {
+export default async function build(api: Api, values: ChairValues) {
   const part = await created(api.v1.part.create({ name: 'CompassArmchair' }))
   await api.v1.part.expression({
     id: part,
     toCreate: [
-      ...Object.entries(MASTERS).map(([name, { value }]) => ({ name, value })),
+      ...Object.entries(values).map(([name, value]) => ({ name, value })),
       ...Object.entries(DERIVED).map(([name, value]) => ({ name, value })),
     ],
   })
