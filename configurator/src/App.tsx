@@ -1,10 +1,10 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
 import { type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { MathUtils, Mesh, type Object3D, Sphere } from 'three'
+import { Mesh, type Object3D, Sphere } from 'three'
 import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
@@ -15,6 +15,8 @@ const DEBOUNCE_MS = 200
 
 /** The camera's vertical field of view, in degrees: narrow, close to a drawing's parallel projection. */
 const FOV = 15
+
+const { ACTION } = CameraControlsImpl
 
 const query = new URLSearchParams(location.search)
 const part = query.get('part') ?? ''
@@ -212,16 +214,13 @@ function Scene({ built, color }: { built: Promise<Built>; color: (role: Role) =>
     sphere.radius *= 1.1
     controls.current?.fitToSphere(sphere, false)
   }, [])
-  // The leva panel covers the right of the canvas: the orbit's center sits in the middle of the pixels left of it.
-  // camera-controls takes the offset in world units at the orbit's center, so it follows the distance, frame by frame,
-  // set before the controls apply it to the camera (drei runs their update at priority -1): the first frame is offset too.
-  useFrame(({ size }) => {
-    const current = controls.current
-    if (!current) return
-    // The view is `2 * distance * tan(fov / 2)` world units tall at the orbit's center.
-    const worldPerPixel = (2 * current.distance * Math.tan(MathUtils.degToRad(FOV) / 2)) / size.height
-    current.setFocalOffset(((PANEL_WIDTH + PANEL_GAP) / 2) * worldPerPixel, 0, 0)
-  }, -2)
+  // The leva panel covers the right of the canvas: the picture is shifted left by half the panel, so that the orbit's
+  // center sits in the middle of what is left. An offset of the projection, in pixels: orbit, dolly and pan leave it be.
+  const { camera, size } = useThree()
+  useLayoutEffect(() => {
+    camera.setViewOffset(size.width, size.height, (PANEL_WIDTH + PANEL_GAP) / 2, 0, size.width, size.height)
+    return () => camera.clearViewOffset()
+  }, [camera, size])
   if (!shape) return null
   return (
     <>
@@ -229,7 +228,13 @@ function Scene({ built, color }: { built: Promise<Built>; color: (role: Role) =>
       <directionalLight position={[300, 600, 400]} intensity={2.4} />
       <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
       <primitive object={shape} />
-      <CameraControls ref={controls} makeDefault />
+      {/* A pan slides the picture (the focal offset), not the orbit's center: that stays on the shape. */}
+      <CameraControls
+        ref={controls}
+        makeDefault
+        mouseButtons={{ left: ACTION.ROTATE, middle: ACTION.DOLLY, right: ACTION.OFFSET, wheel: ACTION.DOLLY }}
+        touches={{ one: ACTION.TOUCH_ROTATE, two: ACTION.TOUCH_DOLLY_OFFSET, three: ACTION.TOUCH_OFFSET }}
+      />
     </>
   )
 }
