@@ -114,8 +114,8 @@ export async function buildConfigurator(watch = false) {
 }
 
 /**
- * A part's render, as the site shows it: tabs with the render itself, its configurator (the `configurator/` app:
- * the part rebuilt in the browser as sliders move), and the part open in Buerligons. On GitHub the README shows the render alone (it prints iframes as text).
+ * A part's render, as the site shows it: tabs with its configurator (the `configurator/` app: the part rebuilt in
+ * the browser as sliders move), the image, and the part open in Buerligons, in that order. On GitHub the README shows the image alone (it prints iframes as text).
  */
 function views(part: string, alt: string) {
   const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
@@ -123,16 +123,16 @@ function views(part: string, alt: string) {
     `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="${allow}" />`
   return [
     // syncKey: the pick is kept in localStorage, the same on every part's page.
-    '<Tabs defaultValue="render" syncKey="part-view">',
+    '<Tabs defaultValue="configurator" syncKey="part-view">',
     '<TabsList>',
-    '<TabsTrigger value="render">Render</TabsTrigger>',
-    '<TabsTrigger value="3d">Model</TabsTrigger>',
+    '<TabsTrigger value="configurator">Configurator</TabsTrigger>',
+    '<TabsTrigger value="image">Image</TabsTrigger>',
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '</TabsList>',
-    `<TabsContent value="render"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     // The directory URL, not index.html: Vercel's clean URLs redirect the file to its directory, and the app's
     // relative base resolves against the trailing slash on every host.
-    `<TabsContent value="3d">${frame(`${PAGES_URL}/configurator/?part=${part}`, `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
+    `<TabsContent value="configurator">${frame(`${PAGES_URL}/configurator/?part=${part}`, `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
+    `<TabsContent value="image"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     '</Tabs>',
   ].join('\n')
