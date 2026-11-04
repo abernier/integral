@@ -4,7 +4,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { Bounds, OrbitControls } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { Mesh, type Object3D } from 'three'
+import { Mesh, type Object3D, OrthographicCamera } from 'three'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
 import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
@@ -104,17 +104,24 @@ function Message({ children, color = 'var(--md-sys-color-error)', bottom = 16 }:
 }
 
 /**
- * The leva panel covers the right of the canvas: the camera's view is offset so that the model sits centered in the
- * space left of it, and orbits there. An offset of the projection, in pixels (three's `setViewOffset`), so that
- * zooming and rotating keep it where it is; no offset on a page so narrow that the panel covers over half of it.
+ * The leva panel covers the right of the canvas: the camera frames the pixels left of it, so that the model sits
+ * centered there, orbits there, and `Bounds` fits it there. The frame's width is the camera's, and the canvas
+ * renders it from the left edge (three's `setViewOffset`, in pixels) at the same scale on both axes: zooming and
+ * rotating keep the model in place, and nothing stretches. On a page so narrow that the panel covers over half of
+ * it, the frame is the whole canvas. The camera is `manual`: its frame is set here, not by R3F on resize.
  */
 function ViewOffset({ panel }: { panel: RefObject<HTMLDivElement | null> }) {
   const { camera, size } = useThree()
   useEffect(() => {
+    if (!(camera instanceof OrthographicCamera)) return
     const box = panel.current?.firstElementChild
-    const free = box ? box.getBoundingClientRect().left : size.width
-    if (free < size.width / 2) camera.clearViewOffset()
-    else camera.setViewOffset(free, size.height, 0, 0, size.width, size.height)
+    const left = box ? box.getBoundingClientRect().left : size.width
+    const free = left < size.width / 2 ? size.width : left
+    camera.left = -free / 2
+    camera.right = free / 2
+    camera.top = size.height / 2
+    camera.bottom = -size.height / 2
+    camera.setViewOffset(free, size.height, 0, 0, size.width, size.height)
     return () => camera.clearViewOffset()
   }, [camera, size, panel])
   return null
@@ -181,17 +188,17 @@ function Configurator({ model, panel }: { model: Model; panel: RefObject<HTMLDiv
 
   return (
     <>
-      <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000 }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
+      <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000, manual: true }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
         <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
         <directionalLight position={[300, 600, 400]} intensity={2.4} />
         <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
+        <ViewOffset panel={panel} />
         {/* Fitted to the first shape only, so that the camera stays where the user left it; at once, with no
             animation (maxDuration 0: drei's Bounds reaches its goal on the next frame). */}
         <Bounds key={shape ? 'shape' : 'none'} fit observe={false} maxDuration={0}>
           {shape && <primitive object={shape} />}
         </Bounds>
         <OrbitControls makeDefault />
-        <ViewOffset panel={panel} />
       </Canvas>
       {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
       {!shape && !error && <Message color="var(--md-sys-color-on-surface-variant)">Building the model…</Message>}
