@@ -5,10 +5,10 @@ import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
 import { Mesh, type Object3D, Sphere } from 'three'
-import { useDebounceValue } from 'usehooks-ts'
+import { useDebounceValue, useResizeObserver } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
-import { levaTheme, PANEL_GAP, PANEL_WIDTH, type Role, useDocsTheme } from './App.theme.ts'
+import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
 const DEBOUNCE_MS = 200
@@ -83,6 +83,10 @@ function Page() {
   const color = useRoleColor()
   const [model, setModel] = useState<Model>()
   const [error, setError] = useState<string>()
+  // The leva panel's box, at the right edge, its margin included: measured, since leva shows the panel only once its
+  // inputs are registered. The canvas shifts its picture by half of it. (`null!`: usehooks-ts types the ref as never null.)
+  const panel = useRef<HTMLDivElement>(null!)
+  const { width: panelWidth = 0 } = useResizeObserver({ ref: panel, box: 'border-box' })
 
   useEffect(() => {
     // hasOwn: a plain lookup would also find inherited members such as `constructor`.
@@ -92,8 +96,11 @@ function Page() {
 
   return (
     <>
-      <Leva titleBar={{ title: part }} theme={levaTheme(color)} />
-      {model && <Configurator model={model} />}
+      {/* zIndex: the canvas, fixed too and later in the DOM, would cover the panel. */}
+      <div ref={panel} style={{ position: 'fixed', top: 10, right: 0, zIndex: 1, width: 290, paddingRight: 10, boxSizing: 'border-box' }}>
+        <Leva fill titleBar={{ title: part, drag: false }} theme={levaTheme(color)} />
+      </div>
+      {model && <Configurator model={model} shift={panelWidth / 2} />}
       <Messages>
         {error && !model && <Message>{error}</Message>}
         {!error && !model && <Message color="var(--md-sys-color-on-surface-variant)">Loading…</Message>}
@@ -155,7 +162,7 @@ function dispose(shape: Object3D) {
   disposed.forEach((resource) => resource.dispose())
 }
 
-function Configurator({ model }: { model: Model }) {
+function Configurator({ model, shift }: { model: Model; shift: number }) {
   const color = useRoleColor()
   const [toast, setToast] = useState<string>()
   // leva's `get`, `set` and `values` address an input by its own key, in a folder too (`W`, not `Details.W`).
@@ -188,7 +195,7 @@ function Configurator({ model }: { model: Model }) {
       <Canvas camera={{ position: [600, 500, 700], fov: FOV, near: 1, far: 100000 }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
         {/* Nothing until the first shape: the scene mounts already fitted to it, so that nothing is drawn, then moved. */}
         <Suspense fallback={null}>
-          <Scene built={built} color={color} />
+          <Scene built={built} color={color} shift={shift} />
         </Suspense>
       </Canvas>
       <Messages>
@@ -202,8 +209,11 @@ function Configurator({ model }: { model: Model }) {
   )
 }
 
-/** The scene, once the build is done: the shape, lit, on a grid, fitted at first, the orbit around that fit. */
-function Scene({ built, color }: { built: Promise<Built>; color: (role: Role) => string }) {
+/**
+ * The scene, once the build is done: the shape, lit, on a grid, fitted at first, the orbit around that fit; its
+ * picture shifted left by `shift` pixels.
+ */
+function Scene({ built, color, shift }: { built: Promise<Built>; color: (role: Role) => string; shift: number }) {
   const { shape } = use(built)
   const controls = useRef<ComponentRef<typeof CameraControls>>(null)
   // Frames the first shape, before it is drawn: the orbit around its center, pulled back to its bounding sphere with some
@@ -214,13 +224,15 @@ function Scene({ built, color }: { built: Promise<Built>; color: (role: Role) =>
     sphere.radius *= 1.1
     controls.current?.fitToSphere(sphere, false)
   }, [])
-  // The leva panel covers the right of the canvas: the picture is shifted left by half the panel, so that the orbit's
+  // The leva panel covers the right of the canvas: the picture is shifted left by half of it, so that the orbit's
   // center sits in the middle of what is left. An offset of the projection, in pixels: orbit, dolly and pan leave it be.
+  // On a portrait canvas (a phone), no shift: the panel overlaps the picture instead.
   const { camera, size } = useThree()
   useLayoutEffect(() => {
-    camera.setViewOffset(size.width, size.height, (PANEL_WIDTH + PANEL_GAP) / 2, 0, size.width, size.height)
+    const portrait = size.width < size.height
+    camera.setViewOffset(size.width, size.height, portrait ? 0 : shift, 0, size.width, size.height)
     return () => camera.clearViewOffset()
-  }, [camera, size])
+  }, [camera, size, shift])
   if (!shape) return null
   return (
     <>
