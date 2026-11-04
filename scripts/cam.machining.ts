@@ -1,6 +1,6 @@
 // How `pnpm cam` cuts: the machining values of a run (the CLI's, over the model's CAM config's `defaults`, over
-// MACHINING_DEFAULTS), the tool chosen per cut from the Fusion tool library (`scripts/cam/tools.json`), and what is
-// sent with it to Fusion (fusion-job.py applies it and has no values of its own). Usage, naming and the tool rule:
+// MACHINING_DEFAULTS), the tool chosen per cut from the Fusion tool library (`scripts/cam.tools.json`), and what is
+// sent with it to Fusion (cam.fusion-job.py applies it and has no values of its own). Usage, naming and the tool rule:
 // docs/cam.md (https://abernier.github.io/integral/integral/cam).
 
 import { readFileSync } from 'node:fs'
@@ -12,7 +12,7 @@ import { join } from 'node:path'
  */
 export type Tool = { number: number; description: string; diameter: number; fluteLength: number; stickout: number }
 
-/** A material of materials.json: whether its parts keep their grain along their length, its tool preset's name. */
+/** A material of cam.materials.json: whether its parts keep their grain along their length, its tool preset's name. */
 export type Material = { grain: boolean; preset: string; stock?: string; note?: string }
 
 /** Holding tabs on the outline: how many per contour, how wide, and how much wood they leave (mm). */
@@ -20,9 +20,9 @@ export type Tabs = { count: number; width: number; height: number }
 
 /** The values a model's CAM config `defaults` or the CLI may set. Lengths in mm. */
 export type MachiningOptions = {
-  /** A tool's number in tools.json for every sheet, instead of the one chosen by thickness. */
+  /** A tool's number in cam.tools.json for every sheet, instead of the one chosen by thickness. */
   tool?: number
-  /** A material of materials.json. */
+  /** A material of cam.materials.json. */
   material?: string
   /** The sheet, [length along x, width along y]. */
   sheet?: [number, number]
@@ -71,7 +71,7 @@ const CORNER_RADIUS = [0, 1000]
 
 /**
  * The problems with a CAM config's (or the CLI's) machining values, as messages; none when they are right.
- * `materials`: materials.json's, when `options` names one.
+ * `materials`: cam.materials.json's, when `options` names one.
  */
 export function machiningProblems(options: MachiningOptions, materials?: Record<string, Material>) {
   const problems: string[] = []
@@ -83,8 +83,8 @@ export function machiningProblems(options: MachiningOptions, materials?: Record<
   }
   const sheet = options.sheet
   if (sheet !== undefined && !(sheet.length === 2 && sheet.every(positive))) problems.push('sheet must be [length, width] in mm')
-  if (options.tool !== undefined && !Number.isInteger(options.tool)) problems.push('tool must be a tool number of scripts/cam/tools.json')
-  if (options.material !== undefined && !(materials && options.material in materials)) problems.push(`material must be one of scripts/cam/materials.json (${Object.keys(materials ?? {}).join(', ')})`)
+  if (options.tool !== undefined && !Number.isInteger(options.tool)) problems.push('tool must be a tool number of scripts/cam.tools.json')
+  if (options.material !== undefined && !(materials && options.material in materials)) problems.push(`material must be one of scripts/cam.materials.json (${Object.keys(materials ?? {}).join(', ')})`)
   const tabs = options.tabs
   if (tabs) {
     for (const [key, value] of Object.entries(tabs)) {
@@ -116,9 +116,9 @@ export function resolveMachining(...layers: (MachiningOptions | undefined)[]) {
 export type Machining = ReturnType<typeof resolveMachining>
 
 /** The Fusion tool library, Fusion's own JSON (edited in Fusion, exported as JSON). */
-export const TOOLS_FILE = join(import.meta.dirname, 'tools.json')
+export const TOOLS_FILE = join(import.meta.dirname, 'cam.tools.json')
 /** The materials: per material, its grain, its tool preset and Fusion's stock material. */
-export const MATERIALS_FILE = join(import.meta.dirname, 'materials.json')
+export const MATERIALS_FILE = join(import.meta.dirname, 'cam.materials.json')
 
 /** The library as Fusion wrote it (sent as is to Fusion), and its tools as the selection rule sees them. */
 export function loadTools(file = TOOLS_FILE) {
@@ -135,7 +135,7 @@ export function loadTools(file = TOOLS_FILE) {
   return { library, tools }
 }
 
-/** The materials of materials.json, by name. */
+/** The materials of cam.materials.json, by name. */
 export function loadMaterials(file = MATERIALS_FILE) {
   const list = JSON.parse(readFileSync(file, 'utf8')) as { version: number; materials: Record<string, Material> }
   if (list.version !== 1) throw new Error(`${file}: version ${list.version}, expected 1`)
@@ -166,14 +166,14 @@ const reachOf = (tool: Tool, machining: Machining) =>
 export function pickTool(tools: Tool[], depth: number, machining: Machining) {
   if (machining.tool !== undefined) {
     const tool = tools.find((t) => t.number === machining.tool)
-    if (!tool) throw new Error(`no tool #${machining.tool} in scripts/cam/tools.json (${tools.map((t) => t.number).join(', ')})`)
+    if (!tool) throw new Error(`no tool #${machining.tool} in scripts/cam.tools.json (${tools.map((t) => t.number).join(', ')})`)
     if (toolReach(tool, machining) < depth) throw new Error(`tool #${tool.number} cuts ${toolReach(tool, machining)} mm deep at most (${reachOf(tool, machining)}), the cut is ${depth.toFixed(1)} mm deep`)
     return tool
   }
   const reaching = tools.filter((t) => toolReach(t, machining) >= depth).sort((a, b) => a.diameter - b.diameter || a.fluteLength - b.fluteLength)
   if (!reaching.length) {
     const deepest = tools.reduce((a, b) => (toolReach(b, machining) > toolReach(a, machining) ? b : a))
-    throw new Error(`no tool cuts ${depth.toFixed(1)} mm deep: the deepest in scripts/cam/tools.json, tool #${deepest.number}, cuts ${toolReach(deepest, machining)} mm (${reachOf(deepest, machining)})`)
+    throw new Error(`no tool cuts ${depth.toFixed(1)} mm deep: the deepest in scripts/cam.tools.json, tool #${deepest.number}, cuts ${toolReach(deepest, machining)} mm (${reachOf(deepest, machining)})`)
   }
   return reaching[0]
 }
@@ -185,7 +185,7 @@ export function restTool(tools: Tool[], main: Tool) {
 }
 
 /**
- * What fusion-job.py reads in JOB["machining"] (`job`): every value resolved, in mm; and the rest tool (`rest`, see
+ * What cam.fusion-job.py reads in JOB["machining"] (`job`): every value resolved, in mm; and the rest tool (`rest`, see
  * restTool), whose number `job.rest.tool` carries.
  */
 export function machiningJob(tool: Tool, machining: Machining, depth: number, tools: Tool[], materials: Record<string, Material>) {

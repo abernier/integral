@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { pickTool, resolveMachining, restTool, toolLimit, toolReach, type Tool } from './machining.ts'
+import { pickTool, resolveMachining, restTool, toolLimit, toolReach, type Tool } from './cam.machining.ts'
 
 const tool = (number: number, diameter: number, fluteLength: number, stickout: number): Tool => ({
   number,

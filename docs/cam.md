@@ -10,7 +10,7 @@ Computer-aided manufacturing: the CNC files of a model, made by Fusion from the 
 
 Fusion does the CAM work: it lays the parts out on the sheet (Arrange), finds the pockets, computes the toolpaths, works out what the main tool leaves behind (rest machining), and takes the feeds and stepdowns from its tool library.
 
-The code only prepares Fusion's job. It groups the parts by material and thickness, turns each part so its grain runs along the sheet, picks the tool, passes the values, and adds the wedge setups that Arrange cannot do. Each step is one small script sent to Fusion, [`fusion-job.py`](https://github.com/abernier/integral/blob/main/scripts/cam/fusion-job.py); its header lists them.
+The code only prepares Fusion's job. It groups the parts by material and thickness, turns each part so its grain runs along the sheet, picks the tool, passes the values, and adds the wedge setups that Arrange cannot do. Each step is one small script sent to Fusion, [`cam.fusion-job.py`](https://github.com/abernier/integral/blob/main/scripts/cam.fusion-job.py); its header lists them.
 
 **Simulate every `.sbp` before cutting**, in Fusion or the ShopBot Previewer. Air-cut it first. Check the units, the zero and the tool against the machine.
 
@@ -20,7 +20,7 @@ The code only prepares Fusion's job. It groups the parts by material and thickne
 - [ ] Fusion's MCP server on: Preferences > General > API > *Fusion MCP Server (runs locally on this device)*. On another port, set `FUSION_MCP_URL`. `pnpm cam --list-tools` checks the connection.
 - [ ] No command dialog open in Fusion during a run.
 - [ ] The model's STEP at `.docs/<model>/<model>.step`, one component per part: `nr build:parts` makes it (a run given a link builds its own STEP first).
-- [ ] The tools of [`tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam/tools.json) match the cutters on your ShopBot, and their presets match your wood.
+- [ ] The tools of [`cam.tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam.tools.json) match the cutters on your ShopBot, and their presets match your wood.
 
 ## Run
 
@@ -69,28 +69,28 @@ With Claude Code, [`/cam`](https://github.com/abernier/integral/tree/main/.claud
 
 ## Machining values
 
-The CLI flag wins, then the model's `CAM.defaults`, then the defaults of [`machining.ts`](https://github.com/abernier/integral/blob/main/scripts/cam/machining.ts), where `MachiningOptions` documents each value. Same inputs and Fusion version, same bytes.
+The CLI flag wins, then the model's `CAM.defaults`, then the defaults of [`cam.machining.ts`](https://github.com/abernier/integral/blob/main/scripts/cam.machining.ts), where `MachiningOptions` documents each value. Same inputs and Fusion version, same bytes.
 
-**The tool** is picked per sheet: the narrowest one in `tools.json` long enough for the sheet, or `--tool <number>`.
+**The tool** is picked per sheet: the narrowest one in `cam.tools.json` long enough for the sheet, or `--tool <number>`.
 
 **Tabs** hold the parts in the sheet; `tabs.height` is the wood they leave, `false` means none.
 
 **Grain.** In a material with grain, each part's grain runs along its length, which is the sheet's x; Arrange may only turn a part by 180°. A part's `grain` adds degrees, for a near-square part or a loose tenon whose grain should cross its joint.
 
-Everything else is fixed by [`fusion-job.py`](https://github.com/abernier/integral/blob/main/scripts/cam/fusion-job.py): parts lie largest face down (a part's `flip` turns it up), pockets first, then the outline with tabs, then a rest pass with the narrowest tool in its own file.
+Everything else is fixed by [`cam.fusion-job.py`](https://github.com/abernier/integral/blob/main/scripts/cam.fusion-job.py): parts lie largest face down (a part's `flip` turns it up), pockets first, then the outline with tabs, then a rest pass with the narrowest tool in its own file.
 
 ## Catalogs
 
 | File | What it holds | Edited |
 | --- | --- | --- |
-| [`tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam/tools.json) | The cutters and their feed presets per material: a Fusion tool library | In Fusion's Tool Library, exported as JSON |
-| [`materials.json`](https://github.com/abernier/integral/blob/main/scripts/cam/materials.json) | Each material: whether it has grain, the name of its tool presets, its Fusion stock material | By hand |
+| [`cam.tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam.tools.json) | The cutters and their feed presets per material: a Fusion tool library | In Fusion's Tool Library, exported as JSON |
+| [`cam.materials.json`](https://github.com/abernier/integral/blob/main/scripts/cam.materials.json) | Each material: whether it has grain, the name of its tool presets, its Fusion stock material | By hand |
 
 **Adjust the feeds by the chips and the burn marks.**
 
 ## Config
 
-What Fusion cannot know from the STEP (parts to skip, grain turns, flips, wedge setups, the model's material and post) is the optional `CAM(values)` function of the model's module, returning a `CamConfig` (type in [`config.ts`](https://github.com/abernier/integral/blob/main/scripts/cam/config.ts)): a wedge follows the angle the part was built with. Examples: [zigzag chair](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts), [compass armchair](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts).
+What Fusion cannot know from the STEP (parts to skip, grain turns, flips, wedge setups, the model's material and post) is the optional `CAM(values)` function of the model's module, returning a `CamConfig` (type in [`cam.config.ts`](https://github.com/abernier/integral/blob/main/scripts/cam.config.ts)): a wedge follows the angle the part was built with. Examples: [zigzag chair](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts), [compass armchair](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts).
 
 ## The record: `cam.json`
 
