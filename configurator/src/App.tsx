@@ -137,8 +137,9 @@ function Configurator({ model }: { model: Model }) {
         <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
         <directionalLight position={[300, 600, 400]} intensity={2.4} />
         <gridHelper args={[2000, 40, '#bbb', '#ddd']} />
-        {/* Fitted to the first shape only, so that the camera stays where the user left it. */}
-        <Bounds key={shape ? 'shape' : 'none'} fit observe={false}>
+        {/* Fitted to the first shape only, so that the camera stays where the user left it; at once, with no
+            animation (maxDuration 0: drei's Bounds reaches its goal on the next frame). */}
+        <Bounds key={shape ? 'shape' : 'none'} fit observe={false} maxDuration={0}>
           {shape && <primitive object={shape} />}
         </Bounds>
         <OrbitControls makeDefault />
