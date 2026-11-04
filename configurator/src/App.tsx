@@ -1,10 +1,10 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
-import { type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useState } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { Box3, Mesh, type Object3D, OrthographicCamera, Vector3 } from 'three'
+import { Mesh, type Object3D, Sphere } from 'three'
 import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
@@ -107,71 +107,6 @@ function Message({ children, color = 'var(--md-sys-color-error)' }: { children: 
   return <div style={{ padding: '8px 12px', background, borderRadius: 6, color }}>{children}</div>
 }
 
-/**
- * The leva panel covers the right of the canvas: the camera frames the pixels left of it, so that the model sits
- * centered there, orbits there, and the fit fills them. The frame's width is the camera's, and the canvas renders it
- * from the left edge (three's `setViewOffset`, in pixels) at the same scale on both axes: zooming and rotating keep
- * the model in place, and nothing stretches. The panel's place comes from the theme, not from a measure: leva shows
- * the panel only once its inputs are registered, after this effect. On a page so narrow that the panel covers over
- * half of it, the frame is the whole canvas. The camera is `manual`: its frame is set here, not by R3F on resize. A
- * layout effect, so that the frame is set before anything is fitted into it or drawn.
- */
-function ViewOffset() {
-  const { camera, size } = useThree()
-  useLayoutEffect(() => {
-    if (!(camera instanceof OrthographicCamera)) return
-    const panelLeft = size.width - PANEL_GAP - PANEL_WIDTH
-    const free = panelLeft < size.width / 2 ? size.width : panelLeft
-    camera.left = -free / 2
-    camera.right = free / 2
-    camera.top = size.height / 2
-    camera.bottom = -size.height / 2
-    camera.setViewOffset(free, size.height, 0, 0, size.width, size.height)
-    return () => camera.clearViewOffset()
-  }, [camera, size])
-  return null
-}
-
-/**
- * Frames the first shape, at once: the camera keeps its direction, looks at the shape's center from there, and zooms
- * so that the shape fills the frame with a margin; `onFit` gets the center, for the orbit to turn around. Synchronous,
- * in a layout effect, so that no frame shows the shape before it is framed (drei's Bounds fits over an animation,
- * one unfitted frame even at duration 0). Later shapes keep the camera where the user left it.
- */
-function FitOnce({ object, onFit, margin = 1.2 }: { object: Object3D; onFit: (center: Vector3) => void; margin?: number }) {
-  const { camera, invalidate } = useThree()
-  useLayoutEffect(() => {
-    if (!(camera instanceof OrthographicCamera)) return
-    object.updateWorldMatrix(true, true)
-    const box = new Box3().setFromObject(object)
-    const center = box.getCenter(new Vector3())
-    const extent = box.getSize(new Vector3())
-    const direction = camera.position.clone().sub(center).normalize()
-    // Far enough from the center that the whole shape lies between near and far, whichever way it is turned.
-    camera.position.copy(center).addScaledVector(direction, 4 * Math.max(extent.x, extent.y, extent.z))
-    camera.lookAt(center)
-    camera.updateMatrixWorld()
-    // The shape's extent as the camera sees it: the furthest corner of its box, in camera space.
-    let halfWidth = 0
-    let halfHeight = 0
-    for (const x of [box.min.x, box.max.x])
-      for (const y of [box.min.y, box.max.y])
-        for (const z of [box.min.z, box.max.z]) {
-          const corner = new Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse)
-          halfWidth = Math.max(halfWidth, Math.abs(corner.x))
-          halfHeight = Math.max(halfHeight, Math.abs(corner.y))
-        }
-    const zoomForWidth = (camera.right - camera.left) / (2 * halfWidth)
-    const zoomForHeight = (camera.top - camera.bottom) / (2 * halfHeight)
-    camera.zoom = Math.min(zoomForWidth, zoomForHeight) / margin
-    camera.updateProjectionMatrix()
-    onFit(center)
-    invalidate()
-    // Once, for the first shape: the deps are left out on purpose.
-  }, [])
-  return null
-}
-
 /** A build's outcome. A build that throws keeps the last good shape on screen, with its error. */
 type Built = { shape?: Object3D; error?: string }
 
@@ -245,8 +180,7 @@ function Configurator({ model }: { model: Model }) {
 
   return (
     <>
-      <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000, manual: true }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
-        <ViewOffset />
+      <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000 }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
         {/* Nothing until the first shape: the scene mounts already fitted to it, so that nothing is drawn, then moved. */}
         <Suspense fallback={null}>
           <Scene built={built} color={color} />
@@ -266,16 +200,27 @@ function Configurator({ model }: { model: Model }) {
 /** The scene, once the build is done: the shape, lit, on a grid, fitted at first, the orbit around that fit. */
 function Scene({ built, color }: { built: Promise<Built>; color: (role: Role) => string }) {
   const { shape } = use(built)
-  const [target, setTarget] = useState<Vector3>()
+  const controls = useRef<ComponentRef<typeof CameraControls>>(null)
+  // Frames the first shape, before it is drawn: the orbit around its center, zoomed to its bounding sphere with some
+  // margin, the camera's direction kept. Later shapes keep the camera where the user left it: the deps are left out on purpose.
+  useLayoutEffect(() => {
+    if (!shape) return
+    const sphere = CameraControlsImpl.createBoundingSphere(shape, new Sphere())
+    sphere.radius *= 1.1
+    controls.current?.fitToSphere(sphere, false)
+  }, [])
+  // The leva panel covers the right of the canvas: the orbit's center sits in the middle of the pixels left of it.
+  // camera-controls takes the offset in world units, so it follows the zoom, frame by frame, set before the controls
+  // apply it to the camera (drei runs their update at priority -1): the first frame is offset too.
+  useFrame(({ camera }) => controls.current?.setFocalOffset((PANEL_WIDTH + PANEL_GAP) / 2 / camera.zoom, 0, 0), -2)
   if (!shape) return null
   return (
     <>
       <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
       <directionalLight position={[300, 600, 400]} intensity={2.4} />
       <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
-      <FitOnce object={shape} onFit={setTarget} />
       <primitive object={shape} />
-      <OrbitControls makeDefault target={target} />
+      <CameraControls ref={controls} makeDefault />
     </>
   )
 }
