@@ -1,15 +1,16 @@
 // `pnpm cam <model>`: ShopBot (OpenSBP, .sbp) files for a model, one per sheet and one per setup of its own, made by
 // Fusion's CAM in the Fusion desktop app running on this machine, driven through its local MCP server (cam/fusion.ts):
-// each step is a script cam/fusion-job.py runs there. The files go to `.docs/<model>/cam/`, recorded in its cam.json;
-// with `--values <file.json>`, the model made with those values (masters.ts), into
-// `.docs/<model>/variants/<hash of the values>/cam/`.
+// each step is a script cam/fusion-job.py runs there. The files go to `.docs/<model>/cam/`, recorded in its cam.json.
+// `pnpm cam '<link>'`, the configurator's "Copy link": the model made with the link's values (masters.ts), its STEP
+// built first with ClassCAD into a temporary folder; the files go to the same `.docs/<model>/cam/`.
 // Flags: USAGE below. Usage, naming and the tool rule: docs/cam.md (https://abernier.github.io/integral/integral/cam).
 //
 // Simulate every .sbp before cutting.
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { ENDPOINT, connect, messageOf, runScript } from './cam/fusion.ts'
@@ -31,8 +32,8 @@ import {
   type Tool,
 } from './cam/machining.ts'
 import { configFile, loadConfig } from './cam/config.ts'
-import { type Values, defaultValues, loadValues, mastersFile } from './masters.ts'
-import { MDX, ROOT, parts, variantDir } from './paths.ts'
+import { type Values, defaultValues, linkValues, mastersFile } from './masters.ts'
+import { MDX, ROOT, parts } from './paths.ts'
 import { stepParts } from './step-assembly.ts'
 
 const shown = (path: string) => (path.startsWith(ROOT) ? relative(ROOT, path) : path)
@@ -50,7 +51,6 @@ const { values: flags, positionals } = parseArgs({
     sheet: { type: 'string' },
     spacing: { type: 'string' },
     only: { type: 'string' },
-    values: { type: 'string' },
     force: { type: 'boolean', default: false },
     keep: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
@@ -59,18 +59,17 @@ const { values: flags, positionals } = parseArgs({
   },
 })
 
-const USAGE = `usage: pnpm cam [<model>] [options]      (no model: every model, one after the other)
-  --values <file.json>   the model made with the values of this file (the configurator's "Copy values"): its STEP built
-                         first if missing (or with --force), its files into .docs/<model>/variants/<values' hash>/cam/
-  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step, or the variant's;
-                         cam.json then records no values)
+const USAGE = `usage: pnpm cam [<model> | '<link>'] [options]      (no model: every model, one after the other)
+  '<link>'               the configurator's "Copy link" (?part=<model>&<MASTER>=<value>...): the model made with its
+                         values, its STEP built first with ClassCAD
+  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step; cam.json then
+                         records no values)
   --post <text>          the library post whose vendor/description contains it (default ${DEFAULT_POST})
   --tool <number>        this tool of scripts/cam/tools.json for every sheet (default: per sheet, the narrowest that reaches)
   --sheet <LxW>          the sheet, mm (default ${MACHINING_DEFAULTS.sheet.join('x')})
   --spacing <mm>         between two parts on a sheet (default ${MACHINING_DEFAULTS.spacing}; at least the tool's diameter + ${SPACING_OVER_TOOL})
-  --only <A,B>           these parts only, into .docs/<model>/cam/only/ (the variant's with --values) with its own
-                         cam.json (the full run's files stay)
-  --force                make the files again: the folder's old .sbp go first (and a --values STEP)
+  --only <A,B>           these parts only, into .docs/<model>/cam/only/ with its own cam.json (the full run's files stay)
+  --force                make the files again: the folder's old .sbp go first
   --keep                 leave the document open in Fusion, unsaved, to simulate its setups
   --dry-run              print the plan, send nothing to Fusion
   --list-tools           list the tools of Fusion's MCP server (${ENDPOINT}), then stop`
@@ -88,9 +87,8 @@ if (flags['list-tools']) {
   process.exit(0)
 }
 
-const model = positionals[0]
-if (!model && flags.values !== undefined) fail('--values is for one model: pnpm cam <model> --values <file.json>')
-if (!model) {
+const given = positionals[0]
+if (!given) {
   // Every model (a folder with its <name>.ts, as the build finds them), each in its own run with the same flags.
   const failed = parts().filter((name) => {
     console.log(`\n== ${name}`)
@@ -100,21 +98,27 @@ if (!model) {
   if (failed.length) fail(`failed: ${failed.join(', ')}`)
   process.exit(0)
 }
+// A link (the configurator's "Copy link") names the model and its values; a model alone is made with the defaults.
+const link = given.includes('?') || given.startsWith('http') ? given : undefined
+const linked = link ? await linkValues(link).catch((error: Error) => fail(error.message)) : undefined
+const model = linked?.model ?? given
 if (!parts().includes(model)) fail(`no model ${model} (no ${model}/${model}.ts)`)
+if (link && flags.step !== undefined) fail('--step with a link: the link builds its own STEP, pass one or the other')
+const values = linked?.values ?? (await defaultValues(model))
 
-// The values first: a wrong one fails before anything is built or sent.
-const variant = flags.values === undefined ? undefined : await loadValues(model, flags.values).catch((error: Error) => fail(error.message))
-const values = variant?.values ?? (await defaultValues(model))
-/** The model's built files: its own folder, or its variant's. */
-const built = variant ? variantDir(model, variant.name) : join(MDX, model)
-if (variant) console.log(`cam: ${model} variant ${variant.hash}, the values of ${shown(variant.file)}, in ${shown(built)}`)
-
-const step = resolve(flags.step ?? join(built, `${model}.step`))
-if (variant && !flags.step && (flags.force || !existsSync(step))) {
-  // The build loads ClassCAD, which this script never does (paths.ts): it runs in a process of its own.
-  console.log(`cam: building ${shown(step)} with ${shown(variant.file)}`)
-  const build = spawnSync(process.execPath, [join(import.meta.dirname, 'build.ts'), '--parts-only', model, '--values', variant.file], { stdio: 'inherit' })
-  if (build.status !== 0) fail(`building ${shown(step)} failed`)
+let step = resolve(flags.step ?? join(MDX, model, `${model}.step`))
+if (link) {
+  // The link's STEP, built every run (about 4 s) into a folder of its own, gone when the run ends. ClassCAD loads
+  // only here, not when the script starts: a default run never needs it.
+  console.log(`cam: ${model} with the values of ${link}`)
+  const dir = mkdtempSync(join(tmpdir(), 'integral-cam-'))
+  process.on('exit', () => rmSync(dir, { recursive: true, force: true }))
+  const { openEngine } = await import('./classcad.ts')
+  const { buildPart } = await import('./site.ts')
+  const engine = await openEngine()
+  await buildPart(engine, model, values, dir)
+  engine.client.close()
+  step = join(dir, `${model}.step`)
 }
 if (!existsSync(step)) fail(`no STEP at ${shown(step)}: run \`nr build:parts\` first, or pass --step`)
 const source = configFile(ROOT, model)
@@ -135,7 +139,7 @@ if (options.tool !== undefined && !tools.some((t) => t.number === options.tool))
 const post = flags.post ?? config.defaults?.post ?? DEFAULT_POST
 const only = flags.only?.split(',').map((s) => s.trim())
 // An --only run is a run of its own, in its own folder: the full run's files and record stay as they are.
-const out = only ? join(built, 'cam', 'only') : join(built, 'cam')
+const out = only ? join(MDX, model, 'cam', 'only') : join(MDX, model, 'cam')
 
 const stepNames = stepParts(step)
 if (!stepNames.length) fail(`${shown(step)} is not an assembly (no NEXT_ASSEMBLY_USAGE_OCCURRENCE): rebuild it with \`nr build:parts\``)
@@ -209,10 +213,10 @@ const finish = () =>
 process.on('SIGINT', () => void finish().then(() => process.exit(130)))
 
 /**
- * The record of this run, beside the files (`cam.json`): the model, every master's value it was made with (`values`,
- * the defaults or a `--values` file's), and the variant's `hash`, and for each file made, every value it was made with, the parts on it, and the
- * hashes of what made it, so that a file can be made again the same. With `--step` the geometry is the file's, not
- * the build's, so the record names no values and no hash.
+ * The record of this run, beside the files (`cam.json`): the model, the `link` it was made from (when given) and
+ * every master's value it was made with (`values`, the defaults or the link's), and for each file made, every value
+ * it was made with, the parts on it, and the hashes of what made it, so that a file can be made again the same. With
+ * `--step` the geometry is the file's, not the build's, so the record names no link and no values.
  *
  * Per file: its sha256, the tool and every value given to Fusion, the deepest cut, the post and its version, the
  * Fusion version, the sha256 of every input (`inputs`). A sheet adds its material, thickness and number, its parts
@@ -220,9 +224,9 @@ process.on('SIGINT', () => void finish().then(() => process.exit(130)))
  * frame. A wedge setup adds its turn, depth and margin; a `_rest` file its tool and depth.
  */
 const RECORD = join(out, 'cam.json')
-type CamRecord = { version: 3; model: string; hash?: string; values?: Values; files: Record<string, unknown> }
-// The values and the hash only when the STEP is the build's: another file may hold another geometry.
-const record: CamRecord = flags.step === undefined ? { version: 3, model, hash: variant?.hash, values, files: {} } : { version: 3, model, files: {} }
+type CamRecord = { version: 3; model: string; link?: string; values?: Values; files: Record<string, unknown> }
+// The link and the values only when the STEP is the build's: another file may hold another geometry.
+const record: CamRecord = flags.step === undefined ? { version: 3, model, link, values, files: {} } : { version: 3, model, files: {} }
 // The inputs' hashes: the STEP, the model's module (its `CAM` config; also its geometry, already in the STEP), its
 // masters, the catalogs and the code.
 const inputs = Object.fromEntries(

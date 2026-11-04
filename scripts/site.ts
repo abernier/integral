@@ -19,8 +19,8 @@ import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
 import { build as vite } from 'vite'
 import { type Engine, glb, render, run, save } from './classcad.ts'
-import { type Values, defaultValues, valuesJsonSchema } from './masters.ts'
-import { MDX, ROOT, parts, valuesSchemaFile } from './paths.ts'
+import { type Values, defaultValues } from './masters.ts'
+import { MDX, ROOT, parts } from './paths.ts'
 
 export const DIST = join(ROOT, 'dist')
 
@@ -69,7 +69,7 @@ const docPage = (name: string) => `integral/${name}`
 /**
  * Build a part and write its files into `out`.
  * @param values Every master's value (masters.ts); the defaults when omitted.
- * @param out The folder of its files: `.docs/<part>/` by default, a variant's (`variantDir`) for other values.
+ * @param out The folder of its files: `.docs/<part>/` by default; `pnpm cam '<link>'` builds into a temporary one.
  */
 export async function buildPart(engine: Engine, part: string, values?: Values, out = join(MDX, part)) {
   const started = performance.now()
@@ -83,10 +83,8 @@ export async function buildPart(engine: Engine, part: string, values?: Values, o
   const step = await save(engine, 'STP', join(out, `${part}.step`))
   const model = await glb(engine, join(out, `${part}.glb`))
   await render(engine, join(out, `${part}.png`))
-  // Beside the model's own files, whatever `out`: the configurator's values files point at it.
-  writeFileSync(valuesSchemaFile(part), `${JSON.stringify(await valuesJsonSchema(part), null, 2)}\n`)
   const seconds = ((performance.now() - started) / 1000).toFixed(1)
-  console.log(`${relative(MDX, out)}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
+  console.log(`${out.startsWith(MDX) ? relative(MDX, out) : out}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
 }
 
 /**

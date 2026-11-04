@@ -19,7 +19,7 @@ The code only prepares Fusion's job. It groups the parts by material and thickne
 - [ ] Fusion desktop (macOS or Windows), signed in. Fusion for Personal Use is enough: it posts ShopBot OpenSBP, but its rapids run at the cutting feed, and with no tool change each tool gets its own file.
 - [ ] Fusion's MCP server on: Preferences > General > API > *Fusion MCP Server (runs locally on this device)*. On another port, set `FUSION_MCP_URL`. `pnpm cam --list-tools` checks the connection.
 - [ ] No command dialog open in Fusion during a run.
-- [ ] The model's STEP at `.docs/<model>/<model>.step`, one component per part: `nr build:parts` makes it (a `--values` run builds its variant's STEP itself).
+- [ ] The model's STEP at `.docs/<model>/<model>.step`, one component per part: `nr build:parts` makes it (a run given a link builds its own STEP first).
 - [ ] The tools of [`tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam/tools.json) match the cutters on your ShopBot, and their presets match your wood.
 
 ## Run
@@ -59,11 +59,7 @@ The machine is a `.mch` file in Fusion's machine library (`~/Library/Application
 
 Files that already exist are left alone, so a run is cheap to repeat. To work on one part, `--only <part>` writes to a folder of its own.
 
-A model with values of its own, not the defaults: `pnpm cam <model> --values my-chair.json`. The file is what the configurator's "Copy values" gives: `{ "model": "zigzag-chair", "values": { … } }`, with every master of the model's `<model>.masters.ts` in `values`. Its JSON Schema, which its `$schema` points at, is built as `.docs/<model>/<model>.values.schema.json`. The configurator's "Import values" loads such a file back into the sliders, checked by the same rules: all of it, or nothing. The rules:
-
-- **Every value, the current code.** The file holds every value, not the changed ones, so it means the same part when a default changes; the part is always built by the code checked out.
-- **The schema refuses what the code cannot build.** Another model, a missing or unknown key, or a value out of its range fails the run before anything is made.
-- **The values name the variant.** Its folder is `.docs/<model>/variants/<h>/`, `<h>` the first 8 hex digits of the sha256 of the values: the same values, the same folder, whatever the file is called. The model is built there (again with `--force`), its files go to `<h>/cam/`, and its `CAM` config follows the values: at `"BACK_LEAN": 10`, the zigzag chair's Seat goes on a 10° wedge. `cam.json` records the model, the full hash and every value.
+A model with values of its own, not the defaults: `pnpm cam '<link>'`, the link the configurator's "Copy link" gives, as in `pnpm cam 'https://abernier.github.io/integral/configurator/?part=zigzag-chair&BACK_LEAN=10'`. The link names the model (`part`) and carries only the values that differ from the defaults; the CLI reads it as the configurator does: unknown keys ignored, each value clamped to its master's range, every other master at its default. The STEP is built first, with ClassCAD and those values, in a temporary folder, on every run (about 4 s). The files go to `.docs/<model>/cam/` like any run (`cam/only/` with `--only`), in place of the last run's, and the `CAM` config follows the values: at `BACK_LEAN=10`, the zigzag chair's Seat goes on a 10° wedge. `cam.json` records the `link` and every master's resolved `values` (with `--step`, the geometry is the file's: no values). `pnpm cam <model>` and `pnpm cam` keep meaning the defaults.
 
 A part with no flat face, too thick for every tool, or larger than the sheet gets no file, and the run says so. A toolpath Fusion warns about fails the run.
 
@@ -105,15 +101,13 @@ Each run writes it beside the files. It says what each file is, which tool it us
 A sheet is one board clamped on the ShopBot, of one material and thickness (its size is in `cam.json`), its grain along its length, the x axis. Its zero is its top, at the front-left corner (x-min, y-min).
 
 ```text
-.docs/<model>/
-├── cam/
-│   ├── cam.json                      # the record of the run
-│   ├── <model>_oak_18mm_1.sbp        # every 18 mm oak part that fits on sheet 1, with the sheet's tool
-│   ├── <model>_oak_18mm_1_rest.sbp   # the same sheet, same zero, with the narrowest tool: what the first was too wide for
-│   ├── <model>_oak_18mm_2.sbp        # the rest of the 18 mm oak parts, on sheet 2
-│   ├── Leg_wedge10.sbp               # a second pass on the Leg, cut out and laid on its wedge
-│   └── only/                         # --only runs
-└── variants/<h>/cam/                 # --values runs, <h> the values' hash: the same files
+.docs/<model>/cam/
+├── cam.json                      # the record of the run
+├── <model>_oak_18mm_1.sbp        # every 18 mm oak part that fits on sheet 1, with the sheet's tool
+├── <model>_oak_18mm_1_rest.sbp   # the same sheet, same zero, with the narrowest tool: what the first was too wide for
+├── <model>_oak_18mm_2.sbp        # the rest of the 18 mm oak parts, on sheet 2
+├── Leg_wedge10.sbp               # a second pass on the Leg, cut out and laid on its wedge
+└── only/                         # --only runs
 ```
 
 A wedge file's zero is the top of the part on its wedge, `margin` out from the front-left corner of its box.

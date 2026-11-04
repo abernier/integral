@@ -1,42 +1,16 @@
-// A model made with values of one's own: a values file, every master's value, for one model, as the configurator's
-// "Copy values" gives it:
-//
-//   { "$schema": "…/zigzag-chair/zigzag-chair.values.schema.json", "model": "zigzag-chair",
-//     "values": { "T": 19, …, "BACK_LEAN": 10, … } }
-//
-// Every value, not the changed ones: the file means the same chair when a default changes later. The chair is always
-// built by the current code, and its Zod schema, made from the model's MASTERS (`<model>/<model>.masters.ts`), is the
-// one check: it refuses a file the code cannot build. A variant is named by the hash of its values, not by the file's
-// name: the same values, the same folder (`variantHash`). The build writes the schema as JSON Schema beside the
-// model's files, for editors. Shared by the build (`build.ts --values`) and `pnpm cam --values`. Nothing here loads
-// ClassCAD, so `pnpm cam` can use it.
+// A model's masters (`<model>/<model>.masters.ts`): their defaults, and a model made with values of one's own, given
+// as the configurator's share link ("Copy link"): `?part=<model>&<MASTER>=<value>...`, only the values that differ
+// from the defaults. The link is read as the configurator reads it (configurator/src/App.query.ts withQueryValues):
+// the same link, the same part in the browser and on the CLI. Nothing here loads ClassCAD, so `pnpm cam` can use it.
 
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import * as z from 'zod'
+import { withQueryValues } from '../configurator/src/App.query.ts'
 import type { Control } from '../configurator/src/models.ts'
-import { ROOT } from './paths.ts'
-
-/**
- * The schema of a values file for `model`, from its masters (each a configurator `Control`): every master a number
- * in its range, no other key, the model named.
- */
-export function valuesSchema<M extends Record<string, Control>>(model: string, masters: M) {
-  const values = Object.fromEntries(Object.entries(masters).map(([name, { min, max, hint }]) => [name, z.number().min(min).max(max).describe(hint)]))
-  return z.strictObject({
-    $schema: z.string().optional(),
-    model: z.literal(model),
-    values: z.strictObject(values as { [K in keyof M]: z.ZodNumber }),
-  })
-}
-
-/** A values file of the model whose masters are `M`. */
-export type ValuesFile<M extends Record<string, Control> = Record<string, Control>> = z.infer<ReturnType<typeof valuesSchema<M>>>
+import { ROOT, parts } from './paths.ts'
 
 /** Every master's value of the model whose masters are `M`: what its `build` and `CAM` are given. */
-export type Values<M extends Record<string, Control> = Record<string, Control>> = ValuesFile<M>['values']
+export type Values<M extends Record<string, Control> = Record<string, Control>> = Record<keyof M, number>
 
 /** A model's masters module: `<model>/<model>.masters.ts`. */
 export function mastersFile(model: string) {
@@ -50,11 +24,6 @@ export async function loadMasters(model: string) {
   return MASTERS
 }
 
-/** A model's values file schema as JSON Schema, for editors: the build writes it as `<model>.values.schema.json` (paths.ts valuesSchemaFile). */
-export async function valuesJsonSchema(model: string) {
-  return z.toJSONSchema(valuesSchema(model, await loadMasters(model)))
-}
-
 /** Every master's default value of a model. */
 export async function defaultValues(model: string): Promise<Values> {
   const masters = await loadMasters(model)
@@ -62,33 +31,16 @@ export async function defaultValues(model: string): Promise<Values> {
 }
 
 /**
- * A variant's identity: the sha256 of its values as JSON, keys in the masters' order, numbers as JSON numbers. Its
- * first 8 hex digits name its folder (`variantDir`).
+ * The model and every master's value a configurator link names: `part` is the model; each master's value is the
+ * link's, clamped to its range, or the default when the link has none (unknown keys are ignored). Throws on a link
+ * without `part`, or whose part is no model.
  */
-export function variantHash(masters: Record<string, Control>, values: Values) {
-  const canonical = JSON.stringify(Object.fromEntries(Object.keys(masters).map((name) => [name, values[name]])))
-  return createHash('sha256').update(canonical).digest('hex')
-}
-
-/**
- * A model's values file, checked: the file, its variant's hash and name (`variantHash`), every master's value.
- * Throws on a file that cannot be read, is not JSON, or that the model's schema refuses.
- */
-export async function loadValues(model: string, file: string) {
-  const masters = await loadMasters(model)
-  const schema = valuesSchema(model, masters)
-  let json: unknown
-  try {
-    json = JSON.parse(readFileSync(file, 'utf8'))
-  } catch (error) {
-    throw new Error(`${file}: ${(error as Error).message}`)
-  }
-  // Another model's file would fail on every value: say so alone.
-  const named = (json as { model?: unknown } | null)?.model
-  if (typeof named === 'string' && named !== model) throw new Error(`${file}: the values of ${named}, not ${model}`)
-  const parsed = schema.safeParse(json)
-  if (!parsed.success) throw new Error(`${file}:\n${z.prettifyError(parsed.error)}`)
-  const { values } = parsed.data
-  const hash = variantHash(masters, values)
-  return { file: resolve(file), hash, name: hash.slice(0, 8), values: values as Values }
+export async function linkValues(link: string) {
+  const url = new URL(link)
+  const model = url.searchParams.get('part')
+  if (!model) throw new Error(`${link}: no part (a configurator link: ?part=<model>&<MASTER>=<value>...)`)
+  if (!parts().includes(model)) throw new Error(`${link}: no model ${model} (no ${model}/${model}.ts)`)
+  const masters = withQueryValues(await loadMasters(model), url.searchParams)
+  const values: Values = Object.fromEntries(Object.entries(masters).map(([name, { value }]) => [name, value]))
+  return { model, values }
 }

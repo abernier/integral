@@ -19,13 +19,3 @@ export function parts() {
     .filter((entry) => entry.isDirectory() && existsSync(join(ROOT, entry.name, `${entry.name}.ts`)))
     .map((entry) => entry.name)
 }
-
-/** Where the build writes a model's variant, built with other values: `.docs/<model>/variants/<name>/`, the first 8 hex digits of its hash. */
-export function variantDir(model: string, name: string) {
-  return join(MDX, model, 'variants', name)
-}
-
-/** The JSON Schema of a model's values files (masters.ts), beside the model's own files whatever the variant: the configurator's files point at it. */
-export function valuesSchemaFile(model: string) {
-  return join(MDX, model, `${model}.values.schema.json`)
-}
