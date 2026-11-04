@@ -232,13 +232,18 @@ function Configurator({ model, panel }: { model: Model; panel: RefObject<HTMLDiv
   return (
     <>
       <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000, manual: true }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
-        <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
-        <directionalLight position={[300, 600, 400]} intensity={2.4} />
-        <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
         <ViewOffset panel={panel} />
-        {shape && <FitOnce object={shape} onFit={setTarget} />}
-        {shape && <primitive object={shape} />}
-        <OrbitControls makeDefault target={target} />
+        {/* Nothing until the first shape: the scene mounts already fitted to it, so that nothing is drawn, then moved. */}
+        {shape && (
+          <>
+            <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
+            <directionalLight position={[300, 600, 400]} intensity={2.4} />
+            <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
+            <FitOnce object={shape} onFit={setTarget} />
+            <primitive object={shape} />
+            <OrbitControls makeDefault target={target} />
+          </>
+        )}
       </Canvas>
       {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
       {!shape && !error && <Message color="var(--md-sys-color-on-surface-variant)">Building the model…</Message>}
