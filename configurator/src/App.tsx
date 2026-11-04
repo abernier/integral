@@ -4,7 +4,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { Mesh, type Object3D, Sphere } from 'three'
+import { MathUtils, Mesh, type Object3D, Sphere } from 'three'
 import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
@@ -12,6 +12,9 @@ import { levaTheme, PANEL_GAP, PANEL_WIDTH, type Role, useDocsTheme } from './Ap
 
 /** How long the sliders stay still before the part is rebuilt. */
 const DEBOUNCE_MS = 200
+
+/** The camera's vertical field of view, in degrees: narrow, close to a drawing's parallel projection. */
+const FOV = 15
 
 const query = new URLSearchParams(location.search)
 const part = query.get('part') ?? ''
@@ -180,7 +183,7 @@ function Configurator({ model }: { model: Model }) {
 
   return (
     <>
-      <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000 }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
+      <Canvas camera={{ position: [600, 500, 700], fov: FOV, near: 1, far: 100000 }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
         {/* Nothing until the first shape: the scene mounts already fitted to it, so that nothing is drawn, then moved. */}
         <Suspense fallback={null}>
           <Scene built={built} color={color} />
@@ -201,7 +204,7 @@ function Configurator({ model }: { model: Model }) {
 function Scene({ built, color }: { built: Promise<Built>; color: (role: Role) => string }) {
   const { shape } = use(built)
   const controls = useRef<ComponentRef<typeof CameraControls>>(null)
-  // Frames the first shape, before it is drawn: the orbit around its center, zoomed to its bounding sphere with some
+  // Frames the first shape, before it is drawn: the orbit around its center, pulled back to its bounding sphere with some
   // margin, the camera's direction kept. Later shapes keep the camera where the user left it: the deps are left out on purpose.
   useLayoutEffect(() => {
     if (!shape) return
@@ -210,9 +213,15 @@ function Scene({ built, color }: { built: Promise<Built>; color: (role: Role) =>
     controls.current?.fitToSphere(sphere, false)
   }, [])
   // The leva panel covers the right of the canvas: the orbit's center sits in the middle of the pixels left of it.
-  // camera-controls takes the offset in world units, so it follows the zoom, frame by frame, set before the controls
-  // apply it to the camera (drei runs their update at priority -1): the first frame is offset too.
-  useFrame(({ camera }) => controls.current?.setFocalOffset((PANEL_WIDTH + PANEL_GAP) / 2 / camera.zoom, 0, 0), -2)
+  // camera-controls takes the offset in world units at the orbit's center, so it follows the distance, frame by frame,
+  // set before the controls apply it to the camera (drei runs their update at priority -1): the first frame is offset too.
+  useFrame(({ size }) => {
+    const current = controls.current
+    if (!current) return
+    // The view is `2 * distance * tan(fov / 2)` world units tall at the orbit's center.
+    const worldPerPixel = (2 * current.distance * Math.tan(MathUtils.degToRad(FOV) / 2)) / size.height
+    current.setFocalOffset(((PANEL_WIDTH + PANEL_GAP) / 2) * worldPerPixel, 0, 0)
+  }, -2)
   if (!shape) return null
   return (
     <>
