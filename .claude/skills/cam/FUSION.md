@@ -4,6 +4,8 @@ What an agent does in the Fusion desktop app beyond `pnpm cam`: inspect, simulat
 
 ## MCP tools
 
+They come from the `fusion` server of the repo's `.mcp.json`, Fusion's local MCP server, or from the Autodesk Fusion connector when it is on: the same Fusion, either set of `fusion_mcp_*` tools.
+
 - `fusion_mcp_execute`, featureType `script`, `object: {script, readOnly}`: Python with a `def run(_context: str):`; `print` is the result, an exception the error. Let exceptions raise.
 - `fusion_mcp_execute`, featureType `document`: `open` by file id, `close`; `save` only on the user's word.
 - `fusion_mcp_read`: `activeCommand` (the open dialog and its inputs), `screenshot` (with a `direction`), `document` (`search`, `open`, `recent`), `apiDocumentation`.

@@ -34,7 +34,7 @@ pnpm cam --force                       # every model, every file made again
 
 With `--keep`, the document stays open in Fusion: select a setup, Actions > Simulate, and watch the stock go. With a machine on the setup, Simulate with Machine shows the sheet on the ShopBot, and the tool going into anything it should not.
 
-![Fusion's Simulate with Machine on the zigzag chair's sheet: the ShopBot's gantry over the cherry sheet, the toolpaths in blue, no collision](https://abernier.github.io/integral/integral/cam/simulate.png)
+![Fusion's Simulate with Machine on the zigzag chair's sheet: the ShopBot's gantry over the cherry sheet, the toolpaths in blue, no collision](cam/simulate.png)
 
 <details>
 <summary>The ShopBot in Fusion</summary>
@@ -69,7 +69,7 @@ A part with no flat face, too thick for every tool, or larger than the sheet get
 
 The files cut in 2.5D, from the top only: vertical walls, inside corners rounded to the tool's radius. Bevels, sloped walls, square corners, and whatever the rest pass cannot reach are hand work. Each model's page lists them; `--only <part> --keep` lets you Simulate one in Fusion.
 
-With Claude Code, [`/cam`](https://github.com/abernier/integral/tree/main/.claude/skills/cam) runs, checks and simulates the files in Fusion.
+With Claude Code, [`/cam`](https://github.com/abernier/integral/tree/main/.claude/skills/cam) runs, checks and simulates the files in Fusion. Its Fusion tools come from the `fusion` server of the repo's [`.mcp.json`](https://github.com/abernier/integral/blob/main/.mcp.json): the same local MCP server, `FUSION_MCP_URL` included. Approve it once when Claude Code asks.
 
 ## Machining values
 

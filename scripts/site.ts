@@ -165,10 +165,10 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
     // GitHub reads `width`; the site, the style.
     .replaceAll(`width="${THUMB}" />`, `width="${THUMB}" style={{ width: '${THUMB / 16}rem', minWidth: '${THUMB / 16}rem', height: 'auto', borderRadius: '0.375rem' }} />`)
   // A page link goes to the site, any other link to the site's files to where the files are served, Buerligons'
-  // `?url=` to the absolute URL. A link's root-relative URL (markdown or `<a href>`) loses the base path: Next.js
-  // puts it back; an `src` keeps it.
+  // `?url=` to the absolute URL. A root-relative URL loses the base path: Next.js puts it back on a link (markdown
+  // or `<a href>`), @pmndrs/docs on an image (markdown or `<img src>`, by MDX_BASEURL); an iframe's `src` keeps it.
   const pages = [HOME, ...docPages().map((d) => `/${docPage(d)}`), ...parts().map((p) => `/${partPage(p)}`)]
-  const linked = body.replace(new RegExp(`(\\]\\(|href="|\\?url=)?${PAGES_URL.replaceAll('.', '\\.')}(/[^\\s)"']*)`, 'g'), (_, before = '', path: string) => {
+  const linked = body.replace(new RegExp(`(\\]\\(|href="|<img src="|\\?url=)?${PAGES_URL.replaceAll('.', '\\.')}(/[^\\s)"']*)`, 'g'), (_, before = '', path: string) => {
     if (before === '?url=') return `${before}${buerligonsUrl(urls.shared, path)}`
     const url = `${pages.includes(path) ? urls.site : urls.files}${path}`
     return before && BASE_PATH && url.startsWith(`${BASE_PATH}/`) ? `${before}${url.slice(BASE_PATH.length)}` : `${before}${url}`
@@ -234,8 +234,9 @@ export function docsEnv(overrides: Record<string, string> = {}) {
     NEXT_PUBLIC_LIBNAME_SHORT: 'integral',
     BASE_PATH,
     HOME_REDIRECT: HOME,
-    // Unset: @pmndrs/docs would make every image URL absolute on it, the pages' root-relative ones included.
-    MDX_BASEURL: '',
+    // @pmndrs/docs resolves the pages' images under the base path, root-relative, so they load from whichever
+    // host serves the page; `/` at a root, as empty would turn the resolution off.
+    MDX_BASEURL: BASE_PATH || '/',
     NEXT_PUBLIC_URL: SITE_URL,
     SOURCECODE_BASEURL: 'https://github.com/abernier/integral/tree/main',
     // No base: the pages do not sit at their READMEs' paths, so each page gives its own `edit` URL.
