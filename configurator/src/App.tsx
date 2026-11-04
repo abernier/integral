@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Bounds, OrbitControls } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
+import { Mtb, useMtb } from 'material-theme-builder/react'
 import { Mesh, type Object3D } from 'three'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
+import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
 const DEBOUNCE_MS = 200
@@ -48,8 +50,31 @@ function panelSchema(schema: Model['schema']) {
   return { ...main, Details: folder(details, { collapsed: true }) }
 }
 
-/** The configurator page: the part named by `?part=`, rebuilt as its sliders move. */
+/** The configurator page, in the docs' theme: the part named by `?part=`, rebuilt as its sliders move. */
 export function App() {
+  const { dark, mtb } = useDocsTheme()
+  // `<Mtb>` keys its dark values on a `dark` class, as next-themes sets it on the docs' `<html>`.
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+  }, [dark])
+
+  return (
+    <Mtb {...mtb}>
+      <Page />
+    </Mtb>
+  )
+}
+
+/** A role's hex in the current mode, for what CSS variables cannot reach: three.js colors, leva's theme. */
+function useRoleColor() {
+  const { dark } = useDocsTheme()
+  const { getMtbColor } = useMtb()
+  return (role: Role) => getMtbColor(role, dark ? 'dark' : 'light')
+}
+
+function Page() {
+  const color = useRoleColor()
   const [model, setModel] = useState<Model>()
   const [error, setError] = useState<string>()
 
@@ -61,19 +86,21 @@ export function App() {
 
   return (
     <>
-      <Leva titleBar={{ title: part }} />
+      <Leva titleBar={{ title: part }} theme={levaTheme(color)} />
       {model && <Configurator model={model} />}
       {error && !model && <Message>{error}</Message>}
-      {!error && !model && <Message color="#555">Loading…</Message>}
+      {!error && !model && <Message color="var(--md-sys-color-on-surface-variant)">Loading…</Message>}
     </>
   )
 }
 
-function Message({ children, color = '#b00020', bottom = 16 }: { children: string; color?: string; bottom?: number }) {
-  return <div style={{ position: 'fixed', left: 16, bottom, padding: '8px 12px', background: '#fff', borderRadius: 6, color }}>{children}</div>
+function Message({ children, color = 'var(--md-sys-color-error)', bottom = 16 }: { children: string; color?: string; bottom?: number }) {
+  const background = 'var(--md-sys-color-surface-container-high)'
+  return <div style={{ position: 'fixed', left: 16, bottom, padding: '8px 12px', background, borderRadius: 6, color }}>{children}</div>
 }
 
 function Configurator({ model }: { model: Model }) {
+  const color = useRoleColor()
   const [toast, setToast] = useState<string>()
   // leva's `get`, `set` and `values` address an input by its own key, in a folder too (`W`, not `Details.W`).
   const [values, set, get] = useControls(() => ({
@@ -133,10 +160,10 @@ function Configurator({ model }: { model: Model }) {
 
   return (
     <>
-      <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000 }} style={{ position: 'fixed', inset: 0 }}>
+      <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000 }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
         <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
         <directionalLight position={[300, 600, 400]} intensity={2.4} />
-        <gridHelper args={[2000, 40, '#bbb', '#ddd']} />
+        <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
         {/* Fitted to the first shape only, so that the camera stays where the user left it. */}
         <Bounds key={shape ? 'shape' : 'none'} fit observe={false}>
           {shape && <primitive object={shape} />}
@@ -144,9 +171,9 @@ function Configurator({ model }: { model: Model }) {
         <OrbitControls makeDefault />
       </Canvas>
       {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
-      {!shape && !error && <Message color="#555">Building the model…</Message>}
+      {!shape && !error && <Message color="var(--md-sys-color-on-surface-variant)">Building the model…</Message>}
       {error && <Message>{error}</Message>}
-      {toast && <Message color="#111" bottom={error ? 64 : 16}>{toast}</Message>}
+      {toast && <Message color="var(--md-sys-color-on-surface)" bottom={error ? 64 : 16}>{toast}</Message>}
     </>
   )
 }

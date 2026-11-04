@@ -10,8 +10,16 @@
       #root {
         margin: 0;
         height: 100%;
-        background: #eef0f3;
+        /* The docs' Material 3 roles, which <Mtb> defines: see src/App.theme.ts. */
+        background: var(--md-sys-color-surface);
+        color: var(--md-sys-color-on-surface);
         font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+      }
+      /* leva writes a button's label in its value color, on-surface, which the seed's lime is too light to carry in
+         dark mode: the role that goes on the button's container role instead. leva's class names are hashed, only
+         their prefix is stable. */
+      [class*='leva-'] button:not(:disabled) {
+        color: var(--md-sys-color-on-primary-container);
       }
     </style>
   </head>
