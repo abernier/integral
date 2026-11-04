@@ -13,15 +13,15 @@ const LEAN = 8
  * 740 height (the back's rear top corner) with its 8 degree lean.
  */
 export const MASTERS = {
-  T: { value: 19, min: 12, max: 30, step: 0.5, hint: 'board thickness' },
-  W_NOSE: { value: 370, min: 300, max: 500, step: 1, hint: "width at the seat's nose" },
-  W_FOOT: { value: 330, min: 260, max: 460, step: 1, hint: "width at the slant's foot: with W_NOSE, it sets the taper" },
+  T: { main: true, value: 19, min: 12, max: 30, step: 0.5, hint: 'board thickness' },
+  W_NOSE: { main: true, value: 370, min: 300, max: 500, step: 1, hint: "width at the seat's nose" },
+  W_FOOT: { main: true, value: 330, min: 260, max: 460, step: 1, hint: "width at the slant's foot: with W_NOSE, it sets the taper" },
   W_BASE_FRONT: { value: 300, min: 220, max: 420, step: 1, hint: "width of the base's top face at its front edge" },
-  SEAT_TOP: { value: 430, min: 380, max: 500, step: 1, hint: "height of the seat's top face" },
-  SEAT_LEN: { value: 480 - 310 * Math.tan(LEAN * DEG), min: 350, max: 520, step: 1, hint: "the seat's top face, from the nose to the back's rear face" },
-  BACK_H: { value: 310 / Math.cos(LEAN * DEG), min: 200, max: 450, step: 1, hint: 'the back above the seat, along its rear face' },
-  BACK_LEAN: { value: LEAN, min: 0, max: 20, step: 0.5, hint: "the back's lean from the vertical, degrees" },
-  BASE_LENGTH: { value: 418, min: 330, max: 500, step: 1, hint: "the base's underside, from the foot to its square front end" },
+  SEAT_TOP: { main: true, value: 430, min: 380, max: 500, step: 1, hint: "height of the seat's top face" },
+  SEAT_LEN: { main: true, value: 480 - 310 * Math.tan(LEAN * DEG), min: 350, max: 520, step: 1, hint: "the seat's top face, from the nose to the back's rear face" },
+  BACK_H: { main: true, value: 310 / Math.cos(LEAN * DEG), min: 200, max: 450, step: 1, hint: 'the back above the seat, along its rear face' },
+  BACK_LEAN: { main: true, value: LEAN, min: 0, max: 20, step: 0.5, hint: "the back's lean from the vertical, degrees" },
+  BASE_LENGTH: { main: true, value: 418, min: 330, max: 500, step: 1, hint: "the base's underside, from the foot to its square front end" },
   CLEAT: { value: 30, min: 15, max: 50, step: 1, hint: "a cleat's legs" },
   TAILS: { value: 6, min: 2, max: 8, step: 1, hint: 'dovetail count' },
   SLOPE: { value: 1 / 6, min: 0.1, max: 0.25, step: 0.01, hint: 'dovetail slope, 1 in 6' },

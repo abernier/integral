@@ -11,6 +11,15 @@ export interface Control {
   max: number
   step: number
   hint: string
+  /**
+   * Shown at the top level of the configurator; every other master goes in its Details folder. A master is main when
+   * it changes what the user sees or feels of the piece, its size or its posture: the dimensions of use (overall width,
+   * seat height and depth, arm or back height), the back's lean, the board thickness (the stock bought). It stays under
+   * Details when it only changes how the piece is made, or a proportion set once from the original drawing: joinery,
+   * the feet's positions, rail offsets, the back's bow, grips and profile details. A handful per model; masters that
+   * only make sense together (the four foot positions) stay under Details rather than be separate main sliders.
+   */
+  main?: true
 }
 
 /** What a part's model file exports: its leva `schema` and the `build` that makes the part from the schema's values. */

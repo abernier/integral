@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Box3, Mesh, type Object3D } from 'three'
 
+import { loadMasters } from '../../scripts/masters.ts'
 import { parts } from '../../scripts/paths.ts'
 import type { Control, Model } from './models.ts'
 
@@ -35,6 +36,14 @@ for (const part of parts()) {
       assert.ok(step > 0, `${name}: step must be positive`)
       assert.ok(typeof hint === 'string' && hint.trim() !== '', `${name}: no hint`)
     }
+  })
+
+  test(`${part}: at least one slider is main, and every main one is a master`, async () => {
+    const { schema }: Model = await import(`../../${part}/${part}.model.ts`)
+    const masters = await loadMasters(part)
+    const main = Object.keys(masters).filter((name) => masters[name].main)
+    assert.ok(main.length > 0, 'no main master')
+    for (const name of main) assert.ok(Object.hasOwn(schema, name), `${name}: main, but not one of the sliders`)
   })
 
   test(`${part}: builds from its defaults into named meshes with a finite bounding box`, async () => {
