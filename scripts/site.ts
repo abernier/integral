@@ -3,9 +3,8 @@
 //
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
 // ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`), and a README.md.
-// Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`, or a
-// variant's folder, and the JSON Schema of its values files (masters.ts), `<folder>.values.schema.json`, into
-// `.docs/<folder>/`;
+// Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`, or
+// the folder `buildPart` is given (`pnpm cam '<link>'` builds into a temporary one);
 // `buildConfigurator` builds the configurator app into `.docs/configurator/`, and each part's page embeds it. The MDX folder also
 // gets one page per README, where the sidebar wants it: the root one as `integral/introduction.mdx`, each part's
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things"), and one per
@@ -67,7 +66,7 @@ function docPages() {
 const docPage = (name: string) => `integral/${name}`
 
 /**
- * Build a part and write its files into `out`.
+ * Build a part and write its files into `out`; returns their absolute paths.
  * @param values Every master's value (masters.ts); the defaults when omitted.
  * @param out The folder of its files: `.docs/<part>/` by default; `pnpm cam '<link>'` builds into a temporary one.
  */
@@ -79,12 +78,16 @@ export async function buildPart(engine: Engine, part: string, values?: Values, o
   const resolved = values ?? (await defaultValues(part))
   const returned = await run(engine, (api) => build(api, resolved))
   mkdirSync(out, { recursive: true })
-  const ofb = await save(engine, 'OFB', join(out, `${part}.ofb`))
-  const step = await save(engine, 'STP', join(out, `${part}.step`))
-  const model = await glb(engine, join(out, `${part}.glb`))
-  await render(engine, join(out, `${part}.png`))
+  const files = { ofb: join(out, `${part}.ofb`), step: join(out, `${part}.step`), glb: join(out, `${part}.glb`), png: join(out, `${part}.png`) }
+  const ofbSize = await save(engine, 'OFB', files.ofb)
+  const stepSize = await save(engine, 'STP', files.step)
+  const glbSize = await glb(engine, files.glb)
+  await render(engine, files.png)
   const seconds = ((performance.now() - started) / 1000).toFixed(1)
-  console.log(`${out.startsWith(MDX) ? relative(MDX, out) : out}: ${seconds} s, ofb ${ofb} B, step ${step} B, glb ${model} B`, JSON.stringify(returned))
+  // The folder relative to .docs when it is under it (the usual case), else as given.
+  const shown = out.startsWith(MDX) ? relative(MDX, out) : out
+  console.log(`${shown}: ${seconds} s, ofb ${ofbSize} B, step ${stepSize} B, glb ${glbSize} B`, JSON.stringify(returned))
+  return files
 }
 
 /**

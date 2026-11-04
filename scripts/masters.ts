@@ -24,23 +24,28 @@ export async function loadMasters(model: string) {
   return MASTERS
 }
 
-/** Every master's default value of a model. */
-export async function defaultValues(model: string): Promise<Values> {
-  const masters = await loadMasters(model)
+/** Each master's current value, by name. */
+function valuesOf(masters: Record<string, Control>): Values {
   return Object.fromEntries(Object.entries(masters).map(([name, { value }]) => [name, value]))
 }
 
+/** Every master's default value of a model. */
+export async function defaultValues(model: string): Promise<Values> {
+  return valuesOf(await loadMasters(model))
+}
+
 /**
- * The model and every master's value a configurator link names: `part` is the model; each master's value is the
- * link's, clamped to its range, or the default when the link has none (unknown keys are ignored). Throws on a link
- * without `part`, or whose part is no model.
+ * The model and every master's value a configurator link names, the full link or its bare query
+ * (`?part=<model>&<MASTER>=<value>...`): `part` is the model; each master's value is the link's, clamped to its
+ * range, or the default when the link has none (unknown keys are ignored). Throws on a link without `part`, or
+ * whose part is no model.
  */
 export async function linkValues(link: string) {
-  const url = new URL(link)
+  // The base makes a bare query parse too; a full link ignores it.
+  const url = new URL(link, 'http://localhost')
   const model = url.searchParams.get('part')
   if (!model) throw new Error(`${link}: no part (a configurator link: ?part=<model>&<MASTER>=<value>...)`)
   if (!parts().includes(model)) throw new Error(`${link}: no model ${model} (no ${model}/${model}.ts)`)
   const masters = withQueryValues(await loadMasters(model), url.searchParams)
-  const values: Values = Object.fromEntries(Object.entries(masters).map(([name, { value }]) => [name, value]))
-  return { model, values }
+  return { model, values: valuesOf(masters) }
 }

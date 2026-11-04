@@ -69,7 +69,8 @@ const USAGE = `usage: pnpm cam [<model> | '<link>'] [options]      (no model: ev
   --sheet <LxW>          the sheet, mm (default ${MACHINING_DEFAULTS.sheet.join('x')})
   --spacing <mm>         between two parts on a sheet (default ${MACHINING_DEFAULTS.spacing}; at least the tool's diameter + ${SPACING_OVER_TOOL})
   --only <A,B>           these parts only, into .docs/<model>/cam/only/ with its own cam.json (the full run's files stay)
-  --force                make the files again: the folder's old .sbp go first
+  --force                make the files again: the folder's old .sbp go first (unasked when its cam.json was made with
+                         other values or another link than this run's)
   --keep                 leave the document open in Fusion, unsaved, to simulate its setups
   --dry-run              print the plan, send nothing to Fusion
   --list-tools           list the tools of Fusion's MCP server (${ENDPOINT}), then stop`
@@ -102,29 +103,80 @@ if (!given) {
 const link = given.includes('?') || given.startsWith('http') ? given : undefined
 const linked = link ? await linkValues(link).catch((error: Error) => fail(error.message)) : undefined
 const model = linked?.model ?? given
-if (!parts().includes(model)) fail(`no model ${model} (no ${model}/${model}.ts)`)
+// A link's model was checked with the link (linkValues).
+if (!linked && !parts().includes(model)) fail(`no model ${model} (no ${model}/${model}.ts)`)
 if (link && flags.step !== undefined) fail('--step with a link: the link builds its own STEP, pass one or the other')
 const values = linked?.values ?? (await defaultValues(model))
+const only = flags.only?.split(',').map((s) => s.trim())
+// An --only run is a run of its own, in its own folder: the full run's files and record stay as they are.
+const out = only ? join(MDX, model, 'cam', 'only') : join(MDX, model, 'cam')
+
+/**
+ * The record of this run, beside the files (`cam.json`): the model, the `link` it was made from (when given) and
+ * every master's value it was made with (`values`, the defaults or the link's), and for each file made, every value
+ * it was made with, the parts on it, and the hashes of what made it, so that a file can be made again the same. With
+ * `--step` the geometry is the file's, not the build's, so the record names no link and no values.
+ *
+ * Per file: its sha256, the tool and every value given to Fusion, the deepest cut, the post and its version, the
+ * Fusion version, the sha256 of every input (`inputs`). A sheet adds its material, thickness and number, its parts
+ * and their grain turn, where they lie (`partsBox`, and `boxes` per part, mm from the corner), its size, spacing and
+ * frame. A wedge setup adds its turn, depth and margin; a `_rest` file its tool and depth.
+ */
+const RECORD = join(out, 'cam.json')
+type CamRecord = { version: 3; model: string; link?: string; values?: Values; files: Record<string, unknown> }
+// The link and the values only when the STEP is the build's: another file may hold another geometry.
+const record: CamRecord = flags.step === undefined ? { version: 3, model, link, values, files: {} } : { version: 3, model, files: {} }
+
+// The files already in the folder are left alone, unless --force, or they are another model's: the folder's record
+// names the link and the values they were made with (none under --step), and when those are not this run's they
+// are made again as --force would. Checked before the link's build, which would be spent for nothing.
+const existing = existsSync(out) ? readdirSync(out).filter((file) => file.endsWith('.sbp')) : []
+if (existing.length && !flags.force) {
+  // The old record, if there is one to read (a missing or unreadable cam.json is no record).
+  let previous: Partial<CamRecord> | undefined
+  try {
+    previous = JSON.parse(readFileSync(RECORD, 'utf8'))
+  } catch {
+    previous = undefined
+  }
+  // Compared as JSON: the values' keys come in the masters' order in both records, so equal makings read the same.
+  const sameMaking = JSON.stringify([previous?.link, previous?.values]) === JSON.stringify([record.link, record.values])
+  if (sameMaking) {
+    console.log(`cam: files already in ${shown(out)} (${existing.join(', ')}): --force makes them again`)
+    process.exit(0)
+  }
+  console.log(`cam: files in ${shown(out)} were made with other values: making them again`)
+}
+
+// Until Fusion is connected, Ctrl-C ends the run at once: with no handler Node ends the process without the 'exit'
+// event, and the link's temporary folder would stay. Once Fusion is connected, `finish` takes over (below).
+const interrupted = () => process.exit(130)
+process.on('SIGINT', interrupted)
 
 let step = resolve(flags.step ?? join(MDX, model, `${model}.step`))
 if (link) {
-  // The link's STEP, built every run (about 4 s) into a folder of its own, gone when the run ends. ClassCAD loads
-  // only here, not when the script starts: a default run never needs it.
+  // The link's STEP, built every run into a folder of its own, gone when the run ends. ClassCAD loads only here, not
+  // when the script starts: a default run never needs it.
   console.log(`cam: ${model} with the values of ${link}`)
   const dir = mkdtempSync(join(tmpdir(), 'integral-cam-'))
   process.on('exit', () => rmSync(dir, { recursive: true, force: true }))
   const { openEngine } = await import('./classcad.ts')
   const { buildPart } = await import('./site.ts')
-  const engine = await openEngine()
-  await buildPart(engine, model, values, dir)
+  const engine = await openEngine().catch((error: unknown) => fail(`ClassCAD: ${messageOf(error)}`))
+  const built = await buildPart(engine, model, values, dir).catch((error: unknown) => {
+    engine.client.close()
+    return fail(`building ${model} failed: ${messageOf(error)}`)
+  })
   engine.client.close()
-  step = join(dir, `${model}.step`)
+  step = built.step
 }
 if (!existsSync(step)) fail(`no STEP at ${shown(step)}: run \`nr build:parts\` first, or pass --step`)
 const source = configFile(ROOT, model)
 const { library, tools } = loadTools()
 const materials = loadMaterials()
 const config = await loadConfig(source, materials, values).catch((error: Error) => fail(error.message))
+// The file's geometry may be another model's, while its CAM config can only be computed from the defaults' values.
+if (flags.step !== undefined && (config.parts || config.defaults)) console.log(`cam: --step: the CAM config is the defaults' (the file's geometry may be another model's)`)
 const partConfigs = config.parts ?? {}
 const sheetFlag = flags.sheet?.split('x').map(Number)
 const cli: MachiningOptions = {
@@ -137,9 +189,6 @@ if (cliProblems.length) fail(`--tool/--sheet/--spacing: ${cliProblems.join('; ')
 const options = resolveMachining(cli, config.defaults)
 if (options.tool !== undefined && !tools.some((t) => t.number === options.tool)) fail(`no tool #${options.tool} in scripts/cam/tools.json (${tools.map((t) => t.number).join(', ')})`)
 const post = flags.post ?? config.defaults?.post ?? DEFAULT_POST
-const only = flags.only?.split(',').map((s) => s.trim())
-// An --only run is a run of its own, in its own folder: the full run's files and record stay as they are.
-const out = only ? join(MDX, model, 'cam', 'only') : join(MDX, model, 'cam')
 
 const stepNames = stepParts(step)
 if (!stepNames.length) fail(`${shown(step)} is not an assembly (no NEXT_ASSEMBLY_USAGE_OCCURRENCE): rebuild it with \`nr build:parts\``)
@@ -159,12 +208,6 @@ const ownSetups = selected.flatMap((part) => (entryOf(part)?.setups ?? []).map((
 
 console.log(`cam: ${model}, ${selected.length} parts from ${shown(step)}, ${config.parts || config.defaults ? `CAM config from ${shown(source)}` : 'no CAM config'}`)
 if (skipped.length) console.log(`cam: skipping ${skipped.join(', ')}`)
-
-const existing = existsSync(out) ? readdirSync(out).filter((file) => file.endsWith('.sbp')) : []
-if (existing.length && !flags.force) {
-  console.log(`cam: files already in ${shown(out)} (${existing.join(', ')}): --force makes them again`)
-  process.exit(0)
-}
 
 const SCRIPT = readFileSync(join(import.meta.dirname, 'cam', 'fusion-job.py'), 'utf8')
 /** The script for one step: JOB first (a JSON string is a valid Python string literal), then fusion-job.py. */
@@ -210,29 +253,21 @@ const finish = () =>
     }
     await client.close()
   })())
+// From here on, Ctrl-C closes the document first: `finish` replaces the plain exit above (both would exit at once).
+process.off('SIGINT', interrupted)
 process.on('SIGINT', () => void finish().then(() => process.exit(130)))
 
-/**
- * The record of this run, beside the files (`cam.json`): the model, the `link` it was made from (when given) and
- * every master's value it was made with (`values`, the defaults or the link's), and for each file made, every value
- * it was made with, the parts on it, and the hashes of what made it, so that a file can be made again the same. With
- * `--step` the geometry is the file's, not the build's, so the record names no link and no values.
- *
- * Per file: its sha256, the tool and every value given to Fusion, the deepest cut, the post and its version, the
- * Fusion version, the sha256 of every input (`inputs`). A sheet adds its material, thickness and number, its parts
- * and their grain turn, where they lie (`partsBox`, and `boxes` per part, mm from the corner), its size, spacing and
- * frame. A wedge setup adds its turn, depth and margin; a `_rest` file its tool and depth.
- */
-const RECORD = join(out, 'cam.json')
-type CamRecord = { version: 3; model: string; link?: string; values?: Values; files: Record<string, unknown> }
-// The link and the values only when the STEP is the build's: another file may hold another geometry.
-const record: CamRecord = flags.step === undefined ? { version: 3, model, link, values, files: {} } : { version: 3, model, files: {} }
 // The inputs' hashes: the STEP, the model's module (its `CAM` config; also its geometry, already in the STEP), its
-// masters, the catalogs and the code.
-const inputs = Object.fromEntries(
-  [step, source, mastersFile(model), TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
-    .map((file) => [shown(file), sha256(file)]),
-)
+// masters, the catalogs and the code. A link's STEP is keyed by the model's name, not by its temporary folder's
+// random path, so that the record reads the same run to run.
+const stepName = link ? `${model}.step (built from the link)` : shown(step)
+const inputs = {
+  [stepName]: sha256(step),
+  ...Object.fromEntries(
+    [source, mastersFile(model), TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
+      .map((file) => [shown(file), sha256(file)]),
+  ),
+}
 const failed: string[] = []
 /** Parts with no file: not imported, not a sheet part, no tool reaching through, larger than a sheet, on a failed sheet. */
 const unmade: string[] = []
@@ -244,7 +279,7 @@ try {
   fusionVersion = imports.fusion
   console.log(`fusion: ${shown(step)} imported as "${imports.document}" in ${seconds(started)} s, ${imports.parts.length} parts`)
   mkdirSync(out, { recursive: true })
-  // --force makes every file of the folder again: the old ones go first, so none is left from another nesting.
+  // Making the folder's files again (--force, or other values): the old ones go first, so none is left from another nesting.
   for (const file of existing) unlinkSync(join(out, file))
 
   // The parts by material and thickness, thinnest first.

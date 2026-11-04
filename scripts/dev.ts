@@ -78,7 +78,9 @@ watch(ROOT, { recursive: true }, (_event, file) => {
   if (file === 'README.md' || (name === 'README.md' && parts().includes(folder)) || (folder === 'docs' && name?.endsWith('.md'))) {
     later('pages', () => void writePages(urls))
   } else if (parts().includes(folder) && name === `${folder}.ts`) {
-    later(folder, () => buildPart(engine, folder))
+    later(folder, async () => {
+      await buildPart(engine, folder)
+    })
   }
 })
 

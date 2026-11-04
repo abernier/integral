@@ -59,7 +59,7 @@ The machine is a `.mch` file in Fusion's machine library (`~/Library/Application
 
 Files that already exist are left alone, so a run is cheap to repeat. To work on one part, `--only <part>` writes to a folder of its own.
 
-A model with values of its own, not the defaults: `pnpm cam '<link>'`, the link the configurator's "Copy link" gives, as in `pnpm cam 'https://abernier.github.io/integral/configurator/?part=zigzag-chair&BACK_LEAN=10'`. The link names the model (`part`) and carries only the values that differ from the defaults; the CLI reads it as the configurator does: unknown keys ignored, each value clamped to its master's range, every other master at its default. The STEP is built first, with ClassCAD and those values, in a temporary folder, on every run (about 4 s). The files go to `.docs/<model>/cam/` like any run (`cam/only/` with `--only`), in place of the last run's, and the `CAM` config follows the values: at `BACK_LEAN=10`, the zigzag chair's Seat goes on a 10° wedge. `cam.json` records the `link` and every master's resolved `values` (with `--step`, the geometry is the file's: no values). `pnpm cam <model>` and `pnpm cam` keep meaning the defaults.
+A model with values of its own, not the defaults: `pnpm cam '<link>'`, the link the configurator's "Copy link" gives, as in `pnpm cam 'https://abernier.github.io/integral/configurator/?part=zigzag-chair&BACK_LEAN=10'`. The link names the model (`part`) and carries only the values that differ from the defaults; the CLI reads it as the configurator does: unknown keys ignored, each value clamped to its master's range, every other master at its default. The STEP is built first, with ClassCAD and those values, in a temporary folder, on every run (about 4 s). The files go to `.docs/<model>/cam/` like any run (`cam/only/` with `--only`), made again when the folder's `cam.json` was made with other values or another link and left alone (without `--force`) when it was the same, and the `CAM` config follows the values: at `BACK_LEAN=10`, the zigzag chair's Seat goes on a 10° wedge. `cam.json` records the `link` and every master's resolved `values` (with `--step`, the geometry is the file's: no values). `pnpm cam <model>` and `pnpm cam` keep meaning the defaults.
 
 A part with no flat face, too thick for every tool, or larger than the sheet gets no file, and the run says so. A toolpath Fusion warns about fails the run.
 
@@ -94,7 +94,7 @@ What Fusion cannot know from the STEP (parts to skip, grain turns, flips, wedge 
 
 ## The record: `cam.json`
 
-Each run writes it beside the files. It says what each file is, which tool it uses, which parts lie where on which sheet, every value given to Fusion, and the hash of every input, so a file can be made again the same (`CamRecord` in [`cam.ts`](https://github.com/abernier/integral/blob/main/scripts/cam.ts)).
+Each run writes it beside the files. It says what each file is, which tool it uses, which parts lie where on which sheet, every value given to Fusion, and the hash of every input, so a file can be made again the same (`CamRecord` in [`cam.ts`](https://github.com/abernier/integral/blob/main/scripts/cam.ts)). The record (version 3) also names the `model`, the `link` when the run was given one, and every master's `values` (none with `--step`, whose geometry is the file's).
 
 ## Cutting the files
 

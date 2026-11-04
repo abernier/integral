@@ -17,14 +17,11 @@ export function withQueryValues(schema: Model['schema'], params: URLSearchParams
   )
 }
 
-/** The values that differ from the schema's defaults, in the schema's order: what a link carries. */
-function changedValues(schema: Model['schema'], values: Record<string, number>): Record<string, number> {
-  return Object.fromEntries(Object.keys(schema).filter((name) => values[name] !== schema[name].value).map((name) => [name, values[name]]))
-}
-
 /** The link's parameters: `part` first, then only the values that differ from the schema's defaults, to keep the link short. */
 export function changedParams(schema: Model['schema'], values: Record<string, number>, part: string): URLSearchParams {
   const params = new URLSearchParams({ part })
-  for (const [name, value] of Object.entries(changedValues(schema, values))) params.set(name, String(value))
+  for (const [name, control] of Object.entries(schema)) {
+    if (values[name] !== control.value) params.set(name, String(values[name]))
+  }
   return params
 }
