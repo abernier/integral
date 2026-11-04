@@ -1,10 +1,10 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
 import { type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { Mesh, type Object3D, Sphere } from 'three'
+import { MathUtils, Mesh, type Object3D, Sphere, Vector3 } from 'three'
 import { useDebounceValue, useResizeObserver } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
@@ -87,6 +87,8 @@ function Page() {
   // inputs are registered. The canvas shifts its picture by half of it. (`null!`: usehooks-ts types the ref as never null.)
   const panel = useRef<HTMLDivElement>(null!)
   const { width: panelWidth = 0 } = useResizeObserver({ ref: panel, box: 'border-box' })
+  // Collapsed, the panel covers next to nothing: no shift.
+  const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
     // hasOwn: a plain lookup would also find inherited members such as `constructor`.
@@ -98,9 +100,9 @@ function Page() {
     <>
       {/* zIndex: the canvas, fixed too and later in the DOM, would cover the panel. */}
       <div ref={panel} style={{ position: 'fixed', top: 10, right: 0, zIndex: 1, width: 290, paddingRight: 10, boxSizing: 'border-box' }}>
-        <Leva fill titleBar={{ title: part, drag: false }} theme={levaTheme(color)} />
+        <Leva fill collapsed={{ collapsed, onChange: setCollapsed }} titleBar={{ title: part, drag: false }} theme={levaTheme(color)} />
       </div>
-      {model && <Configurator model={model} shift={panelWidth / 2} />}
+      {model && <Configurator model={model} shift={collapsed ? 0 : panelWidth / 2} />}
       <Messages>
         {error && !model && <Message>{error}</Message>}
         {!error && !model && <Message color="var(--md-sys-color-on-surface-variant)">Loading…</Message>}
@@ -224,15 +226,26 @@ function Scene({ built, color, shift }: { built: Promise<Built>; color: (role: R
     sphere.radius *= 1.1
     controls.current?.fitToSphere(sphere, false)
   }, [])
-  // The leva panel covers the right of the canvas: the picture is shifted left by half of it, so that the orbit's
-  // center sits in the middle of what is left. An offset of the projection, in pixels: orbit, dolly and pan leave it be.
-  // On a portrait canvas (a phone), no shift: the panel overlaps the picture instead.
-  const { camera, size } = useThree()
-  useLayoutEffect(() => {
-    const portrait = size.width < size.height
-    camera.setViewOffset(size.width, size.height, portrait ? 0 : shift, 0, size.width, size.height)
-    return () => camera.clearViewOffset()
-  }, [camera, size, shift])
+  // The leva panel covers the right of the canvas: the orbit's center sits in the middle of the pixels left of it,
+  // through camera-controls' focal offset, so that a change (the panel collapsed, a phone turned) is smoothed. The offset
+  // is in world units at the orbit's center: recomputed each frame from the distance, so that a dolly keeps it. Only our
+  // part of it is applied, as a delta: the pan, which shares the focal offset, keeps its own. On a portrait canvas (a
+  // phone), no shift: the panel overlaps the picture instead. Priority -2: before drei's own update of the controls (-1),
+  // so that the first frame is shifted already.
+  const applied = useRef<number>(undefined)
+  useFrame(({ size }) => {
+    const current = controls.current
+    if (!current) return
+    const pixels = size.width < size.height ? 0 : shift
+    // The view is `2 * distance * tan(fov / 2)` world units tall at the orbit's center.
+    const wanted = (pixels * 2 * current.distance * Math.tan(MathUtils.degToRad(FOV) / 2)) / size.height
+    if (wanted === applied.current) return
+    const offset = current.getFocalOffset(new Vector3(), true)
+    offset.x += wanted - (applied.current ?? 0)
+    // The first one at once: the first frame is drawn in place.
+    current.setFocalOffset(offset.x, offset.y, offset.z, applied.current !== undefined)
+    applied.current = wanted
+  }, -2)
   if (!shape) return null
   return (
     <>
