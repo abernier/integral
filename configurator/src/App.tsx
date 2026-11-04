@@ -4,7 +4,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { MathUtils, Mesh, type Object3D, Sphere, Vector3 } from 'three'
+import { MathUtils, Mesh, type Object3D, Sphere, Spherical, Vector3 } from 'three'
 import { useDebounceValue, useResizeObserver } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
@@ -15,6 +15,12 @@ const DEBOUNCE_MS = 200
 
 /** The camera's vertical field of view, in degrees: narrow, close to a drawing's parallel projection. */
 const FOV = 15
+
+/**
+ * How long camera-controls takes to settle, in seconds, whether the user drives it or not: one pace, so that the focal
+ * offset and the dolly, damped side by side, keep in step. camera-controls' own `draggingSmoothTime`.
+ */
+const SMOOTH_TIME = 0.125
 
 const { ACTION } = CameraControlsImpl
 
@@ -228,17 +234,19 @@ function Scene({ built, color, shift }: { built: Promise<Built>; color: (role: R
   }, [])
   // The leva panel covers the right of the canvas: the orbit's center sits in the middle of the pixels left of it,
   // through camera-controls' focal offset, so that a change (the panel collapsed, a phone turned) is smoothed. The offset
-  // is in world units at the orbit's center: recomputed each frame from the distance, so that a dolly keeps it. Only our
-  // part of it is applied, as a delta: the pan, which shares the focal offset, keeps its own. On a portrait canvas (a
-  // phone), no shift: the panel overlaps the picture instead. Priority -2: before drei's own update of the controls (-1),
-  // so that the first frame is shifted already.
+  // is in world units at the orbit's center, so it is proportional to the distance: taken from the distance the
+  // controls head for, and damped at the same pace as a dolly (`SMOOTH_TIME` for both), it stays proportional all the
+  // way, frame by frame, and a dolly does not move the shape. Only our part of it is applied, as a delta: the pan, which
+  // shares the focal offset, keeps its own. On a portrait canvas (a phone), no shift: the panel overlaps the picture
+  // instead. Priority -2: before drei's own update of the controls (-1), so that the first frame is shifted already.
   const applied = useRef<number>(undefined)
   useFrame(({ size }) => {
     const current = controls.current
     if (!current) return
     const pixels = size.width < size.height ? 0 : shift
+    const distance = current.getSpherical(new Spherical(), true).radius
     // The view is `2 * distance * tan(fov / 2)` world units tall at the orbit's center.
-    const wanted = (pixels * 2 * current.distance * Math.tan(MathUtils.degToRad(FOV) / 2)) / size.height
+    const wanted = (pixels * 2 * distance * Math.tan(MathUtils.degToRad(FOV) / 2)) / size.height
     if (wanted === applied.current) return
     const offset = current.getFocalOffset(new Vector3(), true)
     offset.x += wanted - (applied.current ?? 0)
@@ -257,6 +265,8 @@ function Scene({ built, color, shift }: { built: Promise<Built>; color: (role: R
       <CameraControls
         ref={controls}
         makeDefault
+        smoothTime={SMOOTH_TIME}
+        draggingSmoothTime={SMOOTH_TIME}
         mouseButtons={{ left: ACTION.ROTATE, middle: ACTION.DOLLY, right: ACTION.OFFSET, wheel: ACTION.DOLLY }}
         touches={{ one: ACTION.TOUCH_ROTATE, two: ACTION.TOUCH_DOLLY_OFFSET, three: ACTION.TOUCH_OFFSET }}
       />
