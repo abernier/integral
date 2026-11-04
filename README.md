@@ -63,7 +63,7 @@ flowchart TD
   cfg -->|Copy link| link["configurator link<br/>part, the values off the defaults"]
   link -->|"pnpm cam 'link'<br/>STEP built by ClassCAD, then CAM"| fusion
   ts -->|"CAM(values)<br/>skips, wedge setups"| fusion
-  tools["tools.json, materials.json<br/>cutters, feeds, materials"] --> fusion
+  tools["cam.tools.json, cam.materials.json<br/>cutters, feeds, materials"] --> fusion
   fusion -->|Arrange: parts nested<br/>by material and thickness| sheets["sheets per material<br/>and thickness, as many as it takes"]
   sheets -->|CAM + ShopBot post| sbp[".sbp per sheet<br/>+ cam.json"]
   sbp -->|simulate, air-cut| shopbot["ShopBot"]

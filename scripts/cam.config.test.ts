@@ -4,10 +4,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { defaultValues } from '../masters.ts'
-import { ROOT } from '../paths.ts'
-import { configFile, loadConfig } from './config.ts'
-import { loadMaterials } from './machining.ts'
+import { defaultValues } from './masters.ts'
+import { ROOT } from './paths.ts'
+import { configFile, loadConfig } from './cam.config.ts'
+import { loadMaterials } from './cam.machining.ts'
 
 const file = configFile(ROOT, 'zigzag-chair')
 const materials = loadMaterials()

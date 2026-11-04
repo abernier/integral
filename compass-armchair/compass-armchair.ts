@@ -15,7 +15,7 @@
 // parameters, and every board is a named body in it, so changing one rebuilds them all.
 
 import { type Api, created, nameSolids } from '../scripts/part.ts'
-import type { CamConfig } from '../scripts/cam/config.ts'
+import type { CamConfig } from '../scripts/cam.config.ts'
 import type { Values } from '../scripts/masters.ts'
 import type { MASTERS } from './compass-armchair.masters.ts'
 
