@@ -27,6 +27,7 @@
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "leva": "^0.10.1",
+    "material-theme-builder": "5.2.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "sharp": "^0.34.5",
