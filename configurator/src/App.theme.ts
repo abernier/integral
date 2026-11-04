@@ -71,8 +71,13 @@ export function mtbConfig(picks: Picks): MtbConfig {
 }
 
 /** leva's color tokens (see its `getDefaultTheme`) as Material 3 roles, `color` giving a role's hex in the current mode. */
+/** The leva panel's width, and leva's own margin to the window's right edge (`right: 10px` in its styles). */
+export const PANEL_WIDTH = 280
+export const PANEL_GAP = 10
+
 export function levaTheme(color: (role: Role) => string): LevaTheme {
   return {
+    sizes: { rootWidth: `${PANEL_WIDTH}px` },
     colors: {
       // The title bar, the panel, the inputs.
       elevation1: color('surfaceContainerHigh'),

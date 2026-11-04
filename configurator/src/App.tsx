@@ -1,13 +1,14 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
-import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
 import { Box3, Mesh, type Object3D, OrthographicCamera, Vector3 } from 'three'
+import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
-import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
+import { levaTheme, PANEL_GAP, PANEL_WIDTH, type Role, useDocsTheme } from './App.theme.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
 const DEBOUNCE_MS = 200
@@ -77,8 +78,6 @@ function Page() {
   const color = useRoleColor()
   const [model, setModel] = useState<Model>()
   const [error, setError] = useState<string>()
-  // Holds the leva panel (a fixed box, the wrapper has no size of its own): the canvas measures it.
-  const panel = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // hasOwn: a plain lookup would also find inherited members such as `constructor`.
@@ -88,43 +87,48 @@ function Page() {
 
   return (
     <>
-      <div ref={panel} style={{ display: 'contents' }}>
-        <Leva titleBar={{ title: part }} theme={levaTheme(color)} />
-      </div>
-      {model && <Configurator model={model} panel={panel} />}
-      {error && !model && <Message>{error}</Message>}
-      {!error && !model && <Message color="var(--md-sys-color-on-surface-variant)">Loading…</Message>}
+      <Leva titleBar={{ title: part }} theme={levaTheme(color)} />
+      {model && <Configurator model={model} />}
+      <Messages>
+        {error && !model && <Message>{error}</Message>}
+        {!error && !model && <Message color="var(--md-sys-color-on-surface-variant)">Loading…</Message>}
+      </Messages>
     </>
   )
 }
 
-function Message({ children, color = 'var(--md-sys-color-error)', bottom = 16 }: { children: string; color?: string; bottom?: number }) {
+/** The messages, stacked at the bottom left. */
+function Messages({ children }: { children: ReactNode }) {
+  return <div style={{ position: 'fixed', left: 16, bottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</div>
+}
+
+function Message({ children, color = 'var(--md-sys-color-error)' }: { children: string; color?: string }) {
   const background = 'var(--md-sys-color-surface-container-high)'
-  return <div style={{ position: 'fixed', left: 16, bottom, padding: '8px 12px', background, borderRadius: 6, color }}>{children}</div>
+  return <div style={{ padding: '8px 12px', background, borderRadius: 6, color }}>{children}</div>
 }
 
 /**
  * The leva panel covers the right of the canvas: the camera frames the pixels left of it, so that the model sits
- * centered there, orbits there, and `Bounds` fits it there. The frame's width is the camera's, and the canvas
- * renders it from the left edge (three's `setViewOffset`, in pixels) at the same scale on both axes: zooming and
- * rotating keep the model in place, and nothing stretches. On a page so narrow that the panel covers over half of
- * it, the frame is the whole canvas. The camera is `manual`: its frame is set here, not by R3F on resize. A layout
- * effect, so that the frame is set before anything is fitted into it or drawn.
+ * centered there, orbits there, and the fit fills them. The frame's width is the camera's, and the canvas renders it
+ * from the left edge (three's `setViewOffset`, in pixels) at the same scale on both axes: zooming and rotating keep
+ * the model in place, and nothing stretches. The panel's place comes from the theme, not from a measure: leva shows
+ * the panel only once its inputs are registered, after this effect. On a page so narrow that the panel covers over
+ * half of it, the frame is the whole canvas. The camera is `manual`: its frame is set here, not by R3F on resize. A
+ * layout effect, so that the frame is set before anything is fitted into it or drawn.
  */
-function ViewOffset({ panel }: { panel: RefObject<HTMLDivElement | null> }) {
+function ViewOffset() {
   const { camera, size } = useThree()
   useLayoutEffect(() => {
     if (!(camera instanceof OrthographicCamera)) return
-    const box = panel.current?.firstElementChild
-    const left = box ? box.getBoundingClientRect().left : size.width
-    const free = left < size.width / 2 ? size.width : left
+    const panelLeft = size.width - PANEL_GAP - PANEL_WIDTH
+    const free = panelLeft < size.width / 2 ? size.width : panelLeft
     camera.left = -free / 2
     camera.right = free / 2
     camera.top = size.height / 2
     camera.bottom = -size.height / 2
     camera.setViewOffset(free, size.height, 0, 0, size.width, size.height)
     return () => camera.clearViewOffset()
-  }, [camera, size, panel])
+  }, [camera, size])
   return null
 }
 
@@ -168,7 +172,50 @@ function FitOnce({ object, onFit, margin = 1.2 }: { object: Object3D; onFit: (ce
   return null
 }
 
-function Configurator({ model, panel }: { model: Model; panel: RefObject<HTMLDivElement | null> }) {
+/** A build's outcome. A build that throws keeps the last good shape on screen, with its error. */
+type Built = { shape?: Object3D; error?: string }
+
+/**
+ * The last few builds, by their values, for `use()`: the build on screen and the one rendering in its place may
+ * differ. A build pushed out is disposed, `<primitive>` frees nothing it did not create; three uploads it again
+ * should it still be drawn.
+ */
+const KEPT = 3
+const builds = new Map<string, Promise<Built>>()
+let lastGood: Object3D | undefined
+
+function build(model: Model, key: string) {
+  const kept = builds.get(key)
+  if (kept) return kept
+  // `Promise.resolve().then`: a `build` that throws at once rejects like one that rejects later.
+  const built: Promise<Built> = Promise.resolve()
+    .then(() => model.build(JSON.parse(key)))
+    .then(
+      (shape) => ({ shape: (lastGood = shape) }),
+      (e) => ({ shape: lastGood, error: e instanceof Error ? e.message : String(e) }),
+    )
+  builds.set(key, built)
+  for (const [oldKey, old] of builds) {
+    if (builds.size <= KEPT) break
+    builds.delete(oldKey)
+    // A failed build only borrows the last good shape: nothing of its own to free.
+    old.then(({ shape, error }) => shape && !error && dispose(shape))
+  }
+  return built
+}
+
+/** Frees a shape's geometries and materials. */
+function dispose(shape: Object3D) {
+  const disposed = new Set<{ dispose(): void }>()
+  shape.traverse((object) => {
+    if (!(object instanceof Mesh)) return
+    disposed.add(object.geometry)
+    for (const material of [object.material].flat()) disposed.add(material)
+  })
+  disposed.forEach((resource) => resource.dispose())
+}
+
+function Configurator({ model }: { model: Model }) {
   const color = useRoleColor()
   const [toast, setToast] = useState<string>()
   // leva's `get`, `set` and `values` address an input by its own key, in a folder too (`W`, not `Details.W`).
@@ -190,65 +237,51 @@ function Configurator({ model, panel }: { model: Model; panel: RefObject<HTMLDiv
     const timer = setTimeout(() => setToast(undefined), 1500)
     return () => clearTimeout(timer)
   }, [toast])
-  const [shape, setShape] = useState<Object3D>()
-  const [error, setError] = useState<string>()
-  // Where the orbit turns: the first shape's center, as a prop so that it holds whenever the controls mount.
-  const [target, setTarget] = useState<Vector3>()
 
-  // Build once the values have stopped changing; a build that throws leaves the last good shape on screen.
-  const key = JSON.stringify(numbers)
-  useEffect(() => {
-    let stale = false
-    const timer = setTimeout(async () => {
-      try {
-        const built = await model.build(JSON.parse(key))
-        if (stale) return
-        setShape(built)
-        setError(undefined)
-      } catch (e) {
-        if (!stale) setError(e instanceof Error ? e.message : String(e))
-      }
-    }, DEBOUNCE_MS)
-    return () => {
-      stale = true
-      clearTimeout(timer)
-    }
-  }, [model, key])
-
-  // <primitive> does not dispose objects it did not create: free the replaced (or unmounted) shape ourselves.
-  useEffect(() => {
-    if (!shape) return
-    return () => {
-      const disposed = new Set<{ dispose(): void }>()
-      shape.traverse((object) => {
-        if (!(object instanceof Mesh)) return
-        disposed.add(object.geometry)
-        for (const material of [object.material].flat()) disposed.add(material)
-      })
-      disposed.forEach((resource) => resource.dispose())
-    }
-  }, [shape])
+  // Built once the sliders have stayed still; the last build stays on screen until the next one is done.
+  const [key] = useDebounceValue(JSON.stringify(numbers), DEBOUNCE_MS)
+  const shown = useDeferredValue(key)
+  const built = build(model, shown)
 
   return (
     <>
       <Canvas orthographic camera={{ position: [600, 500, 700], zoom: 1, near: 1, far: 20000, manual: true }} style={{ position: 'fixed', inset: 0, background: 'var(--md-sys-color-surface)' }}>
-        <ViewOffset panel={panel} />
+        <ViewOffset />
         {/* Nothing until the first shape: the scene mounts already fitted to it, so that nothing is drawn, then moved. */}
-        {shape && (
-          <>
-            <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
-            <directionalLight position={[300, 600, 400]} intensity={2.4} />
-            <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
-            <FitOnce object={shape} onFit={setTarget} />
-            <primitive object={shape} />
-            <OrbitControls makeDefault target={target} />
-          </>
-        )}
+        <Suspense fallback={null}>
+          <Scene built={built} color={color} />
+        </Suspense>
       </Canvas>
-      {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
-      {!shape && !error && <Message color="var(--md-sys-color-on-surface-variant)">Building the model…</Message>}
-      {error && <Message>{error}</Message>}
-      {toast && <Message color="var(--md-sys-color-on-surface)" bottom={error ? 64 : 16}>{toast}</Message>}
+      <Messages>
+        {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
+        <Suspense fallback={<Message color="var(--md-sys-color-on-surface-variant)">Building the model…</Message>}>
+          <BuildError built={built} />
+        </Suspense>
+        {toast && <Message color="var(--md-sys-color-on-surface)">{toast}</Message>}
+      </Messages>
     </>
   )
+}
+
+/** The scene, once the build is done: the shape, lit, on a grid, fitted at first, the orbit around that fit. */
+function Scene({ built, color }: { built: Promise<Built>; color: (role: Role) => string }) {
+  const { shape } = use(built)
+  const [target, setTarget] = useState<Vector3>()
+  if (!shape) return null
+  return (
+    <>
+      <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
+      <directionalLight position={[300, 600, 400]} intensity={2.4} />
+      <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
+      <FitOnce object={shape} onFit={setTarget} />
+      <primitive object={shape} />
+      <OrbitControls makeDefault target={target} />
+    </>
+  )
+}
+
+/** The build's error, once it is done; nothing when it went well. */
+function BuildError({ built }: { built: Promise<Built> }) {
+  const { error } = use(built)
+  return error ? <Message>{error}</Message> : null
 }
