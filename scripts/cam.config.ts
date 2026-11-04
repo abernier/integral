@@ -4,8 +4,8 @@
 
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Values } from '../masters.ts'
-import { machiningProblems, type MachiningOptions, type Material } from './machining.ts'
+import type { Values } from './masters.ts'
+import { machiningProblems, type MachiningOptions, type Material } from './cam.machining.ts'
 
 /**
  * A setup of a part alone, to its own file `<Part>_<name>.sbp`, beside its sheet: what Arrange cannot do, a part on a
@@ -31,7 +31,7 @@ export type PartConfig = {
   skip?: boolean
   /** Laid largest planar face up, not down. */
   flip?: boolean
-  /** Its own material (materials.json), instead of the model's. */
+  /** Its own material (cam.materials.json), instead of the model's. */
   material?: string
   /** Degrees its grain is turned off its length (0, the default: along its longest side), for a material with grain. */
   grain?: number
@@ -41,7 +41,7 @@ export type PartConfig = {
 
 /** A model's CAM config: what its `CAM` export returns. */
 export type CamConfig = {
-  /** The machining values (see machining.ts) and the post (default DEFAULT_POST), for every part. */
+  /** The machining values (see cam.machining.ts) and the post (default DEFAULT_POST), for every part. */
   defaults?: MachiningOptions & { post?: string }
   /** Per part, by its STEP component's name. */
   parts?: Record<string, PartConfig>
@@ -54,7 +54,7 @@ export function configFile(root: string, model: string) {
 
 /**
  * The CAM config of a model's module for the model made with `values` (no `CAM` export: every part, the defaults),
- * checked for what its type cannot say: machining values in range, materials of `materials` (materials.json), setup
+ * checked for what its type cannot say: machining values in range, materials of `materials` (cam.materials.json), setup
  * names fit for a file name.
  */
 export async function loadConfig(file: string, materials: Record<string, Material>, values: Values): Promise<CamConfig> {

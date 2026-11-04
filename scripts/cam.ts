@@ -1,6 +1,6 @@
 // `pnpm cam <model>`: ShopBot (OpenSBP, .sbp) files for a model, one per sheet and one per setup of its own, made by
-// Fusion's CAM in the Fusion desktop app running on this machine, driven through its local MCP server (cam/fusion.ts):
-// each step is a script cam/fusion-job.py runs there. The files go to `.docs/<model>/cam/`, recorded in its cam.json.
+// Fusion's CAM in the Fusion desktop app running on this machine, driven through its local MCP server (cam.fusion.ts):
+// each step is a script cam.fusion-job.py runs there. The files go to `.docs/<model>/cam/`, recorded in its cam.json.
 // `pnpm cam '<link>'`, the configurator's "Copy link": the model made with the link's values (masters.ts), its STEP
 // built first with ClassCAD into a temporary folder; the files go to the same `.docs/<model>/cam/`.
 // Flags: USAGE below. Usage, naming and the tool rule: docs/cam.md (https://abernier.github.io/integral/integral/cam).
@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { ENDPOINT, connect, messageOf, runScript } from './cam/fusion.ts'
+import { ENDPOINT, connect, messageOf, runScript } from './cam.fusion.ts'
 import {
   DEFAULT_POST,
   MACHINING_DEFAULTS,
@@ -30,8 +30,8 @@ import {
   type Machining,
   type MachiningOptions,
   type Tool,
-} from './cam/machining.ts'
-import { configFile, loadConfig } from './cam/config.ts'
+} from './cam.machining.ts'
+import { configFile, loadConfig } from './cam.config.ts'
 import { type Values, defaultValues, linkValues, mastersFile } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
 import { stepParts } from './step-assembly.ts'
@@ -65,7 +65,7 @@ const USAGE = `usage: pnpm cam [<model> | '<link>'] [options]      (no model: ev
   --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step; cam.json then
                          records no values)
   --post <text>          the library post whose vendor/description contains it (default ${DEFAULT_POST})
-  --tool <number>        this tool of scripts/cam/tools.json for every sheet (default: per sheet, the narrowest that reaches)
+  --tool <number>        this tool of scripts/cam.tools.json for every sheet (default: per sheet, the narrowest that reaches)
   --sheet <LxW>          the sheet, mm (default ${MACHINING_DEFAULTS.sheet.join('x')})
   --spacing <mm>         between two parts on a sheet (default ${MACHINING_DEFAULTS.spacing}; at least the tool's diameter + ${SPACING_OVER_TOOL})
   --only <A,B>           these parts only, into .docs/<model>/cam/only/ with its own cam.json (the full run's files stay)
@@ -187,7 +187,7 @@ const cli: MachiningOptions = {
 const cliProblems = machiningProblems(cli, materials)
 if (cliProblems.length) fail(`--tool/--sheet/--spacing: ${cliProblems.join('; ')}`)
 const options = resolveMachining(cli, config.defaults)
-if (options.tool !== undefined && !tools.some((t) => t.number === options.tool)) fail(`no tool #${options.tool} in scripts/cam/tools.json (${tools.map((t) => t.number).join(', ')})`)
+if (options.tool !== undefined && !tools.some((t) => t.number === options.tool)) fail(`no tool #${options.tool} in scripts/cam.tools.json (${tools.map((t) => t.number).join(', ')})`)
 const post = flags.post ?? config.defaults?.post ?? DEFAULT_POST
 
 const stepNames = stepParts(step)
@@ -209,8 +209,8 @@ const ownSetups = selected.flatMap((part) => (entryOf(part)?.setups ?? []).map((
 console.log(`cam: ${model}, ${selected.length} parts from ${shown(step)}, ${config.parts || config.defaults ? `CAM config from ${shown(source)}` : 'no CAM config'}`)
 if (skipped.length) console.log(`cam: skipping ${skipped.join(', ')}`)
 
-const SCRIPT = readFileSync(join(import.meta.dirname, 'cam', 'fusion-job.py'), 'utf8')
-/** The script for one step: JOB first (a JSON string is a valid Python string literal), then fusion-job.py. */
+const SCRIPT = readFileSync(join(import.meta.dirname, 'cam.fusion-job.py'), 'utf8')
+/** The script for one step: JOB first (a JSON string is a valid Python string literal), then cam.fusion-job.py. */
 const script = (job: Record<string, unknown>) => `import json\nJOB = json.loads(${JSON.stringify(JSON.stringify(job))})\n${SCRIPT}`
 
 /** This run's tag on the document it imports: how later steps find it, and how it is told from the user's. */
@@ -264,7 +264,7 @@ const stepName = link ? `${model}.step (built from the link)` : shown(step)
 const inputs = {
   [stepName]: sha256(step),
   ...Object.fromEntries(
-    [source, mastersFile(model), TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam', 'fusion-job.py'), join(import.meta.dirname, 'cam', 'machining.ts'), import.meta.filename]
+    [source, mastersFile(model), TOOLS_FILE, MATERIALS_FILE, join(import.meta.dirname, 'cam.fusion-job.py'), join(import.meta.dirname, 'cam.machining.ts'), import.meta.filename]
       .map((file) => [shown(file), sha256(file)]),
   ),
 }

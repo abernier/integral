@@ -206,7 +206,7 @@ def set_parameter(owner, name, expression):
 
 
 def library_tool(number):
-    """Tool `number` of the Fusion tool library JOB["library"] (tools.json, Fusion's own JSON)."""
+    """Tool `number` of the Fusion tool library JOB["library"] (cam.tools.json, Fusion's own JSON)."""
     library = adsk.cam.ToolLibrary.createFromJson(JOB["library"])
     for i in range(library.count):
         tool = library.item(i)
@@ -383,7 +383,7 @@ def set_part_position(setup):
 
 
 def set_stock_material(setup):
-    """The setup's stock material: Fusion's library material JOB["stock"] (materials.json `stock`), if any."""
+    """The setup's stock material: Fusion's library material JOB["stock"] (cam.materials.json `stock`), if any."""
     if not JOB.get("stock"):
         return
     library = adsk.cam.CAMManager.get().libraryManager.stockMaterialLibrary
