@@ -140,15 +140,16 @@ function views(part: string, alt: string) {
 }
 
 /**
- * The `## References` section's images (one markdown image per line, which GitHub shows stacked) as a carousel,
- * one image a slide, at a height every image fits in whatever its ratio, its alt under it.
+ * The `## References` section's images (one markdown image per line, which GitHub shows stacked) as a carousel:
+ * a strip of images at one height, each as wide as its ratio makes it, as many as fit side by side, its alt under
+ * it; dragged freely, or by the arrows a view at a time.
  */
 function references(images: string) {
   const slides = [...images.matchAll(/^!\[([^\]]*)\]\((\S+)\)$/gm)].map(
     ([, alt, src]) =>
-      `<CarouselItem><figure className="m-0 flex h-[28rem] flex-col items-center justify-center gap-2"><img src="${src}" alt="${alt}" draggable="false" className="m-0 min-h-0 w-auto max-w-full object-contain" /><figcaption className="m-0 text-sm">${alt}</figcaption></figure></CarouselItem>`,
+      `<CarouselItem className="basis-auto"><figure className="m-0 flex w-min flex-col gap-2"><img src="${src}" alt="${alt}" draggable="false" className="m-0 h-64 w-auto max-w-none" /><figcaption className="m-0 text-sm">${alt}</figcaption></figure></CarouselItem>`,
   )
-  return ['<Carousel opts={{ loop: true }}>', '<CarouselContent>', ...slides, '</CarouselContent>', '<CarouselPrevious />', '<CarouselNext />', '</Carousel>'].join('\n')
+  return ["<Carousel opts={{ align: 'start', dragFree: true }}>", '<CarouselContent>', ...slides, '</CarouselContent>', '<CarouselPrevious />', '<CarouselNext />', '</Carousel>'].join('\n')
 }
 
 /**
