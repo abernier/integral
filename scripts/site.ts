@@ -14,11 +14,12 @@
 // The READMEs link the built files and the pages by their GitHub Pages URL, so they read right on GitHub too;
 // for a local site those URLs are rewritten to the local servers, for a built site to root-relative paths.
 
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
 import { build as vite } from 'vite'
 import { queryUrl } from '../configurator/src/App.url.ts'
+import { keyFile } from './build.cache.ts'
 import { type Engine, glb, render, run, save } from './classcad.ts'
 import { type Values, defaultValues } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
@@ -80,6 +81,8 @@ export async function buildPart(engine: Engine, part: string, values?: Values, o
   const resolved = values ?? (await defaultValues(part))
   const returned = await run(engine, (api) => build(api, resolved))
   mkdirSync(out, { recursive: true })
+  // The files about to be written no longer match a build key: build.ts writes it again after a build it keyed.
+  rmSync(keyFile(part, out), { force: true })
   const files = { ofb: join(out, `${part}.ofb`), step: join(out, `${part}.step`), glb: join(out, `${part}.glb`), png: join(out, `${part}.png`) }
   const ofbSize = await save(engine, 'OFB', files.ofb)
   const stepSize = await save(engine, 'STP', files.step)
@@ -240,8 +243,10 @@ export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, sha
   mkdirSync(join(MDX, 'things'), { recursive: true })
   parts().forEach((part, i) => {
     writeFileSync(join(MDX, `${partPage(part)}.mdx`), page(join(ROOT, part, 'README.md'), i + 1, urls, part))
-    // The part's reference images (`<part>/references/`), served beside its built files.
+    // The part's reference images (`<part>/references/`), served beside its built files. The copy replaces the
+    // previous one, so that an image deleted from the part does not stay in .docs/.
     const references = join(ROOT, part, 'references')
+    rmSync(join(MDX, part, 'references'), { recursive: true, force: true })
     if (existsSync(references)) cpSync(references, join(MDX, part, 'references'), { recursive: true })
   })
   return relative(ROOT, MDX)
