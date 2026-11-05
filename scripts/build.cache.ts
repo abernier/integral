@@ -8,7 +8,17 @@ import type { Values } from './masters.ts'
 import { MDX, ROOT } from './paths.ts'
 
 /** The files a part's built files depend on, besides its own script and masters. */
-export const SHARED_SOURCES = ['scripts/part.ts', 'scripts/classcad.ts', 'scripts/step-assembly.ts', 'scripts/site.ts', 'scripts/masters.ts', 'scripts/paths.ts']
+export const SHARED_SOURCES = [
+  'scripts/part.ts',
+  'scripts/classcad.ts',
+  'scripts/step-assembly.ts',
+  'scripts/site.ts',
+  'scripts/masters.ts',
+  'scripts/paths.ts',
+  'configurator/src/models.cam.ts',
+  'configurator/src/models.variants.ts',
+  'configurator/src/App.url.ts',
+]
 
 /**
  * The lockfile: every package's resolved version (ClassCAD's, sharp's and their dependencies'), and the hash of
