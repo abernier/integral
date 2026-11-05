@@ -60,6 +60,12 @@ test('linkValues: a bare query is read like the full link', async () => {
   assert.deepEqual(bare, full)
 })
 
+test('linkValues: a link with its separators escaped (&amp;), copied out of HTML or Markdown, reads as the plain one', async () => {
+  const plain = await linkValues('https://abernier.github.io/integral/configurator/?part=zigzag-chair&BACK_LEAN=10&T=20')
+  const escaped = await linkValues('https://abernier.github.io/integral/configurator/?part=zigzag-chair&amp;BACK_LEAN=10&amp;T=20')
+  assert.deepEqual(escaped, plain)
+})
+
 // The writer of the link (the configurator's queryUrl) and its reader (linkValues) live in two files: this ties them.
 test('linkValues: reads back what the configurator writes into a link', async () => {
   const defaults = await defaultValues('zigzag-chair')

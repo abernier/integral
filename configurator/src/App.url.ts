@@ -97,22 +97,35 @@ function split({ part, variant, ...rest }: { part: string; variant: string; [mas
 }
 
 /**
+ * A link as it is read: a link copied out of HTML or Markdown may carry its separators escaped, `&amp;`. Read raw,
+ * `amp;variant` and `amp;W` would be unknown keys, and the link would open the default variant at its defaults, its
+ * part alone right. Each `&amp;` of a link given as text or a URL is taken as the `&` it stands for.
+ */
+function unescaped(input: LoaderInput): LoaderInput {
+  if (typeof input === 'string') return input.replace(/&amp;/gi, '&')
+  if (input instanceof URL) return new URL(input.href.replace(/&amp;/gi, '&'))
+  return input
+}
+
+/**
  * The part, its variant and the masters' values a URL (or a bare query) names; a master it leaves out, or gets wrong,
- * is the variant's default. The variant is read first, then the masters on top of its defaults.
+ * is the variant's default. The variant is read first, then the masters on top of its defaults. A link with its
+ * separators escaped (`&amp;`) reads as the plain one.
  * @param part The part's masters, whose parsers read the values, and its variants.
  * @param input The URL, its query, or its search params.
  * @param options `strict`: an unknown variant throws, naming the known ones, instead of reading as the default (the
  * CLI, which cannot make a variant it does not know: scripts/masters.ts).
  */
 export function loadQuery(part: Partial<Part>, input: LoaderInput, { strict = false } = {}) {
+  const link = unescaped(input)
   let variant: string
   try {
-    variant = createLoader(fixedParsers(part.variants))(input, { strict }).variant
+    variant = createLoader(fixedParsers(part.variants))(link, { strict }).variant
   } catch {
-    const asked = createLoader({ variant: parseAsString })(input).variant
+    const asked = createLoader({ variant: parseAsString })(link).variant
     throw new Error(`no variant ${asked} (known: ${Object.keys(variantsOf(part.variants)).join(', ')})`)
   }
-  return split(createLoader(queryParsers(part, variant))(input))
+  return split(createLoader(queryParsers(part, variant))(link))
 }
 
 /**

@@ -87,6 +87,18 @@ test('loadQuery, strict: an unknown variant throws, naming the known ones', () =
   assert.equal(loadQuery(part, '?part=p', { strict: true }).variant, 'thin')
 })
 
+test('loadQuery: a link with its separators escaped (&amp;) opens its variant and values', () => {
+  // A configurator link copied out of HTML or Markdown: read raw, it opened the default variant at its defaults.
+  const part = { schema, variants }
+  const expected = { part: 'zigzag-chair', variant: 'thick', values: { T: 25, TAILS: 4 } }
+  assert.deepEqual(loadQuery(part, '?part=zigzag-chair&amp;variant=thick&amp;T=25&AMP;TAILS=4'), expected)
+  assert.deepEqual(loadQuery(part, new URL('https://example.test/configurator/?part=zigzag-chair&amp;variant=thick&amp;T=25&amp;TAILS=4')), expected)
+  // A plain link, the variant before or after the values, reads as it is.
+  for (const search of ['?part=zigzag-chair&variant=thick&T=25&TAILS=4', 'part=zigzag-chair&T=25&TAILS=4&variant=thick']) {
+    assert.deepEqual(loadQuery(part, search), expected)
+  }
+})
+
 test('round trip: in every variant, the values read back as written', () => {
   const part = { schema, variants }
   for (const variant of ['thin', 'thick']) {

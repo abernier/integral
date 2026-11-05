@@ -8,6 +8,7 @@
 
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import type { LoaderInput } from 'nuqs'
 import { loadQuery } from '../configurator/src/App.url.ts'
 import { hasCamValues } from '../configurator/src/models.cam.ts'
 import type { Control, Variants } from '../configurator/src/models.ts'
@@ -81,7 +82,7 @@ export async function defaultValues(model: string, variant?: string): Promise<Va
  * @param variants The model's variants (variantsOf).
  * @param params The link's query.
  */
-export function queryValues(masters: Record<string, Control>, variants: Variants, params: URLSearchParams) {
+export function queryValues(masters: Record<string, Control>, variants: Variants, params: LoaderInput) {
   const { variant, values } = loadQuery({ schema: masters, variants }, params, { strict: true })
   return { variant, values }
 }
@@ -101,7 +102,7 @@ export async function linkValues(link: string) {
   const masters = await loadMasters(model)
   const variants = await loadVariants(model)
   try {
-    return { model, ...queryValues(masters, variants, url.searchParams) }
+    return { model, ...queryValues(masters, variants, url) }
   } catch (error) {
     throw new Error(`${link}: ${model}: ${(error as Error).message}`)
   }
