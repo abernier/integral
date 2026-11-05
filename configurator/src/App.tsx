@@ -1,7 +1,7 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
 import { type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { CameraControls, CameraControlsImpl } from '@react-three/drei'
+import { CameraControls, CameraControlsImpl, Stage } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
 import { Sphere, Spherical, Vector3 } from 'three'
@@ -189,8 +189,9 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
 }
 
 /**
- * The scene, once the build is done: the shape, lit, on a grid, fitted at first, the orbit around that fit; its
- * picture shifted left by `shift` pixels.
+ * The scene, once the build is done: the shape on drei's `<Stage>` (centered at the origin, lit by an environment, a
+ * contact shadow under it), on a grid, fitted at first, the orbit around that fit; its picture shifted left by `shift`
+ * pixels.
  */
 function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   // R3F bridges the Mtb context into the Canvas.
@@ -198,6 +199,8 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   const { shape } = use(built)
   const size = useThree((state) => state.size)
   const controls = useRef<ComponentRef<typeof CameraControls>>(null)
+  // The first shape's height, as `<Stage>` centers it: its floor, where Stage lays the shadow, is half of it below the origin.
+  const [height, setHeight] = useState(0)
   // Our part of the focal offset, as last applied: see the frame loop below.
   const applied = useRef<number>(undefined)
   // Frames the first shape, before it is drawn, into the space the panel leaves free: the orbit around the center of its
@@ -209,6 +212,8 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
     const current = controls.current
     if (!shape || !current || fitted.current) return
     fitted.current = true
+    // Stage's `<Center>` has just moved the shape, in its own layout effect: its world matrices are not updated yet.
+    shape.updateWorldMatrix(true, true)
     const sphere = CameraControlsImpl.createBoundingSphere(shape, new Sphere())
     sphere.radius *= 1.1
     const pixels = pictureShift(shift, size.width, size.height)
@@ -240,10 +245,16 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   if (!shape) return null
   return (
     <>
-      <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
-      <directionalLight position={[300, 600, 400]} intensity={2.4} />
-      <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
-      <primitive object={shape} />
+      {/* The framing above is ours (beside the panel, an orbit that stays on the shape): Stage does not touch the camera.
+          Its spot and fill lights decay over the part's millimetres to nearly nothing: the environment lights it. Stage
+          centers the first shape only (Center's `cacheKey`): later ones keep its offset, so the floor stays put.
+          `apartment`: a soft light from all around, that keeps the woods' colors where `city` and `studio` wash out the
+          faces turned up. drei's presets load from a CDN (raw.githack.com). Contact shadows: no shadow maps to set up. */}
+      <Stage adjustCamera={false} environment="apartment" shadows="contact" center={{ onCentered: ({ height }) => setHeight(height) }}>
+        <primitive object={shape} />
+      </Stage>
+      {/* A millimetre under the floor: out of reach of the contact shadow's camera, which would darken the plane with its lines. */}
+      <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} position-y={-height / 2 - 1} />
       {/* A pan slides the picture (the focal offset), not the orbit's center: that stays on the shape. */}
       <CameraControls
         ref={controls}
