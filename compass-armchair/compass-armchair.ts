@@ -345,19 +345,28 @@ type Rounds = [radius: Radius, takes: (faces: string[]) => boolean]
 /**
  * Round `edges` at `radius`. The engine fails a few fillets for no reason of their own, at particular values (the rear
  * rail's box at the masters' maxima: one edge of it at EDGE_BREAK = 4, but at 3.5 or 5): such a fillet is deleted and
- * its edges chamfered at the same distance instead, with a warning.
+ * its edges chamfered at the same distance instead, with a warning. Only the fillets the failed call left in the tree
+ * are deleted: one refused before it made a feature leaves none, and the fillets before it stay. That takes one tree
+ * read per fillet, before the call.
  */
 async function fillet(api: Api, part: number, name: string, edges: number[], radius: Radius) {
+  const before = await filletIds(api)
   try {
     return await created(api.v1.part.fillet({ id: part, name, references: edges, radius: expr(`$${radius}`) }))
   } catch (error) {
-    // The failed fillet stays in the tree: the newest one.
-    const tree = await api.tree({ refresh: true })
-    const fillets = Object.keys(tree).filter((id) => tree[id].class === 'CC_ConstantRadiusFillet').map(Number)
-    await api.v1.part.deleteFeature({ ids: [Math.max(...fillets)] })
+    const left = (await filletIds(api)).filter((id) => !before.includes(id))
+    if (left.length > 0) await api.v1.part.deleteFeature({ ids: left })
     console.warn(`${name}: ${(error as Error).message}; chamfered at ${radius} instead`)
     return created(api.v1.part.chamfer({ id: part, name, references: edges, distance1: expr(`$${radius}`) }))
   }
+}
+
+/** The ids of the constant-radius fillets in the model's tree. */
+async function filletIds(api: Api) {
+  const tree = await api.tree({ refresh: true })
+  return Object.keys(tree)
+    .filter((id) => tree[id].class === 'CC_ConstantRadiusFillet')
+    .map(Number)
 }
 
 /**
