@@ -19,7 +19,7 @@ The code only prepares Fusion's job. It groups the parts by material and thickne
 - [ ] Fusion desktop (macOS or Windows), signed in. Fusion for Personal Use is enough: it posts ShopBot OpenSBP, but its rapids run at the cutting feed, and with no tool change each tool gets its own file.
 - [ ] Fusion's MCP server on: Preferences > General > API > *Fusion MCP Server (runs locally on this device)*. On another port, set `FUSION_MCP_URL`. `pnpm cam --list-tools` checks the connection.
 - [ ] No command dialog open in Fusion during a run.
-- [ ] The model's STEP in `.docs/<model>/`, one component per part: `nr build:parts` makes it (a run given a link builds its own STEP first). `pnpm cam` reads `<model>.step`, unless a master of the model has a `cam` value (`Control.cam`: a finish made by hand, such as an edge round, 0 in the files): the build then also writes `<model>.cam.step`, the model built again with the masters' `cam` values in place of theirs (`camValues` in [`masters.ts`](https://github.com/abernier/integral/blob/main/scripts/masters.ts)), and that is the STEP `pnpm cam` reads: the files cut square.
+- [ ] The model's STEP in `.docs/<model>/`, `<model>.step` (`<model>.<variant>.step` for a variant other than the default), one component per part: `nr build:parts` makes it, for every variant (a run given a link builds its own STEP first). `pnpm cam` reads that STEP, unless a master of the model has a `cam` value (`Control.cam`: a finish made by hand, such as an edge round, 0 in the files): the build then also writes `<model>[.<variant>].cam.step`, the model built again with the masters' `cam` values in place of theirs (`camValues` in [`masters.ts`](https://github.com/abernier/integral/blob/main/scripts/masters.ts)), and that is the STEP `pnpm cam` reads: the files cut square.
 - [ ] The tools of [`cam.tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam.tools.json) match the cutters on your ShopBot, and their presets match your wood.
 
 ## Run
@@ -29,6 +29,7 @@ pnpm cam --help                        # every flag, its default
 pnpm cam --list-tools                  # what Fusion's MCP server offers
 pnpm cam zigzag-chair --dry-run        # the plan, nothing sent
 pnpm cam zigzag-chair --force --keep   # then Simulate the setups in Fusion
+pnpm cam compass-armchair --variant leather --force   # a variant other than the default
 pnpm cam --force                       # every model, every file made again
 ```
 
@@ -59,7 +60,9 @@ The machine is a `.mch` file in Fusion's machine library (`~/Library/Application
 
 Files that already exist are left alone, so a run is cheap to repeat. To work on one part, `--only <part>` writes to a folder of its own.
 
-A model with values of its own, not the defaults: `pnpm cam '<link>'`, the link the configurator's "Copy link" gives, as in `pnpm cam 'https://abernier.github.io/integral/configurator/?part=zigzag-chair&BACK_LEAN=10'`. The link names the model (`part`) and carries only the values that differ from the defaults; the CLI reads it as the configurator does: unknown keys ignored, each value clamped to its master's range, every other master at its default. The STEP is built first, with ClassCAD and those values (a master's `cam` value over the link's: `camValues`), in a temporary folder, on every run (about 4 s). The files go to `.docs/<model>/cam/` like any run (`cam/only/` with `--only`), made again when the folder's `cam.json` was made with other values or another link and left alone (without `--force`) when it was the same, and the `CAM` config follows the values: at `BACK_LEAN=10`, the zigzag chair's Seat goes on a 10° wedge. `cam.json` records the `link` and every master's resolved `values` (with `--step`, the geometry is the file's: no values). `pnpm cam <model>` and `pnpm cam` keep meaning the defaults.
+A model with values of its own, not the defaults: `pnpm cam '<link>'`, the link the configurator's "Copy link" gives, as in `pnpm cam 'https://abernier.github.io/integral/configurator/?part=zigzag-chair&BACK_LEAN=10'`. The link names the model (`part`), its variant (`variant`, only when the model has more than one; the first when missing) and carries only the values that differ from that variant's defaults; the CLI reads it as the configurator does: unknown keys ignored, each value clamped to its master's range, every other master at the variant's default. A variant the model does not have fails the run, naming the ones it has. The STEP is built first, with ClassCAD, that variant and those values (a master's `cam` value over the link's: `camValues`), in a temporary folder, on every run (about 4 s). The files go to the variant's folder like any run (`cam/only/` in it with `--only`), made again when the folder's `cam.json` was made in another variant, with other values or another link, and left alone (without `--force`) when it was the same, and the `CAM` config follows the variant and the values: at `BACK_LEAN=10`, the zigzag chair's Seat goes on a 10° wedge. `cam.json` records the `variant`, the `link` and every master's resolved `values` (with `--step`, the geometry is the file's: no values). `pnpm cam <model>` and `pnpm cam` keep meaning the defaults of the default variant.
+
+A variant other than the default, with its defaults: `pnpm cam <model> --variant <id>`, from the STEP `nr build:parts` made for it (`.docs/<model>/<model>.<id>.step`, or its `.cam.step`). Not with a link, which names its own variant. The default variant's files go to `.docs/<model>/cam/`, another's to `.docs/<model>/cam/<id>/`, so both can be kept.
 
 A part with no flat face, too thick for every tool, or larger than the sheet gets no file, and the run says so. A toolpath Fusion warns about fails the run.
 
@@ -90,11 +93,11 @@ Everything else is fixed by [`cam.fusion-job.py`](https://github.com/abernier/in
 
 ## Config
 
-What Fusion cannot know from the STEP (parts to skip, grain turns, flips, wedge setups, the model's material and post) is the optional `CAM(values)` function of the model's module, returning a `CamConfig` (type in [`cam.config.ts`](https://github.com/abernier/integral/blob/main/scripts/cam.config.ts)): a wedge follows the angle the part was built with. Examples: [zigzag chair](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts), [compass armchair](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts).
+What Fusion cannot know from the STEP (parts to skip, grain turns, flips, wedge setups, the model's material and post) is the optional `CAM(values, variant)` function of the model's module, returning a `CamConfig` (type in [`cam.config.ts`](https://github.com/abernier/integral/blob/main/scripts/cam.config.ts)): a wedge follows the angle the part was built with, a variant's own board its own config. Examples: [zigzag chair](https://github.com/abernier/integral/blob/main/zigzag-chair/zigzag-chair.ts), [compass armchair](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts).
 
 ## The record: `cam.json`
 
-Each run writes it beside the files. It says what each file is, which tool it uses, which parts lie where on which sheet, every value given to Fusion, and the hash of every input, so a file can be made again the same (`CamRecord` in [`cam.ts`](https://github.com/abernier/integral/blob/main/scripts/cam.ts)). The record (version 3) also names the `model`, the `link` when the run was given one, and every master's `values` (none with `--step`, whose geometry is the file's).
+Each run writes it beside the files. It says what each file is, which tool it uses, which parts lie where on which sheet, every value given to Fusion, and the hash of every input, so a file can be made again the same (`CamRecord` in [`cam.ts`](https://github.com/abernier/integral/blob/main/scripts/cam.ts)). The record (version 4) also names the `model`, its `variant`, the `link` when the run was given one, and every master's `values` (none with `--step`, whose geometry is the file's).
 
 ## Cutting the files
 
@@ -107,7 +110,8 @@ A sheet is one board clamped on the ShopBot, of one material and thickness (its 
 ├── <model>_oak_18mm_1_rest.sbp   # the same sheet, same zero, with the narrowest tool: what the first was too wide for
 ├── <model>_oak_18mm_2.sbp        # the rest of the 18 mm oak parts, on sheet 2
 ├── Leg_wedge10.sbp               # a second pass on the Leg, cut out and laid on its wedge
-└── only/                         # --only runs
+├── only/                         # --only runs
+└── <variant>/                    # the same, for a variant other than the default (--variant, or a link's)
 ```
 
 A wedge file's zero is the top of the part on its wedge, `margin` out from the front-left corner of its box.

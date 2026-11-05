@@ -1,6 +1,7 @@
 // The parts the configurator knows: every `<folder>/<folder>.model.ts` at the repository's root, picked up by its
 // file, nothing to register. A model file exports its `schema` (leva controls, keyed by the part's parameter
-// names) and `build(values)`, which makes the part as a three.js object.
+// names), its `variants` when it has more than one (models.variants.ts), and `build(values, variant)`, which makes
+// the part as a three.js object.
 /// <reference types="vite/client" />
 import type { Object3D } from 'three'
 
@@ -22,15 +23,47 @@ export interface Control {
   main?: true
   /**
    * The value the CAM files' geometry is built with, whatever the configurator's: a finish the router does not cut, made
-   * by hand on the cut part (an edge round, 0 there). `pnpm build:parts` writes that geometry as `<part>.cam.step`.
+   * by hand on the cut part (an edge round, 0 there). `pnpm build:parts` writes that geometry as
+   * `<part>[.<variant>].cam.step`.
    */
   cam?: number
+  /**
+   * The variants this master means something in (their ids, models.variants.ts); every variant when omitted. A master
+   * of no use in the current variant (the cane's thickness on a cushioned seat) is hidden from the panel, and its value
+   * goes on unchanged.
+   */
+  variants?: readonly string[]
 }
 
-/** What a part's model file exports: its leva `schema` and the `build` that makes the part from the schema's values. */
+/**
+ * A named version of a part (the chair with a cane seat, or with a leather cushion): its own defaults for some
+ * masters, on top of the masters' own; what else it changes, the build reads from the variant's id.
+ */
+export interface Variant {
+  /** Its name in the panel's list. */
+  label: string
+  /** What sets it apart, one line. */
+  hint: string
+  /** Its defaults, where they differ from the masters'. */
+  values?: Record<string, number>
+}
+
+/**
+ * A part's variants, by id (as `?variant=` spells it: lowercase letters, digits and dashes): the masters module's
+ * `VARIANTS` export, the first one the default. A part that exports none has one, implicit (models.variants.ts).
+ */
+export type Variants = Record<string, Variant>
+
+/**
+ * What a part's model file exports: its leva `schema`, its `variants` (the masters module's `VARIANTS`, when it has
+ * any), and the `build` that makes the part from the schema's values in one of its variants. Each mesh of the built
+ * part may name its role in `userData.role` (a `Role`, models.roles.ts): the panel's Show folder hides or shows the
+ * meshes by role; a mesh without one is wood (`roleOf`).
+ */
 export type Model = {
   schema: Record<string, Control>
-  build: (values: Record<string, number>) => Object3D | Promise<Object3D>
+  variants?: Variants
+  build: (values: Record<string, number>, variant: string) => Object3D | Promise<Object3D>
 }
 
 /** The model files, keyed by their path relative to this file: `../../<folder>/<folder>.model.ts`. */

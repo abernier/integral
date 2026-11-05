@@ -9,7 +9,7 @@ import type { useMtb } from 'material-theme-builder/react'
 type LevaTheme = NonNullable<ComponentProps<typeof Leva>['theme']>
 
 /** A Material 3 color role, as `useMtb().getMtbColor` takes it. */
-export type Role = Parameters<ReturnType<typeof useMtb>['getMtbColor']>[0]
+export type ColorRole = Parameters<ReturnType<typeof useMtb>['getMtbColor']>[0]
 
 /**
  * The pmndrs seed, the docs' defaults: `pmndrsMtb` in `@pmndrs/docs/src/lib/md3.ts`, and the default scheme of
@@ -71,7 +71,7 @@ export function mtbConfig(picks: Picks): MtbConfig {
 }
 
 /** leva's color tokens (see its `getDefaultTheme`) as Material 3 roles, `color` giving a role's hex in the current mode. */
-export function levaTheme(color: (role: Role) => string): LevaTheme {
+export function levaTheme(color: (role: ColorRole) => string): LevaTheme {
   return {
     colors: {
       // The title bar, the panel, the inputs.

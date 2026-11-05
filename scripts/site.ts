@@ -2,11 +2,15 @@
 // the MDX folder themselves: paths.ts).
 //
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
-// ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`), and a README.md; `<folder>/references/` holds
-// the images its README's `## References` shows (a strip to scroll sideways, on the site), served beside the built files.
-// Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`, or
-// the folder `buildPart` is given (`pnpm cam '<link>'` builds into a temporary one); `buildCamStep` writes
-// `<folder>.cam.step` beside them when a master has a `cam` value: the geometry `pnpm cam` cuts, square;
+// ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`) in one of its variants (scripts/part.ts), and a
+// README.md; `<folder>/references/` holds the images its README's `## References` shows (a strip to scroll sideways,
+// on the site), served beside the built files.
+// Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/` for
+// its default variant, `<folder>.<variant>.<ext>` beside them for each other one (paths.ts partFile), or into the
+// folder `buildPart` is given (`pnpm cam '<link>'` builds into a temporary one); `buildCamStep` writes
+// `<folder>[.<variant>].cam.step` beside them when a master has a `cam` value: the geometry `pnpm cam` cuts, square.
+// The PNG is the part as cut, wood only (its module's ROLES, scripts/part.ts): rendered from that CAM build when there
+// is one, else from the build; the OFB, STEP and GLB are the finished part, every body in it;
 // `buildConfigurator` builds the configurator app into `.docs/configurator/`, and each part's page embeds it. The MDX folder also
 // gets one page per README, where the sidebar wants it: the root one as `integral/introduction.mdx`, each part's
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things"), and one per
@@ -22,8 +26,11 @@ import { build as vite } from 'vite'
 import { queryUrl } from '../configurator/src/App.url.ts'
 import { keyFile } from './build.cache.ts'
 import { type Engine, glb, render, run, save } from './classcad.ts'
-import { type Values, camStepFile, camValues, defaultValues, loadMasters } from './masters.ts'
-import { MDX, ROOT, parts } from './paths.ts'
+import { camValues, hasCamValues } from '../configurator/src/models.cam.ts'
+import { type Values, camStepFile, checkedVariant, defaultValues, loadMasters, loadVariants } from './masters.ts'
+import { roleOf } from '../configurator/src/models.roles.ts'
+import type { PartModule } from './part.ts'
+import { MDX, ROOT, partFile, parts } from './paths.ts'
 
 export const DIST = join(ROOT, 'dist')
 
@@ -69,52 +76,99 @@ function docPages() {
 }
 const docPage = (name: string) => `integral/${name}`
 
+/** A part's module (scripts/part.ts), at a fresh URL each time: `dev` imports a part again after its file changes. */
+async function loadPart(part: string) {
+  return (await import(`${pathToFileURL(join(ROOT, part, `${part}.ts`)).href}?t=${Date.now()}`)) as PartModule
+}
+
+/** Render the drawing, the part's wood alone, to `path` (classcad.ts render). */
+function renderWood(engine: Engine, path: string, { ROLES }: PartModule) {
+  return render(engine, path, (name) => roleOf(ROLES?.[name]) === 'wood')
+}
+
+/** How `buildPart` builds a part: in which variant, with which values, into which folder. */
+export type BuildOptions = {
+  /** The variant's id; the part's default variant when omitted. */
+  variant?: string
+  /** Every master's value (masters.ts); the variant's defaults when omitted. */
+  values?: Values
+  /** The folder of its files: `.docs/<part>/` by default; `pnpm cam '<link>'` builds into a temporary one. */
+  out?: string
+}
+
 /**
- * Build a part and write its files into `out`; returns their absolute paths.
- * @param values Every master's value (masters.ts); the defaults when omitted.
- * @param out The folder of its files: `.docs/<part>/` by default; `pnpm cam '<link>'` builds into a temporary one.
+ * Build a part in one of its variants and write its files into `out`, named by the variant (paths.ts partFile);
+ * returns their absolute paths. The part's default export is given the script API, the values and the variant.
+ * The PNG, wood only, is rendered here only when no master has a `cam` value: else `buildCamStep` renders it, as cut.
+ * @param engine The ClassCAD engine (classcad.ts openEngine).
+ * @param part The part's name (its folder).
  */
-export async function buildPart(engine: Engine, part: string, values?: Values, out = join(MDX, part)) {
+export async function buildPart(engine: Engine, part: string, { variant, values, out = join(MDX, part) }: BuildOptions = {}) {
   const started = performance.now()
-  // A fresh URL each time: `dev` imports a part again after its file changes.
-  const url = `${pathToFileURL(join(ROOT, part, `${part}.ts`)).href}?t=${Date.now()}`
-  const { default: build } = await import(url)
-  const resolved = values ?? (await defaultValues(part))
-  const returned = await run(engine, (api) => build(api, resolved))
+  const module = await loadPart(part)
+  const masters = await loadMasters(part)
+  const variants = await loadVariants(part)
+  const id = checkedVariant(variants, variant)
+  const resolved = values ?? (await defaultValues(part, id))
+  const returned = await run(engine, (api) => module.default(api, resolved, id))
   mkdirSync(out, { recursive: true })
   // The files about to be written no longer match a build key: build.ts writes it again after a build it keyed.
   rmSync(keyFile(part, out), { force: true })
-  const files = { ofb: join(out, `${part}.ofb`), step: join(out, `${part}.step`), glb: join(out, `${part}.glb`), png: join(out, `${part}.png`) }
+  const file = (ext: string) => join(out, partFile(part, variants, id, ext))
+  const files: { ofb: string; step: string; glb: string; png?: string } = { ofb: file('ofb'), step: file('step'), glb: file('glb') }
   const ofbSize = await save(engine, 'OFB', files.ofb)
   const stepSize = await save(engine, 'STP', files.step)
   const glbSize = await glb(engine, files.glb)
-  await render(engine, files.png)
+  if (!hasCamValues(masters)) {
+    files.png = file('png')
+    await renderWood(engine, files.png, module)
+  }
   const seconds = ((performance.now() - started) / 1000).toFixed(1)
   // The folder relative to .docs when it is under it (the usual case), else as given.
   const shown = out.startsWith(MDX) ? relative(MDX, out) : out
-  console.log(`${shown}: ${seconds} s, ofb ${ofbSize} B, step ${stepSize} B, glb ${glbSize} B`, JSON.stringify(returned))
+  console.log(`${shown} (${id}): ${seconds} s, ofb ${ofbSize} B, step ${stepSize} B, glb ${glbSize} B`, JSON.stringify(returned))
   return files
 }
 
 /**
- * Build a part again for its CAM files and write `<part>.cam.step` into `out`, when some master has a `cam` value
- * (camValues: the finishes made by hand, such as edge rounds, left out, so that the router cuts square); returns its
- * path, or undefined when the part's CAM geometry is its `<part>.step`.
- * @param values Every master's value; the defaults when omitted.
+ * Build a part in one of its variants again for its CAM files and write `<part>[.<variant>].cam.step` into `out`, when
+ * some master has a `cam` value (camValues: the finishes made by hand, such as edge rounds, left out, so that the
+ * router cuts square), and its `<part>[.<variant>].png` from that build, wood only: the part as cut; returns the
+ * STEP's path, or undefined when the part's CAM geometry is its plain STEP (its PNG is then `buildPart`'s).
+ * @param engine The ClassCAD engine (classcad.ts openEngine).
+ * @param part The part's name (its folder).
  */
-export async function buildCamStep(engine: Engine, part: string, values?: Values, out = join(MDX, part)) {
+export async function buildCamStep(engine: Engine, part: string, { variant, values, out = join(MDX, part) }: BuildOptions = {}) {
   const masters = await loadMasters(part)
-  const file = camStepFile(masters, out, part)
-  if (file === join(out, `${part}.step`)) return undefined
+  const variants = await loadVariants(part)
+  const id = checkedVariant(variants, variant)
+  const file = camStepFile(masters, out, part, variants, id)
+  if (file === join(out, partFile(part, variants, id, 'step'))) return undefined
   const started = performance.now()
-  const { default: build } = await import(`${pathToFileURL(join(ROOT, part, `${part}.ts`)).href}?t=${Date.now()}`)
-  const resolved = camValues(masters, values ?? (await defaultValues(part)))
-  await run(engine, (api) => build(api, resolved))
+  const module = await loadPart(part)
+  const resolved = camValues(masters, values ?? (await defaultValues(part, id)))
+  await run(engine, (api) => module.default(api, resolved, id))
   mkdirSync(out, { recursive: true })
   const size = await save(engine, 'STP', file)
+  const png = join(out, partFile(part, variants, id, 'png'))
+  await renderWood(engine, png, module)
   const seconds = ((performance.now() - started) / 1000).toFixed(1)
-  console.log(`${relative(MDX, file)}: ${seconds} s, ${size} B, for the CAM files`)
+  console.log(`${relative(MDX, file)}: ${seconds} s, ${size} B, for the CAM files; ${relative(MDX, png)}, as cut`)
   return file
+}
+
+/**
+ * Build every variant of a part, the default first, each into `.docs/<part>/` under its own names (buildPart), with
+ * its CAM geometry when it has one (buildCamStep).
+ * @param engine The ClassCAD engine (classcad.ts openEngine).
+ * @param part The part's name (its folder).
+ */
+export async function buildVariants(engine: Engine, part: string) {
+  for (const variant of Object.keys(await loadVariants(part))) {
+    await buildPart(engine, part, { variant })
+    // The geometry `pnpm cam` reads, square where the part's finishes are made by hand.
+    await buildCamStep(engine, part, { variant })
+  }
 }
 
 /**

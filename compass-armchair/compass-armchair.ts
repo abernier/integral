@@ -7,7 +7,10 @@
 // seam. The seat frame's side rails take the boards on loose tenons, its cross rails are dovetailed through them.
 // The curved back hangs between the armrests: two leaning posts, each on one loose tenon into its armrest, and two
 // arched rails dovetailed through the posts. The cane is sheet cane pressed into a groove around each opening and
-// held there by a glued rattan spline; it is flat, the weave is not modelled. Every outside arris of the assembled wood
+// held there by a glued rattan spline; it is flat, the weave is not modelled (GROOVE off: the groove is routed by hand
+// after glue-up, the cane lies flat on the frame and the CAM files cut none). Or, in the leather variant, a black
+// leather cushion on a plywood board resting on teak cleats, and an upholstered back panel screwed to curved teak
+// fillets behind the rails; no groove then, nothing to hold. Every outside arris of the assembled wood
 // is rounded (EDGE_BREAK, the armrest's nose ARM_NOSE_R), by hand on the cut parts: the CAM files are cut square.
 // The chair faces -Y, x = 0 is its middle, the floor is z = 0; +x is the sitter's left.
 //
@@ -17,19 +20,30 @@
 // rebuilds. The chair is one part: its expressions are the parameters, and every board is a named body in it, so
 // changing one rebuilds them all.
 
-import { type Api, created, nameSolids } from '../scripts/part.ts'
+import { type Api, type Roles, created, nameSolids } from '../scripts/part.ts'
 import type { CamConfig } from '../scripts/cam.config.ts'
 import type { Values } from '../scripts/masters.ts'
-import { type MASTERS, edgeBreak } from './compass-armchair.masters.ts'
+import { type MASTERS, type VARIANTS, edgeBreak, grooved, variantOf } from './compass-armchair.masters.ts'
 
 const TEAK: [number, number, number] = [155, 106, 60] // #9b6a3c
 const CANE: [number, number, number] = [230, 210, 160] // #e6d2a0
+const LEATHER: [number, number, number] = [29, 27, 26] // #1d1b1a
+const PLYWOOD: [number, number, number] = [200, 195, 185] // #c8c3b9, birch plywood, a cool grey-beige: told apart from the cane
 
 /** The masters' values, one per name of compass-armchair.masters.ts. */
 type ChairValues = Values<typeof MASTERS>
 
-/** How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. None depends on the values. */
-export function CAM(_values: ChairValues): CamConfig {
+/** A variant's id (compass-armchair.masters.ts). */
+type Variant = keyof typeof VARIANTS
+
+/**
+ * How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. What is not milled depends on
+ * the variant. The cane's rattan splines are skipped whatever GROOVE: the CAM STEP has none (GROOVE's `cam` is 0), a
+ * finished STEP passed with --step has them, and `pnpm cam` ignores a skip of a part its STEP lacks. The leather
+ * variant's cleats and fillets are teak, milled from the top as the other boards. An unknown variant throws.
+ */
+export function CAM(_values: ChairValues, given: string): CamConfig {
+  const variant = variantOf(given)
   return {
     defaults: { material: 'teak' },
     parts: {
@@ -40,17 +54,30 @@ export function CAM(_values: ChairValues): CamConfig {
       RearRailTenonRight: { grain: 90 },
       ArmTenonLeft: { grain: 90 },
       ArmTenonRight: { grain: 90 },
-      // Woven cane on its frame, not milled.
-      SeatCane: { skip: true },
-      BackCane: { skip: true },
-      // The rattan splines that hold the cane in its groove, glued in, not milled.
-      SeatCaneSpline: { skip: true },
-      BackCaneSpline: { skip: true },
+      ...(variant === 'leather'
+        ? {
+            // Upholstery, not milled.
+            SeatCushion: { skip: true },
+            BackPad: { skip: true },
+            // Bending plywood, bent to the back's arc: cut by hand from a sheet.
+            BackBoard: { skip: true },
+            // Plywood, which cam.materials.json has no preset for: a rectangle, sawn from a sheet.
+            SeatBoard: { skip: true },
+          }
+        : {
+            // Woven cane on its frame, not milled.
+            SeatCane: { skip: true },
+            BackCane: { skip: true },
+            // The rattan splines that hold the cane in its groove, glued in, not milled (in the STEP only with GROOVE).
+            SeatCaneSpline: { skip: true },
+            BackCaneSpline: { skip: true },
+          }),
     },
   }
 }
 
-// Everything else, derived. The armrest's underside is z = U0 - K y.
+// Everything else, derived (`derived` sets the side rail tenons' height per variant). The armrest's underside is
+// z = U0 - K y.
 const DERIVED = {
   X_BOARD: 'W/2 - LEG_T', // the side boards' inner face, on which the posts' outer face lies
   X_POST: 'X_BOARD - POST_W', // the posts' inner face
@@ -91,7 +118,20 @@ const DERIVED = {
   // The back's tail, on a rail's end, centred on the post's axis: at the post's inner face, at its outer face.
   BACK_TAIL_BASE: 'POST_D - 2*BACK_TAIL_SHOULDER',
   BACK_TAIL_END: 'BACK_TAIL_BASE + 2*POST_W*SLOPE',
+  // The leather variant's seat: the cleats' inner face and their top, the board's top; the board and the cushion GAP
+  // short of the rails all round.
+  CLEAT_X: 'X_RAIL - CLEAT',
+  BOARD_TOP: 'SEAT_TOP - SEAT_BOARD_DOWN',
+  CLEAT_TOP: 'BOARD_TOP - SEAT_BOARD_T',
+  GAP: '1',
+  // The leather variant's back: the backer's rear face and its front face.
+  BACKER_OUT: 'R_OUT - FILLET',
+  BACKER_IN: 'BACKER_OUT - BACK_BOARD_T',
 }
+
+/** DERIVED in a variant: without a cane groove, the side rail tenons are centred on the rail's height. */
+const derived = (variant: Variant): typeof DERIVED =>
+  variant === 'cane' ? DERIVED : { ...DERIVED, Z_TENON: 'SEAT_TOP - RAIL_H/2' }
 
 
 // A half-space: a point on its plane and its normal, pointing into the material. Components are expressions in
@@ -223,15 +263,15 @@ type Value = (expression: string) => number
  * The value of the part's expressions, from the masters' values and DERIVED: numbers, names (`$X` or `X`), `C:PI`,
  * + - * / and parentheses, sqrt, sin and cos, what the half-spaces and DERIVED are written with.
  */
-function evaluator(values: ChairValues): Value {
+function evaluator(values: ChairValues, variant: Variant): Value {
   const known = new Map<string, number>([...Object.entries(values), ['C:PI', Math.PI]])
-  const derived: Record<string, string> = DERIVED
+  const expressions: Record<string, string> = derived(variant)
   const functions: Record<string, (x: number) => number> = { sqrt: Math.sqrt, sin: Math.sin, cos: Math.cos }
   const lookup = (name: string) => {
     let value = known.get(name)
     if (value === undefined) {
-      if (!(name in derived)) throw new Error(`no expression ${name}`)
-      value = evaluate(derived[name])
+      if (!(name in expressions)) throw new Error(`no expression ${name}`)
+      value = evaluate(expressions[name])
       known.set(name, value)
     }
     return value
@@ -645,6 +685,13 @@ const groove = (band: Band) => (api: Api, part: number) => band(api, part, 'Groo
 const seatGroove = groove(seatBand)
 const backGroove = groove(backBand)
 
+/**
+ * What the cane's groove cuts from a frame member: the groove when the chair has one (`grooved`), or nothing, with no
+ * cane to hold or the groove left to the hand.
+ */
+const grooves = async (groove: boolean, make: (api: Api, part: number) => Promise<number>, api: Api, part: number) =>
+  groove ? [await make(api, part)] : []
+
 type Builder = (api: Api, part: number, value: Value) => Promise<number>
 
 /** The spline in the groove's outer half, from the cane's sheet on the face down to the groove's bottom. */
@@ -654,9 +701,11 @@ const spline = (band: Band): Builder => (api, part) => band(api, part, 'Spline',
  * The cane of an opening: its sheet lapping the frame out to the groove's middle and down the groove's inner half,
  * its `panel` across the opening. The weave is not modelled. The sheet is the groove's middle outline through the
  * whole depth less its inner outline below the face; the panel reaches up into the sheet: so that no two faces of
- * these booleans lie on one surface, which the engine fails on.
+ * these booleans lie on one surface, which the engine fails on. Without the groove (`groove` false), the sheet lies flat
+ * on the frame out to the groove's middle, the panel up into it as well.
  */
-const cane = (band: Band, panel: Builder): Builder => async (api, part, value) => {
+const cane = (band: Band, panel: Builder, groove: boolean): Builder => async (api, part, value) => {
+  if (!groove) return union(api, part, 'Cane', await band(api, part, 'Sheet', null, '$GROOVE_INSET', '-$CANE_SHEET', '0'), [await panel(api, part, value)])
   const outside = await band(api, part, 'Sheet', null, '$GROOVE_INSET', '-$CANE_SHEET', '$GROOVE_D')
   const sheet = await subtract(api, part, 'Sheet', outside, [await band(api, part, 'Inside', null, GROOVE_IN, '0', '$GROOVE_D + 1')])
   return union(api, part, 'Cane', sheet, [await panel(api, part, value)])
@@ -686,8 +735,8 @@ async function armrestBoard(api: Api, part: number, value: Value, m: (planes: Ha
   return union(api, part, 'Armrest', glued, [front, rear])
 }
 
-/** One side's boards, its +x side as written, the other mirrored. */
-function side(s: 'Left' | 'Right'): Record<string, Builder> {
+/** One side's boards in the variant, its +x side as written, the other mirrored. */
+function side(s: 'Left' | 'Right', groove: boolean): Record<string, Builder> {
   const m = (planes: HalfSpace[]) => (s === 'Left' ? planes : mirror(planes))
   // A point's x on this side, and the sign of +x on it.
   const x = (value: string) => (s === 'Left' ? value : `-(${value})`)
@@ -723,7 +772,7 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
         await board(api, part, 'RearTenon', m(railTenon('$TENON_Y'))),
         await seatTails(api, part, 'FrontTails', m(seatTail(...FRONT_RAIL_Y))),
         await seatTails(api, part, 'RearTails', m(seatTail(...REAR_RAIL_Y))),
-        await seatGroove(api, part),
+        ...(await grooves(groove, seatGroove, api, part)),
       ]),
     [`FrontRailTenon${s}`]: (api, part) => board(api, part, 'Tenon', m(railTenon('-$TENON_Y'))),
     [`RearRailTenon${s}`]: (api, part) => board(api, part, 'Tenon', m(railTenon('$TENON_Y'))),
@@ -750,7 +799,7 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
         await board(api, part, 'LowTail', m(tilt(backTail(BACK_RAILS[0])))),
         await board(api, part, 'HighTail', m(tilt(backTail(BACK_RAILS[1])))),
         await board(api, part, 'Tenon', m(tilt(ARM_TENON))),
-        await backGroove(api, part),
+        ...(await grooves(groove, backGroove, api, part)),
       ]),
     [`ArmTenon${s}`]: (api, part) => board(api, part, 'Tenon', m(tilt(ARM_TENON))),
   }
@@ -761,13 +810,14 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
  * rounded but on its ends (glued to the side rails) and the top one on the opening's side (`lapped`, its face there),
  * which the cane laps; its tails' corner on the seat's outside (`outside`).
  */
-const crossRailBuilder = (y: readonly [string, string], lapped: string, outside: string): Builder => async (api, part, value) => {
+const crossRailBuilder = (y: readonly [string, string], lapped: string, outside: string, groove: boolean): Builder => async (api, part, value) => {
   const middle = await roundedBoard(api, part, value, 'Rail', crossRail(y), [['EDGE_BREAK', allBut(['LongMin', 'LongMax'], [[lapped, 'HighMax']])]])
   const rail = await union(api, part, 'Tails', middle, [
     await seatTails(api, part, 'TailsLeft', seatTail(...y), { value, outside }),
     await seatTails(api, part, 'TailsRight', mirror(seatTail(...y)), { value, outside }),
   ])
-  return subtract(api, part, 'Groove', rail, [await seatGroove(api, part)])
+  const cuts = await grooves(groove, seatGroove, api, part)
+  return cuts.length ? subtract(api, part, 'Groove', rail, cuts) : rail
 }
 
 /**
@@ -777,7 +827,7 @@ const crossRailBuilder = (y: readonly [string, string], lapped: string, outside:
  * post's end (`end`: the low rail's bottom, the high rail's top): the post's round runs on across the tail, which
  * would stand proud of it square.
  */
-const backRailBuilder = (z: readonly [string, string], lapped: string, end: 'HighMin' | 'HighMax'): Builder => async (api, part, value) => {
+const backRailBuilder = (z: readonly [string, string], lapped: string, end: 'HighMin' | 'HighMax', groove: boolean): Builder => async (api, part, value) => {
   const whole = await roundRing(api, part, value, 'Rail', await ring(api, part, 'Rail', '$R_OUT', '$R_IN', z), lapped)
   const tail = async (name: string, planes: HalfSpace[]) =>
     round(api, part, value, name, await board(api, part, name, planes), planes, [
@@ -787,48 +837,125 @@ const backRailBuilder = (z: readonly [string, string], lapped: string, end: 'Hig
     await tail('TailLeft', tilt(backTail(z))),
     await tail('TailRight', mirror(tilt(backTail(z)))),
   ])
-  return subtract(api, part, 'Groove', rail, [await backGroove(api, part)])
+  const cuts = await grooves(groove, backGroove, api, part)
+  return cuts.length ? subtract(api, part, 'Groove', rail, cuts) : rail
 }
 
-const BOARDS: Record<string, Builder> = {
-  ...side('Left'),
-  ...side('Right'),
-  FrontRail: crossRailBuilder(FRONT_RAIL_Y, 'ThickMax', 'RailMin'),
-  RearRail: crossRailBuilder(REAR_RAIL_Y, 'ThickMin', 'RailMax'),
-  // The splines are rattan, glued in.
-  SeatCaneSpline: spline(seatBand),
-  // The seat's panel in its opening, just under the rails' top, and up into the cane's sheet on it (`cane`).
-  SeatCane: cane(seatBand, (api, part) => board(api, part, 'Cane', SEAT_CANE)),
-  LowBackRail: backRailBuilder(BACK_RAILS[0], BACK_RAILS[0][1], 'HighMin'),
-  HighBackRail: backRailBuilder(BACK_RAILS[1], BACK_RAILS[1][0], 'HighMax'),
-  BackCaneSpline: spline(backBand),
-  // The back's panel in its opening, just behind its front, and up into the cane's sheet on it (`cane`).
-  BackCane: cane(backBand, (api, part) => arc(api, part, 'Cane', '$R_IN + $CANE_T', '$R_IN - $CANE_SHEET/2', ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM'])),
+// The leather variant's seat: a plywood board on teak cleats, the cushion on it, in the opening between the rails.
+//
+// The board rests on cleats glued and screwed to the four rails' inner faces rather than in a rebate milled into them:
+// the rails are cut flat from the top on the ShopBot, and a rebate on their inner face is a side-machining operation
+// (or a rebating bit by hand after the dovetails), while the cleats are more flat parts, cut from the top like any
+// board. They also let the board be screwed from below, and the cushion lifted out.
+const CLEAT_HEIGHT = slab('High', 2, '$CLEAT_TOP - $CLEAT', '$CLEAT_TOP')
+const SIDE_CLEAT = [...slab('Thick', 0, '$CLEAT_X', '$X_RAIL'), ...slab('Long', 1, '$CANE_FRONT', '$REAR_RAIL_Y'), ...CLEAT_HEIGHT]
+const crossCleat = (y0: string, y1: string) => [...slab('Long', 0, '-$CLEAT_X', '$CLEAT_X'), ...slab('Thick', 1, y0, y1), ...CLEAT_HEIGHT]
+const fill = (z0: string, z1: string) => [
+  ...slab('Wide', 0, '-$X_RAIL + $GAP', '$X_RAIL - $GAP'),
+  ...slab('Deep', 1, '$CANE_FRONT + $GAP', '$REAR_RAIL_Y - $GAP'),
+  ...slab('Thick', 2, z0, z1),
+]
+
+// The leather variant's back, an upholstered panel between the posts and the rails: a bending-plywood backer and its
+// pad, screwed from behind through the backer into two curved teak fillets. The rails are arcs in plan, so the fillets
+// are flat parts too: arc bands at the rails' rear face, on the low rail and under the high one. The backer is just in
+// front of them, the pad in front of it, to just proud of the rails' front face.
+/**
+ * The bodies not of wood, by name, as the browser model's meshes (compass-armchair.model.ts): the cane and its
+ * splines; the leather variant's plywood, which holds the upholstery, and the upholstery. Its teak cleats and fillets
+ * are wood, milled with the frame. The build's image shows the wood alone.
+ */
+export const ROLES = {
+  SeatCane: 'cane',
+  BackCane: 'cane',
+  SeatCaneSpline: 'cane',
+  BackCaneSpline: 'cane',
+  SeatBoard: 'support',
+  BackBoard: 'support',
+  SeatCushion: 'cushion',
+  BackPad: 'cushion',
+} satisfies Roles
+
+// The arcs' heights are written z1 - z0 (`ring`): an expression for z0 goes in parentheses.
+const BACK_OPEN = ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM'] as const
+
+/**
+ * The chair's boards in the variant, by name: 26 with cane, 24 without its groove (`groove` false: no splines), 32
+ * with leather.
+ */
+function boards(variant: Variant, groove: boolean): Record<string, Builder> {
+  const seat: Record<string, Builder> = {
+    ...side('Left', groove),
+    ...side('Right', groove),
+    FrontRail: crossRailBuilder(FRONT_RAIL_Y, 'ThickMax', 'RailMin', groove),
+    RearRail: crossRailBuilder(REAR_RAIL_Y, 'ThickMin', 'RailMax', groove),
+  }
+  const back: Record<string, Builder> = {
+    LowBackRail: backRailBuilder(BACK_RAILS[0], BACK_RAILS[0][1], 'HighMin', groove),
+    HighBackRail: backRailBuilder(BACK_RAILS[1], BACK_RAILS[1][0], 'HighMax', groove),
+  }
+  if (variant === 'leather') {
+    return {
+      ...seat,
+      ...back,
+      SeatCleatLeft: (api, part) => board(api, part, 'Cleat', SIDE_CLEAT),
+      SeatCleatRight: (api, part) => board(api, part, 'Cleat', mirror(SIDE_CLEAT)),
+      FrontSeatCleat: (api, part) => board(api, part, 'Cleat', crossCleat('$CANE_FRONT', '$CANE_FRONT + $CLEAT')),
+      RearSeatCleat: (api, part) => board(api, part, 'Cleat', crossCleat('$REAR_RAIL_Y - $CLEAT', '$REAR_RAIL_Y')),
+      SeatBoard: (api, part) => board(api, part, 'Board', fill('$CLEAT_TOP', '$BOARD_TOP')),
+      SeatCushion: (api, part) => board(api, part, 'Cushion', fill('$BOARD_TOP', '$SEAT_TOP + $CUSHION_PROUD')),
+      LowBackFillet: (api, part) => arc(api, part, 'Fillet', '$R_OUT', '$BACKER_OUT', [BACK_OPEN[0], `(${BACK_OPEN[0]} + $FILLET)`]),
+      HighBackFillet: (api, part) => arc(api, part, 'Fillet', '$R_OUT', '$BACKER_OUT', [`(${BACK_OPEN[1]} - $FILLET)`, BACK_OPEN[1]]),
+      BackBoard: (api, part) => arc(api, part, 'Board', '$BACKER_OUT', '$BACKER_IN', BACK_OPEN),
+      BackPad: (api, part) => arc(api, part, 'Pad', '$BACKER_IN', '$R_IN - $BACK_PAD_PROUD', BACK_OPEN),
+    }
+  }
+  return {
+    ...seat,
+    // The splines are rattan, glued in; none without the groove.
+    ...(groove && { SeatCaneSpline: spline(seatBand) }),
+    // The seat's panel in its opening, just under the rails' top, and up into the cane's sheet on it (`cane`).
+    SeatCane: cane(seatBand, (api, part) => board(api, part, 'Cane', SEAT_CANE), groove),
+    ...back,
+    ...(groove && { BackCaneSpline: spline(backBand) }),
+    // The back's panel in its opening, just behind its front, and up into the cane's sheet on it (`cane`).
+    BackCane: cane(backBand, (api, part) => arc(api, part, 'Cane', '$R_IN + $CANE_T', '$R_IN - $CANE_SHEET/2', ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM']), groove),
+  }
+}
+
+/** A board's colour, by its name. */
+function color(name: string): [number, number, number] {
+  if (name.includes('Cane')) return CANE
+  if (name === 'SeatCushion' || name === 'BackPad') return LEATHER
+  if (name === 'SeatBoard' || name === 'BackBoard') return PLYWOOD
+  return TEAK
 }
 
 /**
  * Build the chair: one part whose expressions drive every board, each board a named body in it; returns the part,
  * the boards' feature ids and their volumes.
  * @param given Every master's value: the masters are the part's first expressions (EDGE_BREAK under 1 mm taken as 0).
+ * @param variant The variant's id (compass-armchair.masters.ts): cane, or leather; another throws, naming them.
  */
-export default async function build(api: Api, given: ChairValues) {
+export default async function build(api: Api, given: ChairValues, variant: string) {
   // Under 1 mm, no round (as the browser model): the part's EDGE_BREAK is the one built.
   const values = { ...given, EDGE_BREAK: edgeBreak(given.EDGE_BREAK) }
+  const id: Variant = variantOf(variant)
   const part = await created(api.v1.part.create({ name: 'CompassArmchair' }))
   await api.v1.part.expression({
     id: part,
     toCreate: [
       ...Object.entries(values).map(([name, value]) => ({ name, value })),
-      ...Object.entries(DERIVED).map(([name, value]) => ({ name, value })),
+      ...Object.entries(derived(id)).map(([name, value]) => ({ name, value })),
     ],
   })
 
-  const value = evaluator(values)
-  const boards: Record<string, number> = {}
-  for (const [name, make] of Object.entries(BOARDS)) {
+  const value = evaluator(values, id)
+  const bodies: Record<string, number> = {}
+  for (const [name, make] of Object.entries(boards(id, grooved(id, values.GROOVE)))) {
     const body = await make(api, part, value)
-    await api.v1.part.setAppearance({ target: body, color: name.includes('Cane') ? CANE : TEAK })
-    boards[name] = body
+    await api.v1.part.setAppearance({ target: body, color: color(name) })
+    bodies[name] = body
   }
-  return { part, boards, volumes: await nameSolids(api, boards) }
+  return { part, boards: bodies, volumes: await nameSolids(api, bodies) }
 }
