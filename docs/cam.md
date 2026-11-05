@@ -19,7 +19,7 @@ The code only prepares Fusion's job. It groups the parts by material and thickne
 - [ ] Fusion desktop (macOS or Windows), signed in. Fusion for Personal Use is enough: it posts ShopBot OpenSBP, but its rapids run at the cutting feed, and with no tool change each tool gets its own file.
 - [ ] Fusion's MCP server on: Preferences > General > API > *Fusion MCP Server (runs locally on this device)*. On another port, set `FUSION_MCP_URL`. `pnpm cam --list-tools` checks the connection.
 - [ ] No command dialog open in Fusion during a run.
-- [ ] The model's STEP at `.docs/<model>/<model>.step`, one component per part: `nr build:parts` makes it (a run given a link builds its own STEP first).
+- [ ] The model's STEP at `.docs/<model>/<model>.step`, one component per part: `nr build:parts` makes it (a run given a link builds its own STEP first). A model whose masters have a `cam` value (a finish made by hand, such as an edge round, 0 in the files) is cut from `<model>.cam.step`, built with those values beside it: the files cut square.
 - [ ] The tools of [`cam.tools.json`](https://github.com/abernier/integral/blob/main/scripts/cam.tools.json) match the cutters on your ShopBot, and their presets match your wood.
 
 ## Run

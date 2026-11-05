@@ -32,7 +32,7 @@ import {
   type Tool,
 } from './cam.machining.ts'
 import { configFile, loadConfig } from './cam.config.ts'
-import { type Values, defaultValues, linkValues, mastersFile } from './masters.ts'
+import { type Values, camStepFile, camValues, defaultValues, linkValues, loadMasters, mastersFile } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
 import { stepParts } from './step-assembly.ts'
 
@@ -62,8 +62,8 @@ const { values: flags, positionals } = parseArgs({
 const USAGE = `usage: pnpm cam [<model> | '<link>'] [options]      (no model: every model, one after the other)
   '<link>'               the configurator's "Copy link" (?part=<model>&<MASTER>=<value>...): the model made with its
                          values, its STEP built first with ClassCAD
-  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.step; cam.json then
-                         records no values)
+  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.cam.step when a
+                         master has a \`cam\` value, else <model>.step; cam.json then records no values)
   --post <text>          the library post whose vendor/description contains it (default ${DEFAULT_POST})
   --tool <number>        this tool of scripts/cam.tools.json for every sheet (default: per sheet, the narrowest that reaches)
   --sheet <LxW>          the sheet, mm (default ${MACHINING_DEFAULTS.sheet.join('x')})
@@ -153,7 +153,10 @@ if (existing.length && !flags.force) {
 const interrupted = () => process.exit(130)
 process.on('SIGINT', interrupted)
 
-let step = resolve(flags.step ?? join(MDX, model, `${model}.step`))
+// The model's geometry for the CAM files: `<model>.cam.step` when a master has a `cam` value (a finish made by hand,
+// such as an edge round, left out: the files cut square), else `<model>.step`.
+const masters = await loadMasters(model)
+let step = resolve(flags.step ?? camStepFile(masters, join(MDX, model), model))
 if (link) {
   // The link's STEP, built every run into a folder of its own, gone when the run ends. ClassCAD loads only here, not
   // when the script starts: a default run never needs it.
@@ -163,7 +166,7 @@ if (link) {
   const { openEngine } = await import('./classcad.ts')
   const { buildPart } = await import('./site.ts')
   const engine = await openEngine().catch((error: unknown) => fail(`ClassCAD: ${messageOf(error)}`))
-  const built = await buildPart(engine, model, values, dir).catch((error: unknown) => {
+  const built = await buildPart(engine, model, camValues(masters, values), dir).catch((error: unknown) => {
     engine.client.close()
     return fail(`building ${model} failed: ${messageOf(error)}`)
   })

@@ -1,19 +1,26 @@
 // `nr build`: build the parts that changed with ClassCAD, then the configurator and the docs site into dist/, the built files beside its pages.
-// `nr build:parts` (`--parts-only`): the parts alone, into .docs/.
+// `nr build:parts` (`--parts-only`): the parts alone, into .docs/, each with its CAM geometry when it has one (buildCamStep).
 //
-// A part already built from the same sources and values is not built again (build.cache.ts). `--force` builds
-// every part anyway.
+// A part already built from the same sources and values (its CAM STEP too) is not built again (build.cache.ts).
+// `--force` builds every part anyway.
 
 import { cpSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join, relative, sep } from 'node:path'
-import { buildKey, upToDate, writeKey } from './build.cache.ts'
+import { basename, join, relative, sep } from 'node:path'
+import { FILES, buildKey, upToDate, writeKey } from './build.cache.ts'
 import { type Engine, openEngine } from './classcad.ts'
-import { defaultValues } from './masters.ts'
+import { camStepFile, defaultValues, loadMasters } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
-import { DIST, buildConfigurator, buildPart, docsEnv, writePages } from './site.ts'
+import { DIST, buildCamStep, buildConfigurator, buildPart, docsEnv, writePages } from './site.ts'
 
 const force = process.argv.includes('--force')
+
+/** The files a part's build writes into .docs/<part>/: its own, and its CAM STEP when a master has a `cam` value (camStepFile). */
+async function outputs(part: string) {
+  const files = FILES.map((ext) => `${part}.${ext}`)
+  const cam = basename(camStepFile(await loadMasters(part), join(MDX, part), part))
+  return files.includes(cam) ? files : [...files, cam]
+}
 
 // Empty .docs/ but for the parts' folders, whose files may still be current.
 for (const entry of existsSync(MDX) ? readdirSync(MDX) : []) {
@@ -24,7 +31,7 @@ for (const entry of existsSync(MDX) ? readdirSync(MDX) : []) {
 let engine: Engine | undefined
 for (const part of parts()) {
   const key = buildKey(part, await defaultValues(part))
-  if (!force && upToDate(part, key)) {
+  if (!force && upToDate(part, key, join(MDX, part), await outputs(part))) {
     console.log(`${part}: up to date`)
     continue
   }
@@ -32,6 +39,8 @@ for (const part of parts()) {
   rmSync(join(MDX, part), { recursive: true, force: true })
   engine ??= await openEngine()
   await buildPart(engine, part)
+  // The geometry `pnpm cam` reads, square where the part's finishes are made by hand.
+  await buildCamStep(engine, part)
   writeKey(part, key)
 }
 engine?.client.close()

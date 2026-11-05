@@ -59,3 +59,14 @@ test('upToDate: every file is there and the key matches', () => {
     writeFileSync(join(dir, `${PART}.${ext}`), '')
   }
 })
+
+test('upToDate: a part with more files (its CAM STEP) needs each of them', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'build-cache-'))
+  const files = [...FILES.map((ext) => `${PART}.${ext}`), `${PART}.cam.step`]
+  for (const file of files) writeFileSync(join(dir, file), '')
+  writeKey(PART, 'key', dir)
+  assert.equal(upToDate(PART, 'key', dir, files), true)
+  rmSync(join(dir, `${PART}.cam.step`))
+  assert.equal(upToDate(PART, 'key', dir, files), false, 'no CAM STEP')
+  assert.equal(upToDate(PART, 'key', dir), true, 'not asked for')
+})

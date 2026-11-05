@@ -33,6 +33,12 @@ export const MASTERS = {
   RAIL_H: { value: 60, min: 55, max: 65, step: 1, hint: 'Height of the seat rails' },
   RAIL_T: { value: 25, min: 22, max: 28, step: 1, hint: 'Thickness of the side rails' },
   CANE_T: { value: 8, min: 6, max: 10, step: 0.5, hint: 'Thickness of the cane panels' },
+  CANE_SHEET: { value: 2, min: 1.5, max: 3, step: 0.5, hint: 'Thickness of the sheet cane where it laps the frame into its groove' },
+  GROOVE_W: { value: 6, min: 5, max: 8, step: 0.5, hint: 'Width of the cane groove around each opening' },
+  // At most RAIL_H - TENON_H at every corner of the box (55 - 44): the side rail tenons sit in the wood under it.
+  GROOVE_D: { value: 10, min: 6, max: 10, step: 0.5, hint: 'Depth of the cane groove' },
+  GROOVE_INSET: { value: 10, min: 8, max: 12, step: 0.5, hint: "The cane groove's middle, out from the opening's edge" },
+  GROOVE_R: { value: 15, min: 10, max: 16, step: 0.5, hint: "Radius of the cane groove's corners, on its middle" },
   SEAT_FRONT: { value: -229, min: -240, max: -220, step: 1, hint: 'Nose of the side rails' },
   SEAT_BACK: { value: 240, min: 230, max: 250, step: 1, hint: 'Back end of the side rails' },
   FRONT_RAIL_T: { value: 30, min: 26, max: 34, step: 1, hint: 'Thickness of the front cross rail' },
@@ -59,4 +65,7 @@ export const MASTERS = {
   SEAT_PIN_EDGE: { value: 6, min: 5, max: 7, step: 0.5, hint: 'Seat pins at the side rail edges' },
   SEAT_PIN_MID: { value: 6, min: 5, max: 7, step: 0.5, hint: 'Seat pins between the tails' },
   BACK_TAIL_SHOULDER: { value: 12, min: 10, max: 14, step: 0.5, hint: 'Shoulders either side of a back rail tail' },
+  // The rounds are made by hand on the cut parts: the CAM files are cut square (`cam`).
+  ARM_NOSE_R: { value: 8, min: 0, max: 12, step: 0.5, cam: 0, hint: "Round on the armrest nose's edges, by hand" },
+  EDGE_BREAK: { value: 2.5, min: 0, max: 4, step: 0.5, cam: 0, hint: 'Round on the other outside arrises, by hand' },
 } satisfies Record<string, Control>

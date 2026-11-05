@@ -20,6 +20,11 @@ export interface Control {
    * only make sense together (the four foot positions) stay under Details rather than be separate main sliders.
    */
   main?: true
+  /**
+   * The value the CAM files' geometry is built with, whatever the configurator's: a finish the router does not cut, made
+   * by hand on the cut part (an edge round, 0 there). `pnpm build:parts` writes that geometry as `<part>.cam.step`.
+   */
+  cam?: number
 }
 
 /** What a part's model file exports: its leva `schema` and the `build` that makes the part from the schema's values. */
