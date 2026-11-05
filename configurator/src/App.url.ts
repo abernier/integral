@@ -37,19 +37,37 @@ function parseAsMaster({ value, min, max }: Control) {
   }).withDefault(value)
 }
 
-/** The parsers of the query: `part` first, then one per master of the part's schema (none before the model loads). */
+/**
+ * The query's fixed keys, the ones that are not a master. This is their one record: their names are reserved, so
+ * that no part may name a master after one (models.test.ts checks every part), and a new fixed key (#24's `variant`)
+ * is added here, and nowhere else.
+ */
+const fixedParsers = { part: parseAsString.withDefault('') }
+
+/** The names a master may not take: the query's fixed keys. */
+export const RESERVED_KEYS = Object.keys(fixedParsers)
+
+/**
+ * The parsers of the query: the fixed keys first (the URL is written in this order: `?part=` first), then one per
+ * master of the part's schema (none before the model loads). A master named after a fixed key would replace its
+ * parser: the reserved names keep that from happening.
+ */
 function queryParsers(schema: Model['schema'] = {}) {
   const masters = Object.fromEntries(Object.entries(schema).map(([name, control]) => [name, parseAsMaster(control)]))
-  return { part: parseAsString.withDefault(''), ...masters }
+  return { ...fixedParsers, ...masters }
 }
 
 /**
- * The query as two fields: the part, and the masters' values. The masters' keys are only known at runtime, so that
- * the parsers' type cannot tell `part` from a master: the parsers above make `part` a string and every other a number.
+ * The query as two fields: the fixed keys (the part), and the masters' values. The masters' names are only known at
+ * runtime, so that the query's type has every other key as a string or a number: a master's parser makes it a number,
+ * which is checked here rather than assumed.
  */
-function split(query: Record<string, string | number>) {
-  const { part, ...values } = query
-  return { part: part as string, values: values as Values }
+function split({ part, ...rest }: { part: string; [master: string]: string | number }) {
+  const values: Values = {}
+  for (const [name, value] of Object.entries(rest)) {
+    if (typeof value === 'number') values[name] = value
+  }
+  return { part, values }
 }
 
 /**
@@ -73,7 +91,7 @@ export function queryUrl(schema: Model['schema'], { part, values }: { part: stri
 
 /**
  * The part and its masters' values, as the URL holds them, and a setter that writes the values back to the URL (by
- * replace, once they stay still). Without a schema (the model not loaded yet), only the part.
+ * replace, once they stay still). Without a schema (the model not loaded yet), the part and no values.
  * @param schema The part's masters; undefined until its model loads.
  */
 export function useQuery(schema?: Model['schema']) {
