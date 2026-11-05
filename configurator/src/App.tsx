@@ -27,9 +27,6 @@ const SMOOTH_TIME = 0.125
 /** The leva panel's box, at the right edge: leva's default root width (280) plus its margin. */
 const PANEL_WIDTH = 290
 
-/** The gap between the leva panel and the window's top and right edges. */
-const PANEL_GAP = 10
-
 const { ACTION } = CameraControlsImpl
 
 /** The last few builds, by their values: the build on screen and the one rendering in its place may differ. */
@@ -115,11 +112,10 @@ function Page() {
 
   return (
     <>
-      {/* zIndex: the canvas, fixed too and later in the DOM, would cover the panel. */}
-      <div style={{ position: 'fixed', top: PANEL_GAP, right: 0, zIndex: 1, width: PANEL_WIDTH, paddingRight: PANEL_GAP, boxSizing: 'border-box' }}>
-        {/* No drag: leva would move its panel by a CSS transform, away from our box, and the shift would aim at the wrong space. */}
-        <Leva fill collapsed={{ collapsed, onChange: setCollapsed }} titleBar={{ title: part, drag: false }} theme={levaTheme(color)} />
-      </div>
+      {/* Not `fill`: leva then places the panel itself (fixed, 10px from the top right, above the canvas) and only then
+          caps its content to the window's height, scrollable. No drag: leva would move the panel by a CSS transform,
+          away from the space the shift leaves free. */}
+      <Leva collapsed={{ collapsed, onChange: setCollapsed }} titleBar={{ title: part, drag: false }} theme={levaTheme(color)} />
       {model && <Configurator model={model} shift={collapsed ? 0 : PANEL_WIDTH / 2} />}
       <Messages>
         {error && !model && <Message>{error}</Message>}
