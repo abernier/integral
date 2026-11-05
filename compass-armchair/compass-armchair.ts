@@ -67,8 +67,9 @@ const DERIVED = {
   CL: 'cos(LEAN)',
   TL: 'SL/CL',
   POST_Y: 'POST_Y_AT_ARM - (ARM_TOP - SEAT_TOP)*TL', // the posts' axis at seat height
-  // The back rails' faces, two arcs about one centre: flush with the posts' faces at their inner face, the rear one
-  // BOW behind them in the middle.
+  // The back rails' faces, two arcs about one centre on the back's axis, flush with the posts' faces at their inner
+  // face: the rear one through the posts' rear inner corners and BOW behind them in the middle, the front one through
+  // their front inner corners. As in compass-armchair.model.ts.
   R_OUT: '(X_POST*X_POST + BOW*BOW)/(2*BOW)',
   ARC_Y: 'POST_D/2 + BOW - R_OUT', // the centre, in the back's frame
   R_IN: 'sqrt(X_POST*X_POST + (ARC_Y + POST_D/2)*(ARC_Y + POST_D/2))',
@@ -637,8 +638,9 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
         await board(api, part, 'Tenon', m(tilt(ARM_TENON))),
       ]),
     // Rounded but its front inner arris (the cane laps it, the rails' fronts are flush with it at their dovetails): its
-    // inner face's rear arris shows in the opening and behind the rails, its ends' are flush with the rails' tops and
-    // bottoms. Its ends cut into sockets by the rails' tails, the tenon's mortise, the cane's groove.
+    // inner face's rear arris shows in the opening and is flush with the rails' rear faces at their joints, its ends'
+    // with the rails' tops and bottoms. Its ends cut into sockets by the rails' tails, the tenon's mortise, the cane's
+    // groove.
     [`BackPost${s}`]: async (api, part, value) =>
       subtract(api, part, 'SocketsMortiseAndGroove', await roundedBoard(api, part, value, 'Post', m(POST), [['EDGE_BREAK', allBut([], [['AcrossMin', 'DeepMin']])]], true), [
         await board(api, part, 'LowTail', m(tilt(backTail(BACK_RAILS[0])))),

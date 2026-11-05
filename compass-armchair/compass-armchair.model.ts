@@ -54,14 +54,13 @@ function derive(p: Masters) {
   const K = (p.ARM_BACK_H - p.ARM_NOSE_H) / (p.ARM_BACK_Y - p.ARM_FRONT)
   const U0 = p.ARM_TOP - p.ARM_NOSE_H + K * p.ARM_FRONT
   const POST_Y = p.POST_Y_AT_ARM - (p.ARM_TOP - p.SEAT_TOP) * TL // the posts' axis at seat height
-  // The back rails' faces, two arcs about one centre. The rails are BOW less deep than the posts: their rear face is
-  // flush with the posts' rear face in the middle, their front face with the posts' front face at the ends, so that
-  // nothing of the back shows beyond the posts in a side view.
-  const RAIL_D = p.POST_D - p.BOW
-  const R_BACK = (X_POST ** 2 + p.BOW ** 2) / (2 * p.BOW) + RAIL_D / 2 // the arc's middle line, the cane's
-  const R_OUT = R_BACK + RAIL_D / 2
-  const R_IN = R_BACK - RAIL_D / 2
-  const ARC_Y = p.POST_D / 2 - R_OUT // the centre, in the back's frame
+  // The back rails' faces, two arcs about one centre on the back's axis, flush with the posts' faces at their inner
+  // face: the rear one through the posts' rear inner corners and BOW behind them in the middle, the front one through
+  // their front inner corners. The rail is a little less deep in the middle than the posts (R_OUT - R_IN), its ends
+  // exactly as deep.
+  const R_OUT = (X_POST ** 2 + p.BOW ** 2) / (2 * p.BOW)
+  const ARC_Y = p.POST_D / 2 + p.BOW - R_OUT // the centre, in the back's frame
+  const R_IN = Math.hypot(X_POST, ARC_Y + p.POST_D / 2)
   // Where the posts' rear face crosses the armrest's underside, in the side view; the armrest's square rear end.
   const POST_REAR_0 = POST_Y - p.SEAT_TOP * TL + p.POST_D / 2 / CL
   const MEET_Y = (POST_REAR_0 + TL * U0) / (1 + TL * K)
@@ -91,7 +90,6 @@ function derive(p: Masters) {
     R_OUT,
     ARC_Y,
     R_IN,
-    R_BACK,
     ARM_END,
     ARM_TENON_TOP,
     ARM_TENON_BOTTOM,
@@ -281,9 +279,10 @@ function seatTails(d: Dims, y0: number, y1: number): Part {
 
 /** In the back's frame: the tail at the +x end of a back rail, a trapezoid in plan (x, y) through the rail's
  * height, from the post's inner face to its outer face; it slides in along the post, and locks the rail against
- * pulling out of it. */
-function backTail(d: Dims, z0: number, z1: number): Part {
-  const tail = Polygon(...trapezoid(d.X_BOARD, d.X_POST, 0, d.BACK_TAIL_END, d.BACK_TAIL_BASE))
+ * pulling out of it. `into`: on, past the post's inner face, into the rail it is fused onto. */
+function backTail(d: Dims, z0: number, z1: number, into = 0): Part {
+  const base = d.BACK_TAIL_BASE - 2 * into * d.SLOPE // on its flanks, `into` past the post's inner face
+  const tail = Polygon(...trapezoid(d.X_BOARD, d.X_POST - into, 0, d.BACK_TAIL_END, base))
   return tail.extrude(z1 - z0).translate(0, 0, z0)
 }
 
@@ -298,8 +297,8 @@ function armTenon(d: Dims): Part {
 /**
  * In the back's frame: the +x post, its arrises broken but its front inner one (the cane laps it, the rails' fronts
  * are flush with it at their dovetails), its ends cut into sockets by the rails' tails, the tenon's mortise, the
- * cane's groove. Its inner face's other arrises are broken: its rear one shows in the opening and behind the rails,
- * its ends' at the rails' tops and bottoms, flush with them.
+ * cane's groove. Its inner face's other arrises are broken: its rear one shows in the opening and is flush with the
+ * rails' rear faces at their joints, its ends' with the rails' tops and bottoms.
  */
 function backPost(d: Dims, rails: Span[], groove: Part): Part {
   const post = Box(d.POST_W, d.POST_D, rails[1][1] - rails[0][0], { align: [Align.MIN, Align.CENTER, Align.MIN] })
@@ -312,8 +311,8 @@ function backPost(d: Dims, rails: Span[], groove: Part): Part {
 /**
  * A back rail's ring with its edges rounded at `radius`; chamfered at it instead when the round fails, as the ClassCAD
  * part does (scripts' `fillet`). The ring's circles are metres across on a shallow bow: smlibwasm checks a round by the
- * volume it takes off, a bound its arcs of that size can overshoot for some widths and bows (W 459, POST_D 42, BOW
- * 11.5), though the round is a few millimetres by hand either way. Sharp, with a warning, if the chamfer fails too.
+ * volume it takes off, a bound its arcs of that size can overshoot for some widths and bows (W 473, POST_D 38, BOW
+ * 9), though the round is a few millimetres by hand either way. Sharp, with a warning, if the chamfer fails too.
  */
 function breakRing(ring: Part, edges: Edge[], radius: number): Part {
   try {
@@ -343,7 +342,9 @@ function backRails(d: Dims, rails: Span[], groove: Part): Named[] {
     const broken = ring.edges().filter((edge) => !(Math.abs(edge.start.z - lapped) < 1e-6 && Math.abs(edge.radius - d.R_IN) < 1e-6))
     const rounded = d.EDGE_BREAK > 0 ? breakRing(ring, broken, d.EDGE_BREAK) : ring
     const rail = rounded.intersect(arcBand(d, d.R_OUT + 1, d.R_IN - 1).extrude(z1 - z0 + 2).translate(0, 0, z0 - 1))
-    const tail = backTail(d, z0, z1)
+    // The tails reach into the rail: its end face, as deep as the post, flush with its faces, and a tail's base on it
+    // make a fuse the kernel fails for some values (W 471, LEG_T 26, POST_W 31, POST_D 41, BOW 9, BACK_TILT 19.5).
+    const tail = backTail(d, z0, z1, 1)
     return { part: rail.fuse(tail, tail.mirror(Plane.YZ)).cut(groove), name: 'back rail' }
   })
 }

@@ -75,7 +75,7 @@ export const MIN_EDGE_BREAK = 1
 
 /**
  * The EDGE_BREAK both kernels build with: 0 under MIN_EDGE_BREAK. A sub-millimetre round is sanding, not a feature, and
- * on a back rail's ring the kernel refuses one as close to the largest its edges allow (W 465, POST_D 36, BOW 9).
+ * on a back rail's ring the kernel refuses one as close to the largest its edges allow (W 458, POST_D 38, BOW 8).
  */
 export function edgeBreak(value: number) {
   return value < MIN_EDGE_BREAK ? 0 : value
