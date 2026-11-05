@@ -1,8 +1,11 @@
 // `pnpm cam <model>`: ShopBot (OpenSBP, .sbp) files for a model, one per sheet and one per setup of its own, made by
 // Fusion's CAM in the Fusion desktop app running on this machine, driven through its local MCP server (cam.fusion.ts):
 // each step is a script cam.fusion-job.py runs there. The files go to `.docs/<model>/cam/`, recorded in its cam.json.
+// It reads `.docs/<model>/<model>.cam.step` when a master has a `cam` value (`nr build:parts` writes it, the model built
+// with the masters' `cam` values: camValues, masters.ts), else `<model>.step`.
 // `pnpm cam '<link>'`, the configurator's "Copy link": the model made with the link's values (masters.ts), its STEP
-// built first with ClassCAD into a temporary folder; the files go to the same `.docs/<model>/cam/`.
+// built first with ClassCAD into a temporary folder, with the masters' `cam` values over the link's (camValues); the
+// files go to the same `.docs/<model>/cam/`.
 // Flags: USAGE below. Usage, naming and the tool rule: docs/cam.md (https://abernier.github.io/integral/integral/cam).
 //
 // Simulate every .sbp before cutting.
@@ -154,7 +157,8 @@ const interrupted = () => process.exit(130)
 process.on('SIGINT', interrupted)
 
 // The model's geometry for the CAM files: `<model>.cam.step` when a master has a `cam` value (a finish made by hand,
-// such as an edge round, left out: the files cut square), else `<model>.step`.
+// such as an edge round, left out: the files cut square), else `<model>.step`. `nr build:parts` writes it beside the
+// model's STEP, built with the masters' `cam` values in place of theirs (camValues); a link's STEP is built so below.
 const masters = await loadMasters(model)
 let step = resolve(flags.step ?? camStepFile(masters, join(MDX, model), model))
 if (link) {

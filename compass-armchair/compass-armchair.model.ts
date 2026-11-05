@@ -119,6 +119,11 @@ function tilt<T extends Part>(d: Dims, shape: T): T {
   return Pos(0, d.POST_Y, d.SEAT_TOP).mul(Rot(-d.BACK_TILT).mul(shape)) as T
 }
 
+/** From the chair to the back's own frame: `tilt` undone. */
+function untilt<T extends Part>(d: Dims, shape: T): T {
+  return Rot(d.BACK_TILT).mul(Pos(0, -d.POST_Y, -d.SEAT_TOP).mul(shape)) as T
+}
+
 /** The back's curve between two radii, from post to post: concave toward the sitter. The span reaches up to the
  * outer radius, past the whole band: the arc is shallow (radius ~ X_POST^2 / 2 BOW, over 3 m for a wide chair with a
  * slight bow), so a fixed height would stop short of it and leave nothing. */
@@ -313,14 +318,22 @@ function arrisSliver(r: number, [u, v]: Point, [su, sv]: Point): Sketch {
  * height (flush with their rear faces); a round there would be a notch in the rail's continuous round. Its rear one
  * between the rails, in the opening, is broken: the round runs from rail to rail.
  */
-function backPost(d: Dims, rails: Span[], groove: Part): Part {
+function backPost(d: Dims, rails: Span[], groove: Part, armrest: Part): Part {
   const post = Box(d.POST_W, d.POST_D, rails[1][1] - rails[0][0], { align: [Align.MIN, Align.CENTER, Align.MIN] })
   const stock = post.translate(d.X_POST, 0, rails[0][0])
   const glued: [string, string][] = [['-x', '-y'], ['-x', '+y'], ['-x', '-z'], ['-x', '+z']]
   const rounded = round(stock, boxPlanes(stock), breakAllBut(d, glued))
   const opening = () =>
     arrisSliver(d.EDGE_BREAK, [d.X_POST, d.POST_D / 2], [1, -1]).extrude(rails[1][0] - rails[0][1]).translate(0, 0, rails[0][1])
-  return (d.EDGE_BREAK ? rounded.cut(opening()) : rounded)
+  // Its outer face's front and rear arrises against the armrest (`armrest`, its outline in the back's frame).
+  const againstArmrest = () =>
+    ([[-1, 1], [1, -1]] as const).map(([side, toward]) =>
+      arrisSliver(d.EDGE_BREAK, [d.X_BOARD, (side * d.POST_D) / 2], [-1, toward])
+        .extrude(rails[1][1] - rails[0][0])
+        .translate(0, 0, rails[0][0])
+        .intersect(armrest),
+    )
+  return (d.EDGE_BREAK ? rounded.cut(opening()).fuse(...againstArmrest()) : rounded)
     .cut(rails.map(([z0, z1]) => backTail(d, z0, z1)))
     .cut(armTenon(d), groove)
 }
@@ -439,6 +452,18 @@ function model(d: Dims): Named[] {
   // face's bottom arris only between the cross rails, in the opening: under them it is flush with their bottoms, and a
   // round there would be a notch in their continuous round across the seat's front and back. The tenons' mortises,
   // its pins (what the tails leave), the cane's groove.
+  // What the side rails' and the posts' outer faces lie against, seen from the side, square to x through them: the
+  // side's two boards (their hull less the V between them under the notch) and the armrest. The arrises of those faces
+  // are sharp where they lie against it, in an inside corner, rounded beyond it, their round running on into the
+  // board's face: the wood their round took off is put back there (`arrisSliver`, cut to the outline).
+  const outlineX = d.X_BOARD - d.EDGE_BREAK - 1
+  const outlineT = d.EDGE_BREAK + 2
+  const sideOutline = sidePrism(
+    [frontLeg[0], frontLeg[1], [0, d.NOTCH_Z], rearLeg[0], rearLeg[1], rearLeg[2], frontLeg[4]],
+    outlineX,
+    outlineT,
+  )
+  const armOutline = sidePrism(armProfile, outlineX, outlineT)
   const stock = Box(d.RAIL_T, d.SEAT_BACK - d.SEAT_FRONT, d.RAIL_H, { align: [Align.MAX, Align.MIN, Align.MAX] }).translate(
     d.X_BOARD,
     d.SEAT_FRONT,
@@ -451,7 +476,13 @@ function model(d: Dims): Named[] {
     const sliver = arrisSliver(d.EDGE_BREAK, [d.X_RAIL, d.SEAT_TOP - d.RAIL_H], [1, 1]).on(Plane.XZ).extrude(d.SEAT_BACK - d.REAR_RAIL_T - y0)
     return sliver.translate(0, y0 - sliver.bbox().min.y, 0)
   }
-  const rail = (d.EDGE_BREAK ? railRounded.cut(opening()) : railRounded)
+  // Its outer face's top and bottom arrises against the boards (`sideOutline`).
+  const againstBoards = () =>
+    ([[d.SEAT_TOP, -1], [d.SEAT_TOP - d.RAIL_H, 1]] as const).map(([z, toward]) => {
+      const sliver = arrisSliver(d.EDGE_BREAK, [d.X_BOARD, z], [-1, toward]).on(Plane.XZ).extrude(d.SEAT_BACK - d.SEAT_FRONT)
+      return sliver.translate(0, d.SEAT_FRONT - sliver.bbox().min.y, 0).intersect(sideOutline)
+    })
+  const rail = (d.EDGE_BREAK ? railRounded.cut(opening()).fuse(...againstBoards()) : railRounded)
     .cut(tenons)
     .cut(frontTails, rearTails)
     .cut(seat.groove)
@@ -490,7 +521,7 @@ function model(d: Dims): Named[] {
     { part: tenons[0], name: 'rail tenon' },
     { part: tenons[1], name: 'rail tenon' },
     { part: arm, name: 'armrest' },
-    { part: tilt(d, backPost(d, rails, back.groove)), name: 'back post' },
+    { part: tilt(d, backPost(d, rails, back.groove, untilt(d, armOutline))), name: 'back post' },
     { part: loose, name: 'arm tenon' },
   ]
   for (const mirrored of [false, true]) {

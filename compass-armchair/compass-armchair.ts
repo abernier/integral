@@ -344,7 +344,7 @@ type Rounds = [radius: Radius, takes: (faces: string[]) => boolean]
 
 /**
  * Round `edges` at `radius`. The engine fails a few fillets for no reason of their own, at particular values (the rear
- * rail's box at the masters' maxima: one edge of it at EDGE_BREAK = 4, but at 3.5 or 5): such a fillet is deleted and
+ * rail's box at the masters' maxima: one edge of it at EDGE_BREAK = 4, not at 3.5 or 5): such a fillet is deleted and
  * its edges chamfered at the same distance instead, with a warning. Only the fillets the failed call left in the tree
  * are deleted: one refused before it made a feature leaves none, and the fillets before it stay. That takes one tree
  * read per fillet, before the call.
@@ -439,6 +439,42 @@ async function arrisSliver(api: Api, part: number, value: Value, name: string, f
   const round = await column(api, part, `${name}Round`, frame, axis, '$EDGE_BREAK', `(${w1}) - (${w0}) + 2`)
   return subtract(api, part, name, square, [round])
 }
+
+// The side's outline, seen from the side: the hull of its two boards and its armrest's underside, less the V between
+// the boards under the notch. Square to x, through the side rails' and the posts' outer faces.
+const SIDE_HULL = [
+  ...FRONT_LEG.filter(({ name }) => name === 'Floor' || name === 'Front'),
+  ...REAR_LEG.filter(({ name }) => name === 'Back'),
+  UNDER_ARM,
+]
+const flip = ({ name, at, normal }: HalfSpace) => H(`${name}Flipped`, at, normal.map((n) => `-(${n})`) as Vec)
+const NOTCH = [
+  H('Floor', ['0', '0', '-1'], ['0', '0', '1']),
+  flip(FRONT_LEG.find(({ name }) => name === 'Back')!),
+  flip(REAR_LEG.find(({ name }) => name === 'Front')!),
+]
+
+/**
+ * The wood an arris's round took off where the arris lies against a side board's inner face, in an inside corner
+ * (`arrisSliver` cut to `cover`, the board's outline, less `gap`, where the board is not): put back, it is sharp
+ * there, and rounded on either side, its round running on into the board's face. Null when EDGE_BREAK is 0.
+ */
+async function insideCorner(api: Api, part: number, value: Value, name: string, sliver: number | null, cover: HalfSpace[], gap?: { planes: HalfSpace[]; below: string }) {
+  if (sliver === null) return null
+  const covered = await intersect(api, part, name, sliver, [await board(api, part, `${name}Cover`, cover)])
+  // Only where the sliver reaches down into the V: a boolean whose tool misses its target is left out.
+  if (!gap || value(gap.below) >= value('$NOTCH_Z')) return covered
+  return subtract(api, part, name, covered, [await board(api, part, `${name}Gap`, gap.planes)])
+}
+
+/** `body` with the wood of its inside corners (`insideCorner`) put back. */
+async function sharpInside(api: Api, part: number, body: number, corners: (number | null)[]) {
+  const fills = present(...corners)
+  return fills.length > 0 ? union(api, part, 'InsideCorners', body, fills) : body
+}
+
+// The armrest's outline, seen from the side, square to x: what the posts' outer faces lie against.
+const ARMREST_OUTLINE = armrest('$ARM_FRONT', '$ARM_END').filter(({ name }) => !name.startsWith('Board'))
 
 /**
  * A board, its arrises rounded before its joints are cut: the edges to round are told apart by the half-spaces the
@@ -674,10 +710,14 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
     [`Spline${s}`]: (api, part) => board(api, part, 'Spline', m(SPLINE)),
     // Rounded but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; its
     // inner face's bottom arris only between the cross rails, in the opening (`arrisSliver`): under them it is flush with
-    // their bottoms, and a round there would be a notch in their continuous round across the seat's front and back. The
-    // tenons' mortises, its pins (what the tails leave), the cane's groove.
+    // their bottoms, and a round there would be a notch in their continuous round across the seat's front and back. Its
+    // outer face's top and bottom arrises sharp where they lie against the boards, in an inside corner, rounded before,
+    // behind and between them (`insideCorner`). The tenons' mortises, its pins (what the tails leave), the cane's groove.
     [`SideRail${s}`]: async (api, part, value) =>
-      subtract(api, part, 'MortisesSocketsAndGroove', await roundedBoard(api, part, value, 'Rail', m(SIDE_RAIL), [['EDGE_BREAK', allBut([], [['ThickMin', 'HighMax'], ['ThickMin', 'HighMin'], ['ThickMin', 'LongMin'], ['ThickMin', 'LongMax']])]]), [
+      subtract(api, part, 'MortisesSocketsAndGroove', await sharpInside(api, part, await roundedBoard(api, part, value, 'Rail', m(SIDE_RAIL), [['EDGE_BREAK', allBut([], [['ThickMin', 'HighMax'], ['ThickMin', 'HighMin'], ['ThickMin', 'LongMin'], ['ThickMin', 'LongMax']])]]), [
+        await insideCorner(api, part, value, 'AgainstBoardsTop', await arrisSliver(api, part, value, 'AgainstBoardsTop', ALONG_Y_FRAME, [x('$X_BOARD'), '$SEAT_TOP'], [-sx, -1], ['-$SEAT_BACK', '-$SEAT_FRONT']), m(SIDE_HULL)),
+        await insideCorner(api, part, value, 'AgainstBoardsBottom', await arrisSliver(api, part, value, 'AgainstBoardsBottom', ALONG_Y_FRAME, [x('$X_BOARD'), '$SEAT_TOP - $RAIL_H'], [-sx, 1], ['-$SEAT_BACK', '-$SEAT_FRONT']), m(SIDE_HULL), { planes: m(NOTCH), below: '$SEAT_TOP - $RAIL_H' }),
+      ]), [
         ...present(await arrisSliver(api, part, value, 'Opening', ALONG_Y_FRAME, [x('$X_RAIL'), '$SEAT_TOP - $RAIL_H'], [sx, 1], ['-$REAR_RAIL_Y', '-$CANE_FRONT'])),
         await board(api, part, 'FrontTenon', m(railTenon('-$TENON_Y'))),
         await board(api, part, 'RearTenon', m(railTenon('$TENON_Y'))),
@@ -697,10 +737,15 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
     // flush with it at their dovetails) and its inner face's arrises where the rails' ends cover it: its ends' (flush
     // with the rails' tops and bottoms, the rails as deep as the post there) and its rear one over the rails' height
     // (flush with their rear faces); a round there would be a notch in the rail's continuous round. Its rear one
-    // between the rails, in the opening, is rounded (`arrisSliver`): the round runs from rail to rail. Its ends cut
+    // between the rails, in the opening, is rounded (`arrisSliver`): the round runs from rail to rail. Its outer face's
+    // front and rear arrises sharp where they lie against the armrest, in an inside corner, rounded above and below it
+    // (`insideCorner`). Its ends cut
     // into sockets by the rails' tails, the tenon's mortise, the cane's groove.
     [`BackPost${s}`]: async (api, part, value) =>
-      subtract(api, part, 'SocketsMortiseAndGroove', await roundedBoard(api, part, value, 'Post', m(POST), [['EDGE_BREAK', allBut([], [['AcrossMin', 'DeepMin'], ['AcrossMin', 'DeepMax'], ['AcrossMin', 'LongMin'], ['AcrossMin', 'LongMax']])]], true), [
+      subtract(api, part, 'SocketsMortiseAndGroove', await sharpInside(api, part, await roundedBoard(api, part, value, 'Post', m(POST), [['EDGE_BREAK', allBut([], [['AcrossMin', 'DeepMin'], ['AcrossMin', 'DeepMax'], ['AcrossMin', 'LongMin'], ['AcrossMin', 'LongMax']])]], true), [
+        await insideCorner(api, part, value, 'AgainstArmrestFront', await arrisSliver(api, part, value, 'AgainstArmrestFront', UPRIGHT_FRAME, [x('$X_BOARD'), '-$POST_D/2'], [-sx, 1], ['$LOW_RAIL_BOTTOM', '$HIGH_RAIL_TOP']), m(ARMREST_OUTLINE)),
+        await insideCorner(api, part, value, 'AgainstArmrestRear', await arrisSliver(api, part, value, 'AgainstArmrestRear', UPRIGHT_FRAME, [x('$X_BOARD'), '$POST_D/2'], [-sx, -1], ['$LOW_RAIL_BOTTOM', '$HIGH_RAIL_TOP']), m(ARMREST_OUTLINE)),
+      ]), [
         ...present(await arrisSliver(api, part, value, 'Opening', UPRIGHT_FRAME, [x('$X_POST'), '$POST_D/2'], [sx, -1], ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM'])),
         await board(api, part, 'LowTail', m(tilt(backTail(BACK_RAILS[0])))),
         await board(api, part, 'HighTail', m(tilt(backTail(BACK_RAILS[1])))),
