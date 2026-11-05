@@ -8,7 +8,7 @@ import { test } from 'node:test'
 import { FILES, LOCKFILE, SHARED_SOURCES, buildKey, upToDate, writeKey } from './build.cache.ts'
 
 const PART = 'chair'
-const VALUES = { T: 18, BACK_LEAN: 12 }
+const VALUES = { default: { T: 18, BACK_LEAN: 12 } }
 
 /** A repository holding the part's script and masters, the shared sources and the lockfile. */
 function repository() {
@@ -36,7 +36,12 @@ test('buildKey: changes when a source changes (the part, its masters, a shared o
 
 test('buildKey: changes when a value changes', () => {
   const root = repository()
-  assert.notEqual(buildKey(PART, VALUES, { root, env: {} }), buildKey(PART, { ...VALUES, T: 20 }, { root, env: {} }))
+  assert.notEqual(buildKey(PART, VALUES, { root, env: {} }), buildKey(PART, { default: { ...VALUES.default, T: 20 } }, { root, env: {} }))
+})
+
+test('buildKey: changes when a variant is added', () => {
+  const root = repository()
+  assert.notEqual(buildKey(PART, VALUES, { root, env: {} }), buildKey(PART, { ...VALUES, other: VALUES.default }, { root, env: {} }))
 })
 
 test('buildKey: changes when an engine variable is set', () => {

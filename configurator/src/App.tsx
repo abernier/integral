@@ -1,15 +1,19 @@
-// `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
+// `?part=<folder>&variant=<id>`: that part's model in that variant, a slider per parameter, and the part itself, rebuilt
+// as a slider moves.
 import { Component, type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CameraControls, CameraControlsImpl, ContactShadows, Environment, Stage } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { Box3, Sphere, Spherical, Vector3 } from 'three'
+import { Box3, Mesh, type Object3D, Sphere, Spherical, Vector3 } from 'three'
 import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
+import { usedIn, variantSchema, variantsOf } from './models.variants.ts'
 import { useQuery, queryUrl, type Values } from './App.url.ts'
 import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
-import { type Built, createBuilds } from './App.build.ts'
+import { type Built, buildKey, createBuilds } from './App.build.ts'
+import { switchedValues } from './App.variant.ts'
+import { rolesOf, showRoles } from './App.show.ts'
 import { fitDistance, focalShift, pictureShift } from './App.camera.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
@@ -40,9 +44,16 @@ const PANEL_WIDTH = LEVA_ROOT_WIDTH + LEVA_ROOT_OFFSET
  */
 const ENVIRONMENT_URL = `${import.meta.env.BASE_URL}lebombo_1k.hdr`
 
+/**
+ * Where leva puts the panel's entries, by its `order` (lowest first, 0 by default, ties in the order they came): the
+ * actions and the Variant select, then the Show folder, then the sliders and their Details folder. Two hooks make them
+ * (the Show folder is a third, in the canvas): the order holds whichever registers first.
+ */
+const ORDER = { actions: -2, show: -1 }
+
 const { ACTION } = CameraControlsImpl
 
-/** The last few builds, by their values: the build on screen and the one rendering in its place may differ. */
+/** The last few builds, by their variant and values: the build on screen and the one rendering in its place may differ. */
 const build = createBuilds(3)
 
 /** Scratch objects for the frame loop: nothing allocated per frame. */
@@ -52,8 +63,11 @@ const box = new Box3()
 const boxSize = new Vector3()
 const boxCenter = new Vector3()
 
-/** The shape's footprint, in world space, as the contact shadow needs it. */
-type Bounds = { floor: number; x: number; z: number; height: number; radius: number }
+/**
+ * Where the shape stands, in world space: the floor under the whole shape, and the footprint of its shown meshes, as the
+ * contact shadow needs it (none when every role is hidden).
+ */
+type Bounds = { floor: number; shadow?: { x: number; z: number; height: number; radius: number } }
 
 /** Copies text to the clipboard; the textarea route is for iframes and non-secure contexts. Never throws. */
 async function copyText(text: string) {
@@ -77,13 +91,24 @@ async function copyText(text: string) {
   }
 }
 
-/** The schema as leva takes it, `main` left out: the main masters at the top level, every other one in a collapsed Details folder. */
-function panelSchema<C extends Control>(schema: Record<string, C>) {
-  const main: Record<string, Omit<C, 'main'>> = {}
-  const details: Record<string, Omit<C, 'main'>> = {}
-  for (const [name, { main: isMain, ...control }] of Object.entries(schema)) {
-    if (isMain) main[name] = control
-    else details[name] = control
+/** A slider as leva takes it: the master without what only the configurator reads, a `render` that may hide it. */
+type PanelControl<C extends Control> = Omit<C, 'main' | 'variants'> & { render?: (get: (path: string) => string) => boolean }
+
+/**
+ * The schema as leva takes it, `main` and `variants` left out: the main masters at the top level, every other one in a
+ * collapsed Details folder.
+ * @param selected Whether the panel has a Variant select (a part of several variants): a master of no use in the
+ * variant it shows is then hidden, its value kept.
+ */
+function panelSchema<C extends Control>(schema: Record<string, C>, selected: boolean) {
+  const main: Record<string, PanelControl<C>> = {}
+  const details: Record<string, PanelControl<C>> = {}
+  for (const [name, control] of Object.entries(schema)) {
+    const { main: isMain, variants, ...input } = control
+    // leva's `render` gets the store's `get`, which addresses an input by its path: the select's is `Variant`.
+    const panelControl: PanelControl<C> = selected && variants ? { ...input, render: (get) => usedIn(control, get('Variant')) } : input
+    if (isMain) main[name] = panelControl
+    else details[name] = panelControl
   }
   // A model that marks no master main keeps one flat list: no empty top level, no folder holding everything.
   if (Object.keys(main).length === 0) return details
@@ -158,6 +183,11 @@ function Message({ children, color = 'var(--md-sys-color-error)' }: { children: 
   return <div style={{ padding: '8px 12px', background, borderRadius: 6, color }}>{children}</div>
 }
 
+/** The schema's defaults, by name. */
+function defaults(schema: Model['schema']) {
+  return Object.fromEntries(Object.entries(schema).map(([name, control]) => [name, control.value]))
+}
+
 /**
  * The schema with the URL's values as the sliders' initial values, each slider writing its changes back to the URL
  * (App.url.ts): the URL holds the state, leva shows it.
@@ -176,21 +206,59 @@ function boundToUrl(schema: Model['schema'], values: Values, setValues: (values:
 
 function Configurator({ model, shift }: { model: Model; shift: number }) {
   const [toast, setToast] = useState<string>()
-  // The state: the part and the sliders' values, in the URL.
-  const { part, values: numbers, setValues } = useQuery(model.schema)
-  // leva's `get` and `set` address an input by its own key, in a folder too (`W`, not `Details.W`).
-  const [, set, get] = useControls(() => ({
-    'Copy link': button(async () => {
-      const current = get as unknown as (name: string) => number
-      const values = Object.fromEntries(Object.keys(model.schema).map((name) => [name, current(name)]))
-      // The address bar's own URL, as it is about to be once the sliders stay still.
-      const copied = await copyText(queryUrl(model.schema, { part, values }, location.href))
-      setToast(copied ? 'Link copied' : 'Could not copy the link')
+  const variants = variantsOf(model.variants)
+  const selected = Object.keys(variants).length > 1
+  // The state: the part, its variant and the sliders' values (relative to that variant's defaults), in the URL.
+  const { part, variant, values: numbers, setValues, setVariant } = useQuery(model)
+  // A switch of variant under way: the variant left and the sliders' values then, until the sliders follow (below).
+  const [switching, setSwitching] = useState<{ from: string; values: Values }>()
+  const schemaOf = (id: string) => variantSchema(model.schema, model.variants, id)
+  const current = () => {
+    const value = get as unknown as (name: string) => number
+    return Object.fromEntries(Object.keys(model.schema).map((name) => [name, value(name)]))
+  }
+
+  // The actions and the Variant select, made again as the variant changes, so that they act on the current one and the
+  // select's hint (shown on hover) is its own. Registered before the sliders, whose `render` reads the select.
+  useControls(
+    () => ({
+      'Copy link': {
+        ...button(async () => {
+          // The address bar's own URL, as it is about to be once the sliders stay still.
+          const copied = await copyText(queryUrl(model, { part, variant, values: current() }, location.href))
+          setToast(copied ? 'Link copied' : 'Could not copy the link')
+        }),
+        order: ORDER.actions,
+      },
+      ...(selected && {
+        Variant: {
+          value: variant,
+          options: Object.fromEntries(Object.entries(variants).map(([id, { label }]) => [label, id])),
+          hint: variants[variant].hint,
+          order: ORDER.actions,
+          // Called at once with the select's value (`initial`), then on each change: only a change switches. The
+          // variant alone goes to the URL; the sliders follow once its parsers are in place.
+          onChange: (id: string, _path: string, { initial }: { initial: boolean }) => {
+            if (initial || id === variant) return
+            setSwitching({ from: variant, values: current() })
+            setVariant(id)
+          },
+        },
+      }),
+      Reset: { ...button(() => set(defaults(schemaOf(variant)))), order: ORDER.actions },
     }),
-    Reset: button(() => set(Object.fromEntries(Object.entries(model.schema).map(([name, control]) => [name, control.value])))),
-    // leva shows each control's `hint` on hover.
-    ...panelSchema(boundToUrl(model.schema, numbers, setValues)),
-  }))
+    [variant],
+  )
+  // leva's `get` and `set` address an input by its own key, in a folder too (`W`, not `Details.W`). Made once: the
+  // sliders start at the URL's values; a later variant only sets their values. leva shows each control's `hint` on hover.
+  const [, set, get] = useControls(() => panelSchema(boundToUrl(model.schema, numbers, setValues), selected))
+  // The variant switched, its parsers in place: the sliders take the new variant's defaults, the user's tweaks kept, and
+  // each writes its value back to the URL against that variant's defaults. leva does not follow the URL: it is set here.
+  useEffect(() => {
+    if (!switching) return
+    set(switchedValues(model, switching.from, variant, switching.values))
+    setSwitching(undefined)
+  }, [switching, variant, model, set])
   useEffect(() => {
     if (!toast) return
     const timer = setTimeout(() => setToast(undefined), 1500)
@@ -198,7 +266,7 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
   }, [toast])
 
   // Built once the sliders have stayed still; the last build stays on screen until the next one is done.
-  const [key] = useDebounceValue(JSON.stringify(numbers), DEBOUNCE_MS)
+  const [key] = useDebounceValue(buildKey(variant, numbers), DEBOUNCE_MS)
   const shown = useDeferredValue(key)
   const built = build(model, shown)
 
@@ -224,10 +292,19 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
   )
 }
 
+/** The box of the meshes on screen, in world space: a role hidden in the Show folder takes no room. */
+function visibleBox(shape: Object3D, target: Box3) {
+  target.makeEmpty()
+  shape.traverseVisible((object) => {
+    if (object instanceof Mesh) target.expandByObject(object, true)
+  })
+  return target
+}
+
 /**
  * The scene, once the build is done: the shape on drei's `<Stage>` (centered at the origin, lit by an environment, a
- * contact shadow under it), on a grid, fitted at first, the orbit around that fit; its picture shifted left by `shift`
- * pixels.
+ * contact shadow under its shown meshes), on a grid, fitted at first, the orbit around that fit; its picture shifted
+ * left by `shift` pixels.
  */
 function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   // R3F bridges the Mtb context into the Canvas.
@@ -235,6 +312,8 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   const { shape } = use(built)
   const size = useThree((state) => state.size)
   const controls = useRef<ComponentRef<typeof CameraControls>>(null)
+  // The roles on screen (the panel's Show folder), as a key: the shadow is drawn again when one is hidden or shown.
+  const shown = useShow(shape)
   // The current shape's bounds, where Stage's `<Center>` has put it: the floor, the grid and the contact shadow under it.
   const [bounds, setBounds] = useState<Bounds>()
   // Our part of the focal offset, as last applied: see the frame loop below.
@@ -245,17 +324,10 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   // user left it.
   const fitted = useRef(false)
   useLayoutEffect(() => {
-    if (!shape) return
+    const current = controls.current
+    if (!shape || !current || fitted.current) return
     // Stage's `<Center>` has just moved the shape, in its own layout effect: its world matrices are not updated yet.
     shape.updateWorldMatrix(true, true)
-    // Every shape, not only the first: a part grown with a slider keeps its whole shadow.
-    box.setFromObject(shape, true)
-    box.getSize(boxSize)
-    box.getCenter(boxCenter)
-    const radius = boxSize.length() / 2
-    setBounds({ floor: box.min.y, x: boxCenter.x, z: boxCenter.z, height: boxSize.y, radius })
-    const current = controls.current
-    if (!current || fitted.current) return
     fitted.current = true
     const sphere = CameraControlsImpl.createBoundingSphere(shape, new Sphere())
     sphere.radius *= 1.1
@@ -266,6 +338,19 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
     current.setFocalOffset(0, 0, 0, false)
     applied.current = undefined
   }, [shape])
+  // Every shape, not only the first, and every change of the roles shown: a part grown with a slider keeps its whole
+  // shadow, and a hidden role casts none. After useShow's own layout effect, which has just shown or hidden the meshes.
+  useLayoutEffect(() => {
+    if (!shape) return
+    shape.updateWorldMatrix(true, true)
+    // The floor is the whole shape's: hiding the legs leaves the seat above it, not on it.
+    const floor = box.setFromObject(shape, true).min.y
+    visibleBox(shape, box)
+    if (box.isEmpty()) return setBounds({ floor })
+    box.getSize(boxSize)
+    box.getCenter(boxCenter)
+    setBounds({ floor, shadow: { x: boxCenter.x, z: boxCenter.z, height: box.max.y - floor, radius: boxSize.length() / 2 } })
+  }, [shape, shown])
   // The leva panel covers the right of the canvas: the orbit's center sits in the middle of the pixels left of it,
   // through camera-controls' focal offset, so that a change (the panel collapsed, a phone turned) is smoothed. Taken from
   // the distance the controls head for, and damped at the same pace as a dolly (`SMOOTH_TIME` for both), it stays
@@ -300,17 +385,20 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
       <Lighting />
       {bounds && (
         <>
-          {/* Contact shadows: no shadow maps to set up. Sized from the current shape, as Stage would (four times its bounding
-              radius, wide enough for the blur), its camera reaching the shape's top. Drawn once per shape (`frames`,
-              remounted by the key): the part does not move between builds, so the shadow is not redrawn every frame. */}
-          <ContactShadows
-            key={shape.uuid}
-            frames={1}
-            position={[bounds.x, bounds.floor, bounds.z]}
-            scale={bounds.radius * 4}
-            far={bounds.height}
-            blur={2}
-          />
+          {/* Contact shadows: no shadow maps to set up. Sized from the shown meshes, as Stage would (four times their
+              bounding radius, wide enough for the blur), its camera reaching their top. Drawn once per shape and per set of
+              roles shown (`frames`, remounted by the key): the part does not move between builds, so the shadow is not
+              redrawn every frame. */}
+          {bounds.shadow && (
+            <ContactShadows
+              key={`${shape.uuid} ${shown}`}
+              frames={1}
+              position={[bounds.shadow.x, bounds.floor, bounds.shadow.z]}
+              scale={bounds.shadow.radius * 4}
+              far={bounds.shadow.height}
+              blur={2}
+            />
+          )}
           {/* A millimetre under the floor: out of reach of the contact shadow's camera, which would darken the plane with its lines. */}
           <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} position-y={bounds.floor - 1} />
         </>
@@ -326,6 +414,26 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
       />
     </>
   )
+}
+
+/**
+ * The panel's Show folder, for a shape whose meshes play at least two roles (`userData.role`, models.ts): a checkbox
+ * per role, all on at first, that shows or hides its meshes. Applied to each shape put on screen, a cached one too.
+ * A view, not the object: not in the link. A role gone with a variant leaves the folder; seen again, it is as it was
+ * left (leva keeps an input's value while it is out of the panel). A hook, not a component: the scene's contact shadow
+ * follows the roles shown.
+ * @returns The roles shown, as a key that changes with them.
+ */
+function useShow(shape: Object3D | undefined) {
+  const roles = shape ? rolesOf(shape) : []
+  const schema = roles.length < 2 ? {} : Object.fromEntries(roles.map((role) => [role, { value: true, label: role[0].toUpperCase() + role.slice(1) }]))
+  const shown = useControls('Show', schema, { order: ORDER.show }, [roles.join()]) as Record<string, boolean>
+  const key = JSON.stringify(shown)
+  // Before the frame is drawn: the shape never shows a hidden role.
+  useLayoutEffect(() => {
+    if (shape) showRoles(shape, JSON.parse(key) as Record<string, boolean>)
+  }, [shape, key])
+  return key
 }
 
 /**

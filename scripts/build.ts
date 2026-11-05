@@ -1,25 +1,29 @@
-// `nr build`: build the parts that changed with ClassCAD, then the configurator and the docs site into dist/, the built files beside its pages.
-// `nr build:parts` (`--parts-only`): the parts alone, into .docs/, each with its CAM geometry when it has one (buildCamStep).
+// `nr build`: build the parts that changed with ClassCAD, each of its variants (site.ts), then the configurator and the docs site into dist/, the built files beside its pages.
+// `nr build:parts` (`--parts-only`): the parts alone, into .docs/, each variant with its CAM geometry when it has one (buildCamStep).
 //
-// A part already built from the same sources and values (its CAM STEP too) is not built again (build.cache.ts).
-// `--force` builds every part anyway.
+// A part already built from the same sources and values (every variant's files, their CAM STEPs too) is not built
+// again (build.cache.ts). `--force` builds every part anyway.
 
 import { cpSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { basename, join, relative, sep } from 'node:path'
 import { FILES, buildKey, upToDate, writeKey } from './build.cache.ts'
 import { type Engine, openEngine } from './classcad.ts'
-import { camStepFile, defaultValues, loadMasters } from './masters.ts'
-import { MDX, ROOT, parts } from './paths.ts'
-import { DIST, buildCamStep, buildConfigurator, buildPart, docsEnv, writePages } from './site.ts'
+import { type Values, camStepFile, defaultValues, loadMasters, loadVariants } from './masters.ts'
+import { MDX, ROOT, partFile, parts } from './paths.ts'
+import { DIST, buildConfigurator, buildVariants, docsEnv, writePages } from './site.ts'
 
 const force = process.argv.includes('--force')
 
-/** The files a part's build writes into .docs/<part>/: its own, and its CAM STEP when a master has a `cam` value (camStepFile). */
+/** The files a part's build writes into .docs/<part>/: every variant's (paths.ts partFile), and its CAM STEP when a master has a `cam` value (camStepFile). */
 async function outputs(part: string) {
-  const files = FILES.map((ext) => `${part}.${ext}`)
-  const cam = basename(camStepFile(await loadMasters(part), join(MDX, part), part))
-  return files.includes(cam) ? files : [...files, cam]
+  const masters = await loadMasters(part)
+  const variants = await loadVariants(part)
+  return Object.keys(variants).flatMap((variant) => {
+    const files = FILES.map((ext) => partFile(part, variants, variant, ext))
+    const cam = basename(camStepFile(masters, join(MDX, part), part, variants, variant))
+    return files.includes(cam) ? files : [...files, cam]
+  })
 }
 
 // Empty .docs/ but for the parts' folders, whose files may still be current.
@@ -30,7 +34,10 @@ for (const entry of existsSync(MDX) ? readdirSync(MDX) : []) {
 // The engine starts only if a part has to be built (a few seconds).
 let engine: Engine | undefined
 for (const part of parts()) {
-  const key = buildKey(part, await defaultValues(part))
+  // Every variant's values, by its id (the variants come with the masters' file).
+  const values: Record<string, Values> = {}
+  for (const variant of Object.keys(await loadVariants(part))) values[variant] = await defaultValues(part, variant)
+  const key = buildKey(part, values)
   if (!force && upToDate(part, key, join(MDX, part), await outputs(part))) {
     console.log(`${part}: up to date`)
     continue
@@ -38,9 +45,8 @@ for (const part of parts()) {
   // From a clean folder: no leftovers, nor `pnpm cam` toolpaths (cam/) cut for the old geometry.
   rmSync(join(MDX, part), { recursive: true, force: true })
   engine ??= await openEngine()
-  await buildPart(engine, part)
-  // The geometry `pnpm cam` reads, square where the part's finishes are made by hand.
-  await buildCamStep(engine, part)
+  // Every variant, each with its CAM STEP when it has one.
+  await buildVariants(engine, part)
   writeKey(part, key)
 }
 engine?.client.close()

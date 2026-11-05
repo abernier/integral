@@ -1,11 +1,13 @@
 // `pnpm cam <model>`: ShopBot (OpenSBP, .sbp) files for a model, one per sheet and one per setup of its own, made by
 // Fusion's CAM in the Fusion desktop app running on this machine, driven through its local MCP server (cam.fusion.ts):
 // each step is a script cam.fusion-job.py runs there. The files go to `.docs/<model>/cam/`, recorded in its cam.json.
-// It reads `.docs/<model>/<model>.cam.step` when a master has a `cam` value (`nr build:parts` writes it, the model built
-// with the masters' `cam` values: camValues, masters.ts), else `<model>.step`.
-// `pnpm cam '<link>'`, the configurator's "Copy link": the model made with the link's values (masters.ts), its STEP
-// built first with ClassCAD into a temporary folder, with the masters' `cam` values over the link's (camValues); the
-// files go to the same `.docs/<model>/cam/`.
+// It reads `.docs/<model>/<model>[.<variant>].cam.step` when a master has a `cam` value (`nr build:parts` writes it,
+// the model built with the masters' `cam` values: camValues, masters.ts), else `<model>[.<variant>].step`.
+// `pnpm cam '<link>'`, the configurator's "Copy link": the model made in the link's variant with its values
+// (masters.ts), its STEP built first with ClassCAD into a temporary folder, with the masters' `cam` values over the
+// link's (camValues); the files go to the variant's CAM folder.
+// `pnpm cam <model> --variant <id>`: that variant with its defaults, from its STEP `pnpm build` made. The default
+// variant's CAM folder is `.docs/<model>/cam/`, another's `.docs/<model>/cam/<variant>/` (paths.ts camFolder).
 // Flags: USAGE below. Usage, naming and the tool rule: docs/cam.md (https://abernier.github.io/integral/integral/cam).
 //
 // Simulate every .sbp before cutting.
@@ -35,8 +37,8 @@ import {
   type Tool,
 } from './cam.machining.ts'
 import { configFile, loadConfig } from './cam.config.ts'
-import { type Values, camStepFile, camValues, defaultValues, linkValues, loadMasters, mastersFile } from './masters.ts'
-import { MDX, ROOT, parts } from './paths.ts'
+import { type Values, camStepFile, camValues, checkedVariant, defaultValues, linkValues, loadMasters, loadVariants, mastersFile } from './masters.ts'
+import { MDX, ROOT, camFolder, partFile, parts } from './paths.ts'
 import { stepParts } from './step-assembly.ts'
 
 const shown = (path: string) => (path.startsWith(ROOT) ? relative(ROOT, path) : path)
@@ -54,6 +56,7 @@ const { values: flags, positionals } = parseArgs({
     sheet: { type: 'string' },
     spacing: { type: 'string' },
     only: { type: 'string' },
+    variant: { type: 'string' },
     force: { type: 'boolean', default: false },
     keep: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
@@ -63,17 +66,19 @@ const { values: flags, positionals } = parseArgs({
 })
 
 const USAGE = `usage: pnpm cam [<model> | '<link>'] [options]      (no model: every model, one after the other)
-  '<link>'               the configurator's "Copy link" (?part=<model>&<MASTER>=<value>...): the model made with its
-                         values, its STEP built first with ClassCAD
-  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>.cam.step when a
-                         master has a \`cam\` value, else <model>.step; cam.json then records no values)
+  '<link>'               the configurator's "Copy link" (?part=<model>&variant=<id>&<MASTER>=<value>...): the model
+                         made in its variant with its values, its STEP built first with ClassCAD
+  --variant <id>         this variant of the model, with its defaults (default: the model's first); not with a link,
+                         which names its own. Its files go to .docs/<model>/cam/<variant>/ (the default's: cam/)
+  --step <file>          the assembly STEP to read the parts from (default .docs/<model>/<model>[.<variant>].cam.step
+                         when a master has a \`cam\` value, else <model>[.<variant>].step; cam.json then records no values)
   --post <text>          the library post whose vendor/description contains it (default ${DEFAULT_POST})
   --tool <number>        this tool of scripts/cam.tools.json for every sheet (default: per sheet, the narrowest that reaches)
   --sheet <LxW>          the sheet, mm (default ${MACHINING_DEFAULTS.sheet.join('x')})
   --spacing <mm>         between two parts on a sheet (default ${MACHINING_DEFAULTS.spacing}; at least the tool's diameter + ${SPACING_OVER_TOOL})
-  --only <A,B>           these parts only, into .docs/<model>/cam/only/ with its own cam.json (the full run's files stay)
+  --only <A,B>           these parts only, into the variant's cam/only/ with its own cam.json (the full run's files stay)
   --force                make the files again: the folder's old .sbp go first (unasked when its cam.json was made with
-                         other values or another link than this run's)
+                         another variant, other values or another link than this run's)
   --keep                 leave the document open in Fusion, unsaved, to simulate its setups
   --dry-run              print the plan, send nothing to Fusion
   --list-tools           list the tools of Fusion's MCP server (${ENDPOINT}), then stop`
@@ -92,6 +97,7 @@ if (flags['list-tools']) {
 }
 
 const given = positionals[0]
+if (!given && flags.variant !== undefined) fail('--variant without a model: variants are a model\'s, name one')
 if (!given) {
   // Every model (a folder with its <name>.ts, as the build finds them), each in its own run with the same flags.
   const failed = parts().filter((name) => {
@@ -102,23 +108,35 @@ if (!given) {
   if (failed.length) fail(`failed: ${failed.join(', ')}`)
   process.exit(0)
 }
-// A link (the configurator's "Copy link") names the model and its values; a model alone is made with the defaults.
+// A link (the configurator's "Copy link") names the model, its variant and its values; a model alone is made with
+// the defaults of its default variant, or of --variant's.
 const link = given.includes('?') || given.startsWith('http') ? given : undefined
 const linked = link ? await linkValues(link).catch((error: Error) => fail(error.message)) : undefined
 const model = linked?.model ?? given
 // A link's model was checked with the link (linkValues).
 if (!linked && !parts().includes(model)) fail(`no model ${model} (no ${model}/${model}.ts)`)
 if (link && flags.step !== undefined) fail('--step with a link: the link builds its own STEP, pass one or the other')
-const values = linked?.values ?? (await defaultValues(model))
+if (link && flags.variant !== undefined) fail('--variant with a link: the link names its own variant (?variant=), pass one or the other')
+const variants = await loadVariants(model)
+// A link's variant was checked with the link (linkValues); --variant's here, the default when neither names one.
+const variant = linked?.variant ?? (() => {
+  try {
+    return checkedVariant(variants, flags.variant)
+  } catch (error) {
+    return fail(`--variant: ${model}: ${(error as Error).message}`)
+  }
+})()
+const values = linked?.values ?? (await defaultValues(model, variant))
 const only = flags.only?.split(',').map((s) => s.trim())
 // An --only run is a run of its own, in its own folder: the full run's files and record stay as they are.
-const out = only ? join(MDX, model, 'cam', 'only') : join(MDX, model, 'cam')
+const out = only ? join(camFolder(model, variants, variant), 'only') : camFolder(model, variants, variant)
 
 /**
- * The record of this run, beside the files (`cam.json`): the model, the `link` it was made from (when given) and
- * every master's value it was made with (`values`, the defaults or the link's), and for each file made, every value
- * it was made with, the parts on it, and the hashes of what made it, so that a file can be made again the same. With
- * `--step` the geometry is the file's, not the build's, so the record names no link and no values.
+ * The record of this run, beside the files (`cam.json`): the model, its `variant`, the `link` it was made from (when
+ * given) and every master's value it was made with (`values`, the variant's defaults or the link's), and for each
+ * file made, every value it was made with, the parts on it, and the hashes of what made it, so that a file can be
+ * made again the same. With `--step` the geometry is the file's, not the build's, so the record names no link and
+ * no values.
  *
  * Per file: its sha256, the tool and every value given to Fusion, the deepest cut, the post and its version, the
  * Fusion version, the sha256 of every input (`inputs`). A sheet adds its material, thickness and number, its parts
@@ -126,12 +144,13 @@ const out = only ? join(MDX, model, 'cam', 'only') : join(MDX, model, 'cam')
  * frame. A wedge setup adds its turn, depth and margin; a `_rest` file its tool and depth.
  */
 const RECORD = join(out, 'cam.json')
-type CamRecord = { version: 3; model: string; link?: string; values?: Values; files: Record<string, unknown> }
-// The link and the values only when the STEP is the build's: another file may hold another geometry.
-const record: CamRecord = flags.step === undefined ? { version: 3, model, link, values, files: {} } : { version: 3, model, files: {} }
+type CamRecord = { version: 4; model: string; variant: string; link?: string; values?: Values; files: Record<string, unknown> }
+// The link and the values only when the STEP is the build's: another file may hold another geometry. The variant
+// always: the CAM config is computed in it.
+const record: CamRecord = flags.step === undefined ? { version: 4, model, variant, link, values, files: {} } : { version: 4, model, variant, files: {} }
 
 // The files already in the folder are left alone, unless --force, or they are another model's: the folder's record
-// names the link and the values they were made with (none under --step), and when those are not this run's they
+// names the variant, the link and the values they were made with (no values under --step), and when those are not this run's they
 // are made again as --force would. Checked before the link's build, which would be spent for nothing.
 const existing = existsSync(out) ? readdirSync(out).filter((file) => file.endsWith('.sbp')) : []
 if (existing.length && !flags.force) {
@@ -143,12 +162,12 @@ if (existing.length && !flags.force) {
     previous = undefined
   }
   // Compared as JSON: the values' keys come in the masters' order in both records, so equal makings read the same.
-  const sameMaking = JSON.stringify([previous?.link, previous?.values]) === JSON.stringify([record.link, record.values])
+  const sameMaking = JSON.stringify([previous?.variant, previous?.link, previous?.values]) === JSON.stringify([record.variant, record.link, record.values])
   if (sameMaking) {
     console.log(`cam: files already in ${shown(out)} (${existing.join(', ')}): --force makes them again`)
     process.exit(0)
   }
-  console.log(`cam: files in ${shown(out)} were made with other values: making them again`)
+  console.log(`cam: files in ${shown(out)} were made with another variant or other values: making them again`)
 }
 
 // Until Fusion is connected, Ctrl-C ends the run at once: with no handler Node ends the process without the 'exit'
@@ -156,21 +175,22 @@ if (existing.length && !flags.force) {
 const interrupted = () => process.exit(130)
 process.on('SIGINT', interrupted)
 
-// The model's geometry for the CAM files: `<model>.cam.step` when a master has a `cam` value (a finish made by hand,
-// such as an edge round, left out: the files cut square), else `<model>.step`. `nr build:parts` writes it beside the
-// model's STEP, built with the masters' `cam` values in place of theirs (camValues); a link's STEP is built so below.
+// The model's geometry for the CAM files: `<model>[.<variant>].cam.step` when a master has a `cam` value (a finish made
+// by hand, such as an edge round, left out: the files cut square), else `<model>[.<variant>].step`. `nr build:parts`
+// writes it beside the model's STEP, built with the masters' `cam` values in place of theirs (camValues); a link's STEP
+// is built so below.
 const masters = await loadMasters(model)
-let step = resolve(flags.step ?? camStepFile(masters, join(MDX, model), model))
+let step = resolve(flags.step ?? camStepFile(masters, join(MDX, model), model, variants, variant))
 if (link) {
   // The link's STEP, built every run into a folder of its own, gone when the run ends. ClassCAD loads only here, not
   // when the script starts: a default run never needs it.
-  console.log(`cam: ${model} with the values of ${link}`)
+  console.log(`cam: ${model} (${variant}) with the values of ${link}`)
   const dir = mkdtempSync(join(tmpdir(), 'integral-cam-'))
   process.on('exit', () => rmSync(dir, { recursive: true, force: true }))
   const { openEngine } = await import('./classcad.ts')
   const { buildPart } = await import('./site.ts')
   const engine = await openEngine().catch((error: unknown) => fail(`ClassCAD: ${messageOf(error)}`))
-  const built = await buildPart(engine, model, camValues(masters, values), dir).catch((error: unknown) => {
+  const built = await buildPart(engine, model, { variant, values: camValues(masters, values), out: dir }).catch((error: unknown) => {
     engine.client.close()
     return fail(`building ${model} failed: ${messageOf(error)}`)
   })
@@ -181,9 +201,9 @@ if (!existsSync(step)) fail(`no STEP at ${shown(step)}: run \`nr build:parts\` f
 const source = configFile(ROOT, model)
 const { library, tools } = loadTools()
 const materials = loadMaterials()
-const config = await loadConfig(source, materials, values).catch((error: Error) => fail(error.message))
+const config = await loadConfig(source, materials, values, variant).catch((error: Error) => fail(error.message))
 // The file's geometry may be another model's, while its CAM config can only be computed from the defaults' values.
-if (flags.step !== undefined && (config.parts || config.defaults)) console.log(`cam: --step: the CAM config is the defaults' (the file's geometry may be another model's)`)
+if (flags.step !== undefined && (config.parts || config.defaults)) console.log(`cam: --step: the CAM config is the variant's defaults' (the file's geometry may be another model's)`)
 const partConfigs = config.parts ?? {}
 const sheetFlag = flags.sheet?.split('x').map(Number)
 const cli: MachiningOptions = {
@@ -213,7 +233,7 @@ const grain = Object.fromEntries(selected.filter((name) => materials[materialOf(
 /** The parts' setups of their own (a wedge): one file each, beside the sheets. */
 const ownSetups = selected.flatMap((part) => (entryOf(part)?.setups ?? []).map((setup) => ({ part, setup })))
 
-console.log(`cam: ${model}, ${selected.length} parts from ${shown(step)}, ${config.parts || config.defaults ? `CAM config from ${shown(source)}` : 'no CAM config'}`)
+console.log(`cam: ${model} (${variant}), ${selected.length} parts from ${shown(step)}, ${config.parts || config.defaults ? `CAM config from ${shown(source)}` : 'no CAM config'}`)
 if (skipped.length) console.log(`cam: skipping ${skipped.join(', ')}`)
 
 const SCRIPT = readFileSync(join(import.meta.dirname, 'cam.fusion-job.py'), 'utf8')
@@ -267,7 +287,7 @@ process.on('SIGINT', () => void finish().then(() => process.exit(130)))
 // The inputs' hashes: the STEP, the model's module (its `CAM` config; also its geometry, already in the STEP), its
 // masters, the catalogs and the code. A link's STEP is keyed by the model's name, not by its temporary folder's
 // random path, so that the record reads the same run to run.
-const stepName = link ? `${model}.step (built from the link)` : shown(step)
+const stepName = link ? `${partFile(model, variants, variant, 'step')} (built from the link)` : shown(step)
 const inputs = {
   [stepName]: sha256(step),
   ...Object.fromEntries(

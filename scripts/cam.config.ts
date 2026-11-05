@@ -1,6 +1,7 @@
 // A model's CAM config: what Fusion cannot know from the STEP, the `CAM` export of the model's own module
-// (`<model>/<model>.ts`), a function of the masters' values returning a `CamConfig`: a wedge follows the angle the
-// part was built with. Optional: without one, every part is cut on the sheets, with the defaults.
+// (`<model>/<model>.ts`), a function of the masters' values and the variant returning a `CamConfig`: a wedge follows
+// the angle the part was built with, a variant's own board its own setup. Optional: without one, every part is cut on
+// the sheets, with the defaults.
 
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -53,13 +54,17 @@ export function configFile(root: string, model: string) {
 }
 
 /**
- * The CAM config of a model's module for the model made with `values` (no `CAM` export: every part, the defaults),
- * checked for what its type cannot say: machining values in range, materials of `materials` (cam.materials.json), setup
- * names fit for a file name.
+ * The CAM config of a model's module for the model made with `values` in `variant` (no `CAM` export: every part, the
+ * defaults), checked for what its type cannot say: machining values in range, materials of `materials`
+ * (cam.materials.json), setup names fit for a file name.
+ * @param file The model's module (configFile).
+ * @param materials The materials catalog (cam.machining.ts loadMaterials).
+ * @param values Every master's value the model was made with.
+ * @param variant The variant's id it was made in (scripts/part.ts).
  */
-export async function loadConfig(file: string, materials: Record<string, Material>, values: Values): Promise<CamConfig> {
-  const { CAM } = (await import(pathToFileURL(file).href)) as { CAM?: (values: Values) => CamConfig }
-  const config = CAM?.(values) ?? {}
+export async function loadConfig(file: string, materials: Record<string, Material>, values: Values, variant: string): Promise<CamConfig> {
+  const { CAM } = (await import(pathToFileURL(file).href)) as { CAM?: (values: Values, variant: string) => CamConfig }
+  const config = CAM?.(values, variant) ?? {}
   if (config.defaults) {
     const problems = machiningProblems(config.defaults, materials)
     if (problems.length) throw new Error(`${file}: CAM.defaults: ${problems.join('; ')}`)

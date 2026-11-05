@@ -8,7 +8,7 @@ import type { Values } from './masters.ts'
 import { MDX, ROOT } from './paths.ts'
 
 /** The files a part's built files depend on, besides its own script and masters. */
-export const SHARED_SOURCES = ['scripts/part.ts', 'scripts/classcad.ts', 'scripts/step-assembly.ts', 'scripts/site.ts', 'scripts/masters.ts']
+export const SHARED_SOURCES = ['scripts/part.ts', 'scripts/classcad.ts', 'scripts/step-assembly.ts', 'scripts/site.ts', 'scripts/masters.ts', 'scripts/paths.ts']
 
 /**
  * The lockfile: every package's resolved version (ClassCAD's, sharp's and their dependencies'), and the hash of
@@ -24,11 +24,12 @@ export const FILES = ['ofb', 'step', 'glb', 'png']
 
 /**
  * What a part's built files are made from: its script and masters, the shared sources, the lockfile, the engine's
- * environment variables and the values it is built with.
+ * environment variables and the values it is built with, every variant's.
+ * @param values Each variant's values, by its id.
  * @param root The repository: ROOT by default.
  * @param env The environment: process.env by default.
  */
-export function buildKey(part: string, values: Values, { root = ROOT, env = process.env } = {}) {
+export function buildKey(part: string, values: Record<string, Values>, { root = ROOT, env = process.env } = {}) {
   const hash = createHash('sha256')
   const sources = [`${part}/${part}.ts`, `${part}/${part}.masters.ts`, ...SHARED_SOURCES, LOCKFILE]
   for (const source of sources) {

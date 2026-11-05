@@ -1,5 +1,5 @@
 // Every part's model file, found the way models.ts finds them (its `import.meta.glob` does not exist under node, so
-// the files are imported directly): the sliders make sense, and the part builds from them.
+// the files are imported directly): the sliders make sense, the variants too, and the part builds from them in each.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Box3, Mesh, type Object3D } from 'three'
@@ -8,6 +8,7 @@ import { loadMasters } from '../../scripts/masters.ts'
 import { parts } from '../../scripts/paths.ts'
 import { RESERVED_KEYS } from './App.url.ts'
 import type { Control, Model } from './models.ts'
+import { defaultVariant, variantSchema, variantsOf } from './models.variants.ts'
 
 /** The schema's defaults, by name. */
 function defaults(schema: Record<string, Control>) {
@@ -53,23 +54,55 @@ for (const part of parts()) {
     for (const name of main) assert.ok(Object.hasOwn(schema, name), `${name}: main, but not one of the sliders`)
   })
 
-  test(`${part}: builds from its defaults into named meshes with a finite bounding box`, async () => {
-    const { schema, build }: Model = await import(`../../${part}/${part}.model.ts`)
-    const shape = await build(defaults(schema))
-    const names = meshNames(shape)
-    assert.ok(names.length >= 1, 'no mesh')
-    for (const name of names) assert.ok(name.trim() !== '', 'mesh without a name')
-    const box = new Box3().setFromObject(shape)
-    assert.ok(!box.isEmpty(), 'empty bounding box')
-    for (const n of [...box.min.toArray(), ...box.max.toArray()]) assert.ok(Number.isFinite(n), 'bounding box not finite')
+  test(`${part}: every variant has an id as ?variant= spells it, and its defaults are masters in range`, async () => {
+    const { schema, variants }: Model = await import(`../../${part}/${part}.model.ts`)
+    for (const [id, { label, hint, values = {} }] of Object.entries(variantsOf(variants))) {
+      assert.match(id, /^[a-z0-9-]+$/, `${id}: not lowercase letters, digits and dashes`)
+      assert.ok(label.trim() !== '' && hint.trim() !== '', `${id}: no label or no hint`)
+      for (const [name, value] of Object.entries(values)) {
+        assert.ok(Object.hasOwn(schema, name), `${id}: ${name} is not a master`)
+        assert.ok(schema[name].min <= value && value <= schema[name].max, `${id}: ${name} outside its range`)
+      }
+    }
   })
+
+  test(`${part}: every master's variants are the part's`, async () => {
+    const { schema, variants }: Model = await import(`../../${part}/${part}.model.ts`)
+    const ids = Object.keys(variantsOf(variants))
+    for (const [name, control] of Object.entries(schema)) {
+      for (const id of control.variants ?? []) assert.ok(ids.includes(id), `${name}: no variant ${id}`)
+    }
+  })
+
+  for (const id of Object.keys(variantsOf(await variantsOfPart(part)))) {
+    test(`${part}, ${id}: builds from its defaults into named meshes with a finite bounding box and named roles`, async () => {
+      const { schema, variants, build }: Model = await import(`../../${part}/${part}.model.ts`)
+      const shape = await build(defaults(variantSchema(schema, variants, id)), id)
+      const names = meshNames(shape)
+      assert.ok(names.length >= 1, 'no mesh')
+      for (const name of names) assert.ok(name.trim() !== '', 'mesh without a name')
+      shape.traverse((object) => {
+        const { role } = object.userData
+        if (object instanceof Mesh && role !== undefined) assert.ok(typeof role === 'string' && role.trim() !== '', `${object.name}: a role, but not a name`)
+      })
+      const box = new Box3().setFromObject(shape)
+      assert.ok(!box.isEmpty(), 'empty bounding box')
+      for (const n of [...box.min.toArray(), ...box.max.toArray()]) assert.ok(Number.isFinite(n), 'bounding box not finite')
+    })
+  }
+}
+
+/** A part's variants, to name a test per variant: read from its model file before the tests are declared. */
+async function variantsOfPart(part: string) {
+  const { variants }: Model = await import(`../../${part}/${part}.model.ts`)
+  return variants
 }
 
 // Its JSDoc promises that any combination of the sliders builds: the corners of the range are the hardest.
 for (const end of ['min', 'max'] as const) {
   test(`compass-armchair: builds with every slider at its ${end}`, async () => {
-    const { schema, build }: Model = await import('../../compass-armchair/compass-armchair.model.ts')
-    await assert.doesNotReject(async () => build(corner(schema, end)))
+    const { schema, variants, build }: Model = await import('../../compass-armchair/compass-armchair.model.ts')
+    await assert.doesNotReject(async () => build(corner(schema, end), defaultVariant(variants)))
   })
 }
 

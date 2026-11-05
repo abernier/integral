@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { BufferGeometry, Mesh, MeshBasicMaterial, type Object3D } from 'three'
 
-import { createBuilds } from './App.build.ts'
+import { buildKey, createBuilds } from './App.build.ts'
 
 const disposed = new WeakSet<Object3D>()
 
@@ -14,13 +14,16 @@ function shape() {
   return mesh
 }
 
-/** A model whose builds the test settles by hand, one per key; `fail` rejects, `throw` throws at once. */
+/**
+ * A model whose builds the test settles by hand, one per key, named after its values' first name and, but for the
+ * default, its variant (`A`, `A/cane`); `fail` rejects, `throw` throws at once.
+ */
 function fakeModel() {
   const shapes = new Map<string, Object3D>()
   const settle = new Map<string, { resolve: () => void; reject: () => void }>()
   const model = {
-    build: (values: Record<string, number>) => {
-      const name = Object.keys(values)[0]
+    build: (values: Record<string, number>, variant: string) => {
+      const name = Object.keys(values)[0] + (variant === 'default' ? '' : `/${variant}`)
       if (name === 'throw') throw new Error('thrown')
       const built = shape()
       shapes.set(name, built)
@@ -32,8 +35,8 @@ function fakeModel() {
   return { model, shapes, settle }
 }
 
-/** A key, as the component makes it: the params' JSON. */
-const key = (name: string) => JSON.stringify({ [name]: 1 })
+/** A key, as the component makes it, of the default variant unless named. */
+const key = (name: string, variant = 'default') => buildKey(variant, { [name]: 1 })
 
 /** Lets every pending `then` run. */
 const flush = () => new Promise((resolve) => setTimeout(resolve))
@@ -42,6 +45,17 @@ test('the same key gives the same build', () => {
   const build = createBuilds(3)
   const { model } = fakeModel()
   assert.equal(build(model, key('A')), build(model, key('A')))
+})
+
+test('the variant is part of the key, and reaches the build', async () => {
+  const build = createBuilds(3)
+  const { model, shapes, settle } = fakeModel()
+  const plain = build(model, key('A'))
+  const cane = build(model, key('A', 'cane'))
+  assert.notEqual(plain, cane)
+  await flush()
+  settle.get('A/cane')!.resolve()
+  assert.equal((await cane).shape, shapes.get('A/cane'))
 })
 
 test('a build that throws at once fails like one that rejects, and borrows the last good shape', async () => {
