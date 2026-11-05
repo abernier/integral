@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { type Engine, openEngine } from './classcad.ts'
 import { defaultValues } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
@@ -21,13 +21,18 @@ const SHARED_SOURCES = ['scripts/part.ts', 'scripts/classcad.ts', 'scripts/step-
 /** The packages that build them; the patch on @classcad/mcp is hashed with its file. */
 const ENGINE_PACKAGES = ['@classcad/mcp', '@classcad/script', '@classcad/renderer', '@classcad/skill']
 
-/** What a part's built files are made from: its sources, the shared ones, the engine and the values. */
+/**
+ * What a part's built files are made from: its sources, the shared ones, the engine and the values.
+ * CLASSCAD_WASM_VERSION and CLASSCAD_WASM_URL are hashed too: they let @classcad/mcp pick another engine release.
+ */
 async function buildKey(part: string) {
   const hash = createHash('sha256')
   const sources = [`${part}/${part}.ts`, `${part}/${part}.masters.ts`, ...SHARED_SOURCES]
   if (existsSync(join(ROOT, 'patches'))) sources.push(...readdirSync(join(ROOT, 'patches')).map((file) => `patches/${file}`))
   for (const source of sources) hash.update(source).update(readFileSync(join(ROOT, source)))
   for (const name of ENGINE_PACKAGES) hash.update(`${name}@${packageVersion(name)}`)
+  hash.update(`CLASSCAD_WASM_VERSION=${process.env.CLASSCAD_WASM_VERSION ?? ''}`)
+  hash.update(`CLASSCAD_WASM_URL=${process.env.CLASSCAD_WASM_URL ?? ''}`)
   hash.update(JSON.stringify(await defaultValues(part)))
   return hash.digest('hex')
 }
@@ -55,7 +60,8 @@ for (const part of parts()) {
     console.log(`${part}: up to date`)
     continue
   }
-  rmSync(keyFile(part), { force: true })
+  // From a clean folder: no leftovers, nor `pnpm cam` toolpaths (cam/) cut for the old geometry.
+  rmSync(join(MDX, part), { recursive: true, force: true })
   engine ??= await openEngine()
   await buildPart(engine, part)
   writeFileSync(keyFile(part), key)
@@ -71,8 +77,16 @@ if (!process.argv.includes('--parts-only')) {
     env: docsEnv(),
     stdio: 'inherit',
   })
-  // The built files, at the URLs the pages link them by (not the pages, nor the parts' keys).
-  cpSync(MDX, DIST, { recursive: true, filter: (path) => path === MDX || !/\.(mdx|key)$/.test(path) })
+  // The built files, at the URLs the pages link them by (not the pages, the parts' keys, nor `pnpm cam`'s .docs/<part>/cam/).
+  cpSync(MDX, DIST, {
+    recursive: true,
+    filter: (path) => {
+      if (path === MDX) return true
+      const segments = relative(MDX, path).split(sep)
+      if (segments[1] === 'cam') return false
+      return !/\.(mdx|key)$/.test(path)
+    },
+  })
   console.log(`site: ${DIST}`)
 }
 
