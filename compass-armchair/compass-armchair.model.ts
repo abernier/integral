@@ -8,8 +8,8 @@
 // `schema` is the masters (compass-armchair.masters.ts), one Control per master. Their ranges keep every joint
 // valid (a tenon in its mortise, a tail in its socket): `build` does not throw for any combination of values inside
 // them, W and BOW included (a shallow bow on a wide chair is a long, flat arc, which the span must reach). Checked on
-// the all-min and all-max corners, W max x BOW min, and 600 random in-range combinations. Values outside the ranges
-// are not guaranteed.
+// the all-min and all-max corners, W max x BOW min, and 600 random in-range combinations (a back rail's round the
+// kernel refuses is a chamfer: breakRing). Values outside the ranges are not guaranteed.
 
 import * as THREE from 'three'
 import {
@@ -302,6 +302,26 @@ function backPost(d: Dims, rails: Span[], groove: Part): Part {
 }
 
 /**
+ * A back rail's ring with its edges rounded at `radius`; chamfered at it instead when the round fails, as the ClassCAD
+ * part does (scripts' `fillet`). The ring's circles are metres across on a shallow bow: smlibwasm checks a round by the
+ * volume it takes off, a bound its arcs of that size can overshoot for some widths and bows (W 459, POST_D 42, BOW
+ * 11.5), though the round is a few millimetres by hand either way. Sharp, with a warning, if the chamfer fails too.
+ */
+function breakRing(ring: Part, edges: Edge[], radius: number): Part {
+  try {
+    return ring.fillet(edges, radius)
+  } catch (error) {
+    console.warn(`back rail: ${(error as Error).message}; chamfered at ${radius} instead`)
+  }
+  try {
+    return ring.chamfer(edges, radius)
+  } catch (error) {
+    console.warn(`back rail: ${(error as Error).message}; left sharp`)
+    return ring
+  }
+}
+
+/**
  * The back's rails, in the back's own frame: arcs between the posts' inner faces, their arcs broken but the front one
  * on the opening's side, which the cane laps (their ends are glued), their ends cut into tails through the posts, the
  * cane's groove in their front face.
@@ -313,7 +333,7 @@ function backRails(d: Dims, rails: Span[], groove: Part): Named[] {
     const ring = Circle(d.R_OUT).cut(Circle(d.R_IN)).translate(0, d.ARC_Y, 0).extrude(z1 - z0).translate(0, 0, z0)
     const lapped = i === 0 ? z1 : z0
     const broken = ring.edges().filter((edge) => !(Math.abs(edge.start.z - lapped) < 1e-6 && Math.abs(edge.radius - d.R_IN) < 1e-6))
-    const rounded = d.EDGE_BREAK > 0 ? ring.fillet(broken, d.EDGE_BREAK) : ring
+    const rounded = d.EDGE_BREAK > 0 ? breakRing(ring, broken, d.EDGE_BREAK) : ring
     const rail = rounded.intersect(arcBand(d, d.R_OUT + 1, d.R_IN - 1).extrude(z1 - z0 + 2).translate(0, 0, z0 - 1))
     const tail = backTail(d, z0, z1)
     return { part: rail.fuse(tail, tail.mirror(Plane.YZ)).cut(groove), name: 'back rail' }
