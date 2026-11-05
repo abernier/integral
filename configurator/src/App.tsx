@@ -8,6 +8,7 @@ import { Sphere, Spherical, Vector3 } from 'three'
 import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { changedParams, withQueryValues } from './App.query.ts'
+import { useSyncedUrl } from './App.url.ts'
 import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
 import { type Built, createBuilds } from './App.build.ts'
 import { fitDistance, focalShift, pictureShift } from './App.camera.ts'
@@ -160,6 +161,8 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
     const timer = setTimeout(() => setToast(undefined), 1500)
     return () => clearTimeout(timer)
   }, [toast])
+  // The address bar follows the panel, in the same parameters as Copy link: a reload or a shared address gives this state back.
+  useSyncedUrl(changedParams(model.schema, numbers, part))
 
   // Built once the sliders have stayed still; the last build stays on screen until the next one is done.
   const [key] = useDebounceValue(JSON.stringify(numbers), DEBOUNCE_MS)
