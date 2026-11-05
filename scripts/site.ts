@@ -19,6 +19,7 @@ import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
 import { build as vite } from 'vite'
 import { queryUrl } from '../configurator/src/App.url.ts'
+import { keyFile } from './build.cache.ts'
 import { type Engine, glb, render, run, save } from './classcad.ts'
 import { type Values, defaultValues } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
@@ -81,7 +82,7 @@ export async function buildPart(engine: Engine, part: string, values?: Values, o
   const returned = await run(engine, (api) => build(api, resolved))
   mkdirSync(out, { recursive: true })
   // The files about to be written no longer match a build key: build.ts writes it again after a build it keyed.
-  rmSync(join(out, `${part}.key`), { force: true })
+  rmSync(keyFile(part, out), { force: true })
   const files = { ofb: join(out, `${part}.ofb`), step: join(out, `${part}.step`), glb: join(out, `${part}.glb`), png: join(out, `${part}.png`) }
   const ofbSize = await save(engine, 'OFB', files.ofb)
   const stepSize = await save(engine, 'STP', files.step)

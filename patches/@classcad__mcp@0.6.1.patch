@@ -8,7 +8,7 @@ index 7e992a865ee4fd41ea37755cdf3d0f2615f495a7..c6def41b71ac42cd2316753dc68e061d
          configurationData: '/home/web_user/ClassCAD/classcad.ini',
 -        sendTreePatches: true,
 +        // integral: off. A tree patch is computed over the whole tree after every command, which makes a build
-+        // quadratic in its feature count (compass-armchair: 77 s -> 19 s). The build pulls the tree itself.
++        // quadratic in its feature count (see integral's README, Engine patch). The build pulls the tree itself.
 +        sendTreePatches: false,
          compression: false,
          siteLocation: JSON.stringify(loc),
