@@ -8,7 +8,7 @@ import type { Values } from './masters.ts'
 import { MDX, ROOT } from './paths.ts'
 
 /** The files a part's built files depend on, besides its own script and masters. */
-export const SHARED_SOURCES = ['scripts/part.ts', 'scripts/classcad.ts', 'scripts/step-assembly.ts', 'scripts/site.ts']
+export const SHARED_SOURCES = ['scripts/part.ts', 'scripts/classcad.ts', 'scripts/step-assembly.ts', 'scripts/site.ts', 'scripts/masters.ts']
 
 /**
  * The lockfile: every package's resolved version (ClassCAD's, sharp's and their dependencies'), and the hash of
@@ -50,10 +50,13 @@ export function keyFile(part: string, dir = join(MDX, part)) {
   return join(dir, `${part}.key`)
 }
 
-/** Whether every file of a part is in `dir` and was built with this key. */
-export function upToDate(part: string, key: string, dir = join(MDX, part)) {
+/**
+ * Whether every file of a part is in `dir` and was built with this key.
+ * @param files The names of its files in `dir`: `<part>.<ext>` for each of FILES by default.
+ */
+export function upToDate(part: string, key: string, dir = join(MDX, part), files = FILES.map((ext) => `${part}.${ext}`)) {
   if (!existsSync(keyFile(part, dir))) return false
-  if (FILES.some((ext) => !existsSync(join(dir, `${part}.${ext}`)))) return false
+  if (files.some((file) => !existsSync(join(dir, file)))) return false
   return readFileSync(keyFile(part, dir), 'utf8') === key
 }
 

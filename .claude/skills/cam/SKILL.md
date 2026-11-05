@@ -7,7 +7,7 @@ description: Make, check and simulate this repo's ShopBot `.sbp` files with `pnp
 
 `docs/cam.md` is the overview: what Fusion decides, what the code prepares, the flags' spirit, `cam.json`, the files, the ShopBot's Fusion setup. Read it first. `pnpm cam --help` holds the flags; `scripts/cam.fusion-job.py`'s header lists the steps sent to Fusion. This skill is how an agent drives all of it; [FUSION.md](FUSION.md) is how to act in Fusion itself.
 
-Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the rest machining, the feeds (its tool library's presets). A change in how parts are milled is a value: the model's `CAM` config, `cam.tools.json`, `cam.materials.json`, or `cam.machining.ts`.
+Fusion decides how parts lie and nest (Arrange), the pockets, the toolpaths, the rest machining, the feeds (its tool library's presets). A change in how parts are milled is a value: the model's `CAM` config, a master's `cam` value (`Control.cam` in `configurator/src/models.ts`: the value the CAM geometry is built with, such as 0 for an edge round made by hand; `nr build:parts` writes that geometry to `<model>.cam.step`, which `pnpm cam` reads, through `camValues` in `scripts/masters.ts`), `cam.tools.json`, `cam.materials.json`, or `cam.machining.ts`.
 
 ## Run
 
@@ -30,10 +30,10 @@ Report what was simulated and what was not. The user decides a file is safe to c
 
 ## Change how parts are milled
 
-Edit the `CAM(values)` function of `<model>/<model>.ts` (returning `CamConfig`, typed in `scripts/cam.config.ts`), `cam.materials.json`, or `cam.tools.json` (exported from Fusion's Tool Library, as the page says). Values resolve in `scripts/cam.ts` and `cam.machining.ts`; `cam.fusion-job.py` applies them. Rerun and compare `cam.json`: unchanged inputs give byte-identical files.
+Edit the `CAM(values)` function of `<model>/<model>.ts` (returning `CamConfig`, typed in `scripts/cam.config.ts`), a master's `cam` value in `<model>/<model>.masters.ts` (`Control.cam`; rebuild with `nr build:parts` for its `<model>.cam.step`), `cam.materials.json`, or `cam.tools.json` (exported from Fusion's Tool Library, as the page says). Values resolve in `scripts/cam.ts` and `cam.machining.ts`; `cam.fusion-job.py` applies them. Rerun and compare `cam.json`: unchanged inputs give byte-identical files.
 
 ## Rules
 
-- One home per fact: a skip, turn, wedge or material's reason is a comment on its `CAM` entry; a value lives in `CAM`, a catalog JSON or `cam.machining.ts`; a value a master holds is read from `CAM`'s `values` argument, never hard-coded. A model page names the command, links its `.ts`, and keeps its hand-work list only.
+- One home per fact: a skip, turn, wedge or material's reason is a comment on its `CAM` entry; a value lives in `CAM`, a master's `cam` (`Control.cam`), a catalog JSON or `cam.machining.ts`; a value a master holds is read from `CAM`'s `values` argument, never hard-coded. A model page names the command, links its `.ts`, and keeps its hand-work list only.
 - Fusion steps go one small Python script per MCP call, and Node polls between them. Fusion stays idle while it generates: a wait or a loop inside a script (`doEvents`, sleep) crashed it.
 - The run's documents are yours, closed unsaved or left open with `--keep`. Every other Fusion document is the user's: read it, change nothing in it.

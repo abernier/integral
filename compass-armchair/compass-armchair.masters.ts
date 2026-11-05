@@ -33,13 +33,21 @@ export const MASTERS = {
   RAIL_H: { value: 60, min: 55, max: 65, step: 1, hint: 'Height of the seat rails' },
   RAIL_T: { value: 25, min: 22, max: 28, step: 1, hint: 'Thickness of the side rails' },
   CANE_T: { value: 8, min: 6, max: 10, step: 0.5, hint: 'Thickness of the cane panels' },
+  CANE_SHEET: { value: 2, min: 1.5, max: 3, step: 0.5, hint: 'Thickness of the sheet cane where it laps the frame into its groove' },
+  GROOVE_W: { value: 6, min: 5, max: 8, step: 0.5, hint: 'Width of the cane groove around each opening' },
+  // The side rail tenons sit in the wood under it, with a wall of at least 2.5 mm above and below: GROOVE_D + TENON_H
+  // at most RAIL_H - 2 x 2.5 at every corner of the box (55 - 2 x 2.5 = 10 + 40).
+  GROOVE_D: { value: 10, min: 6, max: 10, step: 0.5, hint: 'Depth of the cane groove' },
+  GROOVE_INSET: { value: 10, min: 8, max: 12, step: 0.5, hint: "The cane groove's middle, out from the opening's edge" },
+  GROOVE_R: { value: 15, min: 10, max: 16, step: 0.5, hint: "Radius of the cane groove's corners, on its middle" },
   SEAT_FRONT: { value: -229, min: -240, max: -220, step: 1, hint: 'Nose of the side rails' },
   SEAT_BACK: { value: 240, min: 230, max: 250, step: 1, hint: 'Back end of the side rails' },
   FRONT_RAIL_T: { value: 30, min: 26, max: 34, step: 1, hint: 'Thickness of the front cross rail' },
   REAR_RAIL_T: { value: 40, min: 36, max: 44, step: 1, hint: 'Thickness of the rear cross rail' },
   TENON_LEN: { value: 20, min: 16, max: 24, step: 1, hint: 'How far a side rail tenon goes into the board' },
   TENON_T: { value: 10, min: 8, max: 12, step: 1, hint: 'Side rail tenon thickness' },
-  TENON_H: { value: 40, min: 34, max: 44, step: 1, hint: 'Side rail tenon height' },
+  // Bound with GROOVE_D by RAIL_H: see the cane groove above.
+  TENON_H: { value: 40, min: 34, max: 40, step: 1, hint: 'Side rail tenon height' },
   TENON_Y: { value: 55, min: 50, max: 60, step: 1, hint: 'Distance of the side rail tenons from the seam' },
   TENON_IN_RAIL: { value: 15, min: 12, max: 18, step: 1, hint: 'How far a side rail tenon goes into the rail' },
   BACK_TILT: { main: true, value: 15, min: 10, max: 20, step: 0.5, hint: 'Lean of the back, degrees' },
@@ -59,4 +67,18 @@ export const MASTERS = {
   SEAT_PIN_EDGE: { value: 6, min: 5, max: 7, step: 0.5, hint: 'Seat pins at the side rail edges' },
   SEAT_PIN_MID: { value: 6, min: 5, max: 7, step: 0.5, hint: 'Seat pins between the tails' },
   BACK_TAIL_SHOULDER: { value: 12, min: 10, max: 14, step: 0.5, hint: 'Shoulders either side of a back rail tail' },
+  // The rounds are made by hand on the cut parts: the CAM files are cut square (`cam`).
+  ARM_NOSE_R: { value: 8, min: 0, max: 12, step: 0.5, cam: 0, hint: "Round on the armrest nose's edges, by hand" },
+  EDGE_BREAK: { value: 2.5, min: 0, max: 4, step: 0.5, cam: 0, hint: 'Round on every other outside arris of the assembled chair, by hand; flush glued seams stay sharp; under 1 mm, none' },
 } satisfies Record<string, Control>
+
+/** The smallest EDGE_BREAK that is made: a round under it is no round. */
+export const MIN_EDGE_BREAK = 1
+
+/**
+ * The EDGE_BREAK both kernels build with: 0 under MIN_EDGE_BREAK. A sub-millimetre round is sanding, not a feature, and
+ * on a back rail's ring the kernel refuses one as close to the largest its edges allow (W 458, POST_D 38, BOW 8).
+ */
+export function edgeBreak(value: number) {
+  return value < MIN_EDGE_BREAK ? 0 : value
+}

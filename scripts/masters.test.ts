@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import { queryUrl } from '../configurator/src/App.url.ts'
 import { MASTERS as COMPASS_ARMCHAIR } from '../compass-armchair/compass-armchair.masters.ts'
 import { MASTERS } from '../zigzag-chair/zigzag-chair.masters.ts'
-import { defaultValues, linkValues } from './masters.ts'
+import { camStepFile, camValues, defaultValues, linkValues } from './masters.ts'
 
 test('defaultValues: every master, at its default', async () => {
   const values = await defaultValues('zigzag-chair')
@@ -51,4 +51,16 @@ test('linkValues: reads back, for every master of the real models, a value three
 test('linkValues: a link without part, or of no model, is refused', async () => {
   await assert.rejects(linkValues('https://abernier.github.io/integral/configurator/?BACK_LEAN=10'), /no part/)
   await assert.rejects(linkValues('https://abernier.github.io/integral/configurator/?part=nope'), /no model nope/)
+})
+
+test('camValues: a master with a `cam` value takes it, the others keep theirs; none has one: the same values', () => {
+  const masters = { A: { value: 2, min: 0, max: 4, step: 1, hint: 'a', cam: 0 }, B: { value: 5, min: 0, max: 9, step: 1, hint: 'b' } }
+  assert.deepEqual(camValues(masters, { A: 3, B: 7 }), { A: 0, B: 7 })
+  const values = { T: 18 }
+  assert.equal(camValues({ T: { value: 18, min: 15, max: 25, step: 1, hint: 't' } }, values), values)
+})
+
+test('camStepFile: <model>.cam.step when a master has a `cam` value, else <model>.step', () => {
+  assert.equal(camStepFile({ A: { value: 2, min: 0, max: 4, step: 1, hint: 'a', cam: 0 } }, '/d', 'm'), '/d/m.cam.step')
+  assert.equal(camStepFile(MASTERS, '/d', 'm'), '/d/m.step')
 })

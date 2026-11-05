@@ -5,7 +5,8 @@
 // ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`), and a README.md; `<folder>/references/` holds
 // the images its README's `## References` shows (a strip to scroll sideways, on the site), served beside the built files.
 // Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`, or
-// the folder `buildPart` is given (`pnpm cam '<link>'` builds into a temporary one);
+// the folder `buildPart` is given (`pnpm cam '<link>'` builds into a temporary one); `buildCamStep` writes
+// `<folder>.cam.step` beside them when a master has a `cam` value: the geometry `pnpm cam` cuts, square;
 // `buildConfigurator` builds the configurator app into `.docs/configurator/`, and each part's page embeds it. The MDX folder also
 // gets one page per README, where the sidebar wants it: the root one as `integral/introduction.mdx`, each part's
 // as `things/<folder>.mdx` (@pmndrs/docs groups the sidebar by folder: "Integral", then "Things"), and one per
@@ -21,7 +22,7 @@ import { build as vite } from 'vite'
 import { queryUrl } from '../configurator/src/App.url.ts'
 import { keyFile } from './build.cache.ts'
 import { type Engine, glb, render, run, save } from './classcad.ts'
-import { type Values, defaultValues } from './masters.ts'
+import { type Values, camStepFile, camValues, defaultValues, loadMasters } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
 
 export const DIST = join(ROOT, 'dist')
@@ -93,6 +94,27 @@ export async function buildPart(engine: Engine, part: string, values?: Values, o
   const shown = out.startsWith(MDX) ? relative(MDX, out) : out
   console.log(`${shown}: ${seconds} s, ofb ${ofbSize} B, step ${stepSize} B, glb ${glbSize} B`, JSON.stringify(returned))
   return files
+}
+
+/**
+ * Build a part again for its CAM files and write `<part>.cam.step` into `out`, when some master has a `cam` value
+ * (camValues: the finishes made by hand, such as edge rounds, left out, so that the router cuts square); returns its
+ * path, or undefined when the part's CAM geometry is its `<part>.step`.
+ * @param values Every master's value; the defaults when omitted.
+ */
+export async function buildCamStep(engine: Engine, part: string, values?: Values, out = join(MDX, part)) {
+  const masters = await loadMasters(part)
+  const file = camStepFile(masters, out, part)
+  if (file === join(out, `${part}.step`)) return undefined
+  const started = performance.now()
+  const { default: build } = await import(`${pathToFileURL(join(ROOT, part, `${part}.ts`)).href}?t=${Date.now()}`)
+  const resolved = camValues(masters, values ?? (await defaultValues(part)))
+  await run(engine, (api) => build(api, resolved))
+  mkdirSync(out, { recursive: true })
+  const size = await save(engine, 'STP', file)
+  const seconds = ((performance.now() - started) / 1000).toFixed(1)
+  console.log(`${relative(MDX, file)}: ${seconds} s, ${size} B, for the CAM files`)
+  return file
 }
 
 /**

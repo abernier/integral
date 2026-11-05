@@ -72,3 +72,11 @@ for (const end of ['min', 'max'] as const) {
     await assert.doesNotReject(async () => build(corner(schema, end)))
   })
 }
+
+// The side rail tenons sit under the cane groove: the wood left above and below each one is a wall, thinnest at the
+// shallowest rail with the deepest groove and the tallest tenon.
+test('compass-armchair: the side rail tenons keep a 2.5 mm wall of wood above and below at every corner', async () => {
+  const { schema }: Model = await import('../../compass-armchair/compass-armchair.model.ts')
+  const wall = (schema.RAIL_H.min - schema.GROOVE_D.max - schema.TENON_H.max) / 2
+  assert.ok(wall >= 2.5, `wall of ${wall} mm, under 2.5 mm`)
+})
