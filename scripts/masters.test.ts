@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { changedParams } from '../configurator/src/App.query.ts'
+import { queryUrl } from '../configurator/src/App.url.ts'
+import { MASTERS as COMPASS_ARMCHAIR } from '../compass-armchair/compass-armchair.masters.ts'
 import { MASTERS } from '../zigzag-chair/zigzag-chair.masters.ts'
 import { defaultValues, linkValues } from './masters.ts'
 
@@ -25,14 +26,26 @@ test('linkValues: a bare query is read like the full link', async () => {
   assert.deepEqual(bare, full)
 })
 
-// The writer of the link (the configurator's changedParams) and its reader (linkValues) live in two files: this ties them.
+// The writer of the link (the configurator's queryUrl) and its reader (linkValues) live in two files: this ties them.
 test('linkValues: reads back what the configurator writes into a link', async () => {
   const defaults = await defaultValues('zigzag-chair')
   const changed = { BACK_LEAN: 12, W_NOSE: 400 }
-  const params = changedParams(MASTERS, { ...defaults, ...changed }, 'zigzag-chair')
-  const { model, values } = await linkValues(`https://abernier.github.io/integral/configurator/?${params}`)
+  const link = queryUrl(MASTERS, { part: 'zigzag-chair', values: { ...defaults, ...changed } }, 'https://abernier.github.io/integral/configurator/')
+  const { model, values } = await linkValues(link)
   assert.equal(model, 'zigzag-chair')
   assert.deepEqual(values, { ...defaults, ...changed })
+})
+
+// Some defaults are off their step grid (leva drags from them by whole steps): such values read back exactly.
+test('linkValues: reads back, for every master of the real models, a value three steps off its default', async () => {
+  for (const [model, masters] of [['zigzag-chair', MASTERS], ['compass-armchair', COMPASS_ARMCHAIR]] as const) {
+    const defaults = await defaultValues(model)
+    for (const [name, { value, min, max, step }] of Object.entries(masters)) {
+      const values = { ...defaults, [name]: Math.min(max, Math.max(min, value + 3 * step)) }
+      const link = queryUrl(masters, { part: model, values }, 'https://abernier.github.io/integral/configurator/')
+      assert.deepEqual((await linkValues(link)).values, values, `${model} ${name}`)
+    }
+  }
 })
 
 test('linkValues: a link without part, or of no model, is refused', async () => {

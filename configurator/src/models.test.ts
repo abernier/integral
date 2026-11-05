@@ -6,6 +6,7 @@ import { Box3, Mesh, type Object3D } from 'three'
 
 import { loadMasters } from '../../scripts/masters.ts'
 import { parts } from '../../scripts/paths.ts'
+import { RESERVED_KEYS } from './App.url.ts'
 import type { Control, Model } from './models.ts'
 
 /** The schema's defaults, by name. */
@@ -36,6 +37,12 @@ for (const part of parts()) {
       assert.ok(step > 0, `${name}: step must be positive`)
       assert.ok(typeof hint === 'string' && hint.trim() !== '', `${name}: no hint`)
     }
+  })
+
+  // A master named after a fixed key of the URL would be read and written as that key, not as a slider.
+  test(`${part}: no slider takes a name the URL reserves`, async () => {
+    const { schema }: Model = await import(`../../${part}/${part}.model.ts`)
+    for (const name of RESERVED_KEYS) assert.ok(!Object.hasOwn(schema, name), `${name}: reserved by the URL`)
   })
 
   test(`${part}: at least one slider is main, and every main one is a master`, async () => {

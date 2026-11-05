@@ -18,6 +18,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync,
 import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
 import { build as vite } from 'vite'
+import { queryUrl } from '../configurator/src/App.url.ts'
 import { type Engine, glb, render, run, save } from './classcad.ts'
 import { type Values, defaultValues } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
@@ -132,7 +133,7 @@ function views(part: string, alt: string) {
     '</TabsList>',
     // The directory URL, not index.html: Vercel's clean URLs redirect the file to its directory, and the app's
     // relative base resolves against the trailing slash on every host.
-    `<TabsContent value="configurator">${frame(`${PAGES_URL}/configurator/?part=${part}`, `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
+    `<TabsContent value="configurator">${frame(queryUrl({}, { part, values: {} }, `${PAGES_URL}/configurator/`), `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
     `<TabsContent value="image"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     '</Tabs>',
