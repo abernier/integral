@@ -36,9 +36,8 @@ export async function defaultValues(model: string): Promise<Values> {
 
 /**
  * The model and every master's value a configurator link names, the full link or its bare query
- * (`?part=<model>&<MASTER>=<value>...`): `part` is the model; each master's value is the link's, clamped to its range and
- * snapped to its step, or the default when the link has none (unknown keys are ignored). Throws on a link without `part`, or
- * whose part is no model.
+ * (`?part=<model>&<MASTER>=<value>...`): `part` is the model; each master's value is the link's, clamped to its range, or
+ * the default when the link has none (unknown keys are ignored). Throws on a link without `part`, or whose part is no model.
  */
 export async function linkValues(link: string) {
   // The base makes a bare query parse too; a full link ignores it.

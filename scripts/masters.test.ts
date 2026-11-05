@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { queryUrl } from '../configurator/src/App.url.ts'
+import { MASTERS as COMPASS_ARMCHAIR } from '../compass-armchair/compass-armchair.masters.ts'
 import { MASTERS } from '../zigzag-chair/zigzag-chair.masters.ts'
 import { defaultValues, linkValues } from './masters.ts'
 
@@ -33,6 +34,18 @@ test('linkValues: reads back what the configurator writes into a link', async ()
   const { model, values } = await linkValues(link)
   assert.equal(model, 'zigzag-chair')
   assert.deepEqual(values, { ...defaults, ...changed })
+})
+
+// Some defaults are off their step grid (leva drags from them by whole steps): such values read back exactly.
+test('linkValues: reads back, for every master of the real models, a value three steps off its default', async () => {
+  for (const [model, masters] of [['zigzag-chair', MASTERS], ['compass-armchair', COMPASS_ARMCHAIR]] as const) {
+    const defaults = await defaultValues(model)
+    for (const [name, { value, min, max, step }] of Object.entries(masters)) {
+      const values = { ...defaults, [name]: Math.min(max, Math.max(min, value + 3 * step)) }
+      const link = queryUrl(masters, { part: model, values }, 'https://abernier.github.io/integral/configurator/')
+      assert.deepEqual((await linkValues(link)).values, values, `${model} ${name}`)
+    }
+  }
 })
 
 test('linkValues: a link without part, or of no model, is refused', async () => {

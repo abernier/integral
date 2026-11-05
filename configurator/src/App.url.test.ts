@@ -25,11 +25,10 @@ test('loadQuery: a value is clamped to its range', () => {
   assert.equal(loadQuery(schema, '?TAILS=-3').values.TAILS, 2)
 })
 
-test('loadQuery: a value is snapped to its step, counted from the default', () => {
-  assert.equal(loadQuery(schema, '?T=25.3').values.T, 25.5)
-  assert.equal(loadQuery(schema, '?TAILS=4.4').values.TAILS, 4)
-  const fine = { X: { value: 0, min: 0, max: 1, step: 0.1, hint: '' } }
-  assert.equal(loadQuery(fine, '?X=0.3').values.X, 0.3)
+test('loadQuery: a value off the step grid is kept as given, still clamped', () => {
+  assert.equal(loadQuery(schema, '?T=25.3').values.T, 25.3)
+  assert.equal(loadQuery(schema, '?TAILS=4.4').values.TAILS, 4.4)
+  assert.equal(loadQuery(schema, '?T=30.7').values.T, 30)
 })
 
 test('loadQuery: an unknown key is dropped', () => {
@@ -51,5 +50,15 @@ test('round trip: the URL written for some values reads back as those values', (
   for (const values of [defaults, { T: 19, TAILS: 4 }, { T: 25.5, TAILS: 2 }, { T: 30, TAILS: 8 }]) {
     const state = { part: 'zigzag-chair', values }
     assert.deepEqual(loadQuery(schema, queryUrl(schema, state)), state)
+  }
+})
+
+// leva drags from the slider's initial value by whole steps, and its typed input does not snap: off-grid values.
+test('round trip: values as leva makes them, on a default off the step grid, read back as written', () => {
+  const offGrid = { L: { value: 436.43234124225864, min: 300, max: 600, step: 1, hint: '' } }
+  const dragged = [-3, -1, 1, 4, 100].map((k) => offGrid.L.value + k * offGrid.L.step)
+  for (const L of [...dragged, 437, 300, 600]) {
+    const state = { part: 'zigzag-chair', values: { L } }
+    assert.deepEqual(loadQuery(offGrid, queryUrl(offGrid, state)), state)
   }
 })
