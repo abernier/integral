@@ -35,6 +35,8 @@ test('page: the image lines before the Intro become the strip, the Intro after i
   assert.equal(count(mdx, '<img src='), 4)
   assert.equal(count(mdx, '!['), 0)
   assert.ok(mdx.indexOf('data-renders') < mdx.indexOf('<Intro>'))
+  // The style element sits inside the strip: a direct child of the article is made a block by the theme, and shows.
+  assert.ok(mdx.indexOf('data-renders') < mdx.indexOf('<style>'))
 })
 
 test('page: a README without the block has no strip', () => {
