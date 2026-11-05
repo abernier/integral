@@ -254,9 +254,11 @@ function renders(part: string, images: string) {
   )
   return [
     `{/* The renders: \`pnpm render ${part}\` (scripts/render.ts), Blender headless on the built GLB, scripts/render.blender.py holding the studio, scripts/render.readme.ts the views; the files in ${part}/renders/, the strip made here from the README's image lines (\`renders\` in scripts/site.ts). */}`,
-    // The cap lifts at a breakpoint, which an inline style cannot say: a style element, on the strip's attribute.
-    '<style>{`@media (min-width: 80rem) { [data-renders] { max-width: none } }`}</style>',
     `<div data-renders="" style={{ overflowX: 'auto', paddingBottom: '0.5rem', marginTop: '1.5rem' }}>`,
+    // The cap lifts at a breakpoint, which an inline style cannot say: a style element, on the strip's attribute.
+    // Inside the strip, not beside it: `.post-container > *` makes every direct child of the article a block, a
+    // style element included, and its text would show on the page.
+    '<style>{`@media (min-width: 80rem) { [data-renders] { max-width: none } }`}</style>',
     // `width: max-content; margin-inline: auto`, not `justify-content: center`: it would hide the left of an overflowing row.
     `<div style={{ display: 'flex', gap: '1rem', width: 'max-content', marginInline: 'auto' }}>`,
     ...views,
