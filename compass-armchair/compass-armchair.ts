@@ -7,7 +7,7 @@
 // seam. The seat frame's side rails take the boards on loose tenons, its cross rails are dovetailed through them.
 // The curved back hangs between the armrests: two leaning posts, each on one loose tenon into its armrest, and two
 // arched rails dovetailed through the posts. The cane is sheet cane pressed into a groove around each opening and
-// held there by a glued rattan spline; it is flat, the weave is not modelled. The boards' outside arrises are
+// held there by a glued rattan spline; it is flat, the weave is not modelled. Every exposed arris of the wood is
 // rounded (EDGE_BREAK, the armrest's nose ARM_NOSE_R), by hand on the cut parts: the CAM files are cut square.
 // The chair faces -Y, x = 0 is its middle, the floor is z = 0; +x is the sitter's left.
 //
@@ -358,7 +358,12 @@ async function fillet(api: Api, part: number, name: string, edges: number[], rad
   }
 }
 
-/** Every edge but those on a face of `sharp`, and those along both faces of a pair of `sharpPairs`. */
+/**
+ * Every edge but those on a face of `sharp`, and those along both faces of a pair of `sharpPairs`. EDGE_BREAK is the
+ * one break of every exposed arris, an arris along a flush joint included (a small V at the joint, as on the chair):
+ * sharp are only the edges no one sees or touches once assembled, between two faces glued over their whole extent, in
+ * an inside corner, along a dovetail's joint line, or under the cane's lap.
+ */
 const allBut =
   (sharp: string[], sharpPairs: [string, string][] = []) =>
   (faces: string[]) =>
@@ -587,35 +592,36 @@ const cane = (band: Band, panel: Builder): Builder => async (api, part, value) =
   return union(api, part, 'Cane', sheet, [await panel(api, part, value)])
 }
 
-// The armrest: the nose's four edges rounded at ARM_NOSE_R, then the other arrises at EDGE_BREAK but the underside's,
-// glued onto the boards. The engine takes one radius per fillet.
+// The armrest: the nose's four edges rounded at ARM_NOSE_R, then every other arris at EDGE_BREAK, the underside's too:
+// free before and behind the boards, flush with them over their tops. The engine takes one radius per fillet.
 const ARMREST_ROUNDS: Rounds[] = [
   ['ARM_NOSE_R', (faces) => faces.includes('LengthMin')],
-  ['EDGE_BREAK', allBut(['LengthMin', 'Underside'])],
+  ['EDGE_BREAK', allBut(['LengthMin'])],
 ]
 
 /** One side's boards, its +x side as written, the other mirrored. */
 function side(s: 'Left' | 'Right'): Record<string, Builder> {
   const m = (planes: HalfSpace[]) => (s === 'Left' ? planes : mirror(planes))
-  // Every board's arrises are rounded before its joints are cut, but on its faces glued over their whole extent.
+  // Every board's arrises are rounded before its joints are cut (`allBut`).
   return {
-    // Square on the seam and on the top under the armrest; its half of the spline's slot, the side rail's tenon's
-    // mortise.
+    // Rounded along the seam and under the armrest too, flush with the other board and the armrest: but between the
+    // seam and the top (both glued), and the top's arris on the board's edge, in the inside corner under the armrest,
+    // which runs on past it. Its half of the spline's slot, the side rail's tenon's mortise.
     [`FrontLeg${s}`]: async (api, part, value) =>
-      subtract(api, part, 'SplineAndTenon', await roundedBoard(api, part, value, 'Leg', m(FRONT_LEG), [['EDGE_BREAK', allBut(['Seam', 'UnderArm'])]]), [
+      subtract(api, part, 'SplineAndTenon', await roundedBoard(api, part, value, 'Leg', m(FRONT_LEG), [['EDGE_BREAK', allBut([], [['Seam', 'UnderArm'], ['UnderArm', 'Front']])]]), [
         await board(api, part, 'Spline', m(SPLINE)),
         await board(api, part, 'Tenon', m(railTenon('-$TENON_Y'))),
       ]),
     [`RearLeg${s}`]: async (api, part, value) =>
-      subtract(api, part, 'SplineAndTenon', await roundedBoard(api, part, value, 'Leg', m(REAR_LEG), [['EDGE_BREAK', allBut(['Seam', 'UnderArm'])]]), [
+      subtract(api, part, 'SplineAndTenon', await roundedBoard(api, part, value, 'Leg', m(REAR_LEG), [['EDGE_BREAK', allBut([], [['Seam', 'UnderArm'], ['UnderArm', 'Back']])]]), [
         await board(api, part, 'Spline', m(SPLINE)),
         await board(api, part, 'Tenon', m(railTenon('$TENON_Y'))),
       ]),
     [`Spline${s}`]: (api, part) => board(api, part, 'Spline', m(SPLINE)),
-    // Square on its inner face (the cane laps its top arris, its ends lie in the dovetails); the tenons' mortises,
-    // its pins (what the tails leave), the cane's groove.
+    // Rounded but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; the
+    // tenons' mortises, its pins (what the tails leave), the cane's groove.
     [`SideRail${s}`]: async (api, part, value) =>
-      subtract(api, part, 'MortisesSocketsAndGroove', await roundedBoard(api, part, value, 'Rail', m(SIDE_RAIL), [['EDGE_BREAK', allBut(['ThickMin'])]]), [
+      subtract(api, part, 'MortisesSocketsAndGroove', await roundedBoard(api, part, value, 'Rail', m(SIDE_RAIL), [['EDGE_BREAK', allBut([], [['ThickMin', 'HighMax'], ['ThickMin', 'LongMin'], ['ThickMin', 'LongMax']])]]), [
         await board(api, part, 'FrontTenon', m(railTenon('-$TENON_Y'))),
         await board(api, part, 'RearTenon', m(railTenon('$TENON_Y'))),
         await seatTails(api, part, 'FrontTails', m(seatTail(...FRONT_RAIL_Y))),
@@ -630,10 +636,11 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
         await board(api, part, 'Spline', m(SPLINE)),
         await board(api, part, 'Tenon', m(tilt(ARM_TENON))),
       ]),
-    // Square on its inner face (the rails' ends are glued to it, the cane laps its front arris); its ends cut into
-    // sockets by the rails' tails, the tenon's mortise, the cane's groove.
+    // Rounded but its front inner arris (the cane laps it, the rails' fronts are flush with it at their dovetails): its
+    // inner face's rear arris shows in the opening and behind the rails, its ends' are flush with the rails' tops and
+    // bottoms. Its ends cut into sockets by the rails' tails, the tenon's mortise, the cane's groove.
     [`BackPost${s}`]: async (api, part, value) =>
-      subtract(api, part, 'SocketsMortiseAndGroove', await roundedBoard(api, part, value, 'Post', m(POST), [['EDGE_BREAK', allBut(['AcrossMin'])]], true), [
+      subtract(api, part, 'SocketsMortiseAndGroove', await roundedBoard(api, part, value, 'Post', m(POST), [['EDGE_BREAK', allBut([], [['AcrossMin', 'DeepMin']])]], true), [
         await board(api, part, 'LowTail', m(tilt(backTail(BACK_RAILS[0])))),
         await board(api, part, 'HighTail', m(tilt(backTail(BACK_RAILS[1])))),
         await board(api, part, 'Tenon', m(tilt(ARM_TENON))),

@@ -195,8 +195,14 @@ function round(part: Part, planes: Planes, radius: (faces: string[]) => number |
   return edges.length ? part.fillet(edges, radii) : part
 }
 
-/** Every straight edge broken at EDGE_BREAK, but those on a face of `sharp`. */
-const breakAllBut = (d: Dims, sharp: string[]) => (faces: string[]) => (faces.some((face) => sharp.includes(face)) ? undefined : d.EDGE_BREAK)
+/**
+ * Every straight edge broken at EDGE_BREAK, but those along both faces of a pair of `sharp`: EDGE_BREAK is the one
+ * break of every exposed arris, an arris along a flush joint included (a small V at the joint, as on the chair). Sharp
+ * are only the edges no one sees or touches once assembled: between two faces glued over their whole extent, in an
+ * inside corner, along a dovetail's joint line, or under the cane's lap.
+ */
+const breakAllBut = (d: Dims, sharp: [string, string][]) => (faces: string[]) =>
+  sharp.some(([a, b]) => faces.includes(a) && faces.includes(b)) ? undefined : d.EDGE_BREAK
 
 /**
  * The cane groove's outlines, in the plane of a frame: a rectangle around the opening (u from -halfU to halfU, v from
@@ -290,13 +296,15 @@ function armTenon(d: Dims): Part {
 }
 
 /**
- * In the back's frame: the +x post, its arrises broken but on its inner face (the rails' ends are glued to it, the cane
- * laps its front arris), its ends cut into sockets by the rails' tails, the tenon's mortise, the cane's groove.
+ * In the back's frame: the +x post, its arrises broken but its front inner one (the cane laps it, the rails' fronts
+ * are flush with it at their dovetails), its ends cut into sockets by the rails' tails, the tenon's mortise, the
+ * cane's groove. Its inner face's other arrises are broken: its rear one shows in the opening and behind the rails,
+ * its ends' at the rails' tops and bottoms, flush with them.
  */
 function backPost(d: Dims, rails: Span[], groove: Part): Part {
   const post = Box(d.POST_W, d.POST_D, rails[1][1] - rails[0][0], { align: [Align.MIN, Align.CENTER, Align.MIN] })
   const stock = post.translate(d.X_POST, 0, rails[0][0])
-  return round(stock, boxPlanes(stock), breakAllBut(d, ['-x']))
+  return round(stock, boxPlanes(stock), breakAllBut(d, [['-x', '-y']]))
     .cut(rails.map(([z0, z1]) => backTail(d, z0, z1)))
     .cut(armTenon(d), groove)
 }
@@ -395,28 +403,29 @@ function model(d: Dims): Named[] {
       align: [Align.MIN, Align.CENTER, Align.CENTER],
     }).translate(d.X_BOARD - d.TENON_IN_RAIL, y, d.Z_TENON),
   )
-  // Every board's arrises are broken before its joints are cut, but on its faces glued over their whole extent: here
-  // the seam (side 2) and the top under the armrest (side 3). Its half of the spline's slot, the side rail's tenon's
-  // mortise.
-  const leg = (profile: Point[]) =>
-    round(sidePrism(profile, d.X_BOARD, d.LEG_T), prismPlanes(profile, d.X_BOARD, d.LEG_T), breakAllBut(d, ['2', '3']))
-  const front = leg(frontLeg).cut(spline, tenons[0])
-  const rear = leg(rearLeg).cut(spline, tenons[1])
-  // Broken but on its inner face (the cane laps its top arris, its ends lie in the dovetails); the tenons' mortises,
-  // its pins (what the tails leave), the cane's groove.
+  // Every board's arrises are broken before its joints are cut, those along the seam and under the armrest included,
+  // flush with the other board and the armrest: but the one between the seam and the top (both glued), and the top's
+  // one on the board's edge, in the inside corner under the armrest, which runs on past it. Its half of the spline's
+  // slot, the side rail's tenon's mortise.
+  const leg = (profile: Point[], sharp: [string, string][]) =>
+    round(sidePrism(profile, d.X_BOARD, d.LEG_T), prismPlanes(profile, d.X_BOARD, d.LEG_T), breakAllBut(d, sharp))
+  const front = leg(frontLeg, [['2', '3'], ['3', '4']]).cut(spline, tenons[0]) // seam 2, top 3, front edge 4
+  const rear = leg(rearLeg, [['3', '2'], ['2', '1']]).cut(spline, tenons[1]) // seam 3, top 2, rear edge 1
+  // Broken but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; the
+  // tenons' mortises, its pins (what the tails leave), the cane's groove.
   const stock = Box(d.RAIL_T, d.SEAT_BACK - d.SEAT_FRONT, d.RAIL_H, { align: [Align.MAX, Align.MIN, Align.MAX] }).translate(
     d.X_BOARD,
     d.SEAT_FRONT,
     d.SEAT_TOP,
   )
-  const rail = round(stock, boxPlanes(stock), breakAllBut(d, ['-x']))
+  const rail = round(stock, boxPlanes(stock), breakAllBut(d, [['-x', '+z'], ['-x', '-y'], ['-x', '+y']]))
     .cut(tenons)
     .cut(frontTails, rearTails)
     .cut(seat.groove)
   const loose = tilt(d, armTenon(d))
-  // The nose's four edges (side 0) rounded at ARM_NOSE_R, the other arrises broken but the underside's (side 3), glued
-  // onto the boards; the spline's and the tenon's mortises.
-  const nose = (faces: string[]) => (faces.includes('0') ? d.ARM_NOSE_R : faces.includes('3') ? undefined : d.EDGE_BREAK)
+  // The nose's four edges (side 0) rounded at ARM_NOSE_R, every other arris broken: the underside's (side 3) too, free
+  // before and behind the boards and flush with them over their tops; the spline's and the tenon's mortises.
+  const nose = (faces: string[]) => (faces.includes('0') ? d.ARM_NOSE_R : d.EDGE_BREAK)
   const arm = round(sidePrism(armProfile, d.X_BOARD, d.LEG_T), prismPlanes(armProfile, d.X_BOARD, d.LEG_T), nose).cut(spline, loose)
   const side: Named[] = [
     { part: front, name: 'front leg' },
