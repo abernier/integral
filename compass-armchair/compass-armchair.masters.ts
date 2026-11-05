@@ -35,7 +35,8 @@ export const MASTERS = {
   CANE_T: { value: 8, min: 6, max: 10, step: 0.5, hint: 'Thickness of the cane panels' },
   CANE_SHEET: { value: 2, min: 1.5, max: 3, step: 0.5, hint: 'Thickness of the sheet cane where it laps the frame into its groove' },
   GROOVE_W: { value: 6, min: 5, max: 8, step: 0.5, hint: 'Width of the cane groove around each opening' },
-  // At most RAIL_H - TENON_H at every corner of the box (55 - 44): the side rail tenons sit in the wood under it.
+  // The side rail tenons sit in the wood under it, with a wall of at least 2.5 mm above and below: GROOVE_D + TENON_H
+  // at most RAIL_H - 2 x 2.5 at every corner of the box (55 - 2 x 2.5 = 10 + 40).
   GROOVE_D: { value: 10, min: 6, max: 10, step: 0.5, hint: 'Depth of the cane groove' },
   GROOVE_INSET: { value: 10, min: 8, max: 12, step: 0.5, hint: "The cane groove's middle, out from the opening's edge" },
   GROOVE_R: { value: 15, min: 10, max: 16, step: 0.5, hint: "Radius of the cane groove's corners, on its middle" },
@@ -45,7 +46,8 @@ export const MASTERS = {
   REAR_RAIL_T: { value: 40, min: 36, max: 44, step: 1, hint: 'Thickness of the rear cross rail' },
   TENON_LEN: { value: 20, min: 16, max: 24, step: 1, hint: 'How far a side rail tenon goes into the board' },
   TENON_T: { value: 10, min: 8, max: 12, step: 1, hint: 'Side rail tenon thickness' },
-  TENON_H: { value: 40, min: 34, max: 44, step: 1, hint: 'Side rail tenon height' },
+  // Bound with GROOVE_D by RAIL_H: see the cane groove above.
+  TENON_H: { value: 40, min: 34, max: 40, step: 1, hint: 'Side rail tenon height' },
   TENON_Y: { value: 55, min: 50, max: 60, step: 1, hint: 'Distance of the side rail tenons from the seam' },
   TENON_IN_RAIL: { value: 15, min: 12, max: 18, step: 1, hint: 'How far a side rail tenon goes into the rail' },
   BACK_TILT: { main: true, value: 15, min: 10, max: 20, step: 0.5, hint: 'Lean of the back, degrees' },
