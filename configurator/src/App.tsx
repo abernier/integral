@@ -1,7 +1,7 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
-import { type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Component, type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { CameraControls, CameraControlsImpl, Stage } from '@react-three/drei'
+import { CameraControls, CameraControlsImpl, Environment, Stage } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
 import { Sphere, Spherical, Vector3 } from 'three'
@@ -249,10 +249,13 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
           Its spot and fill lights decay over the part's millimetres to nearly nothing: the environment lights it. Stage
           centers the first shape only (Center's `cacheKey`): later ones keep its offset, so the floor stays put.
           `apartment`: a soft light from all around, that keeps the woods' colors where `city` and `studio` wash out the
-          faces turned up. drei's presets load from a CDN (raw.githack.com). Contact shadows: no shadow maps to set up. */}
-      <Stage adjustCamera={false} environment="apartment" shadows="contact" center={{ onCentered: ({ height }) => setHeight(height) }}>
+          faces turned up. drei's presets load from a CDN (raw.githack.com): the environment is loaded beside Stage, in
+          its own boundary, the plain lights standing in while it loads or if it cannot. Contact shadows: no shadow maps
+          to set up. */}
+      <Stage adjustCamera={false} environment={null} shadows="contact" center={{ onCentered: ({ height }) => setHeight(height) }}>
         <primitive object={shape} />
       </Stage>
+      <Lighting />
       {/* A millimetre under the floor: out of reach of the contact shadow's camera, which would darken the plane with its lines. */}
       <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} position-y={-height / 2 - 1} />
       {/* A pan slides the picture (the focal offset), not the orbit's center: that stays on the shape. */}
@@ -266,6 +269,39 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
       />
     </>
   )
+}
+
+/**
+ * The `apartment` environment that lights the shape. It loads from a CDN: until it is there, and for good if it cannot be
+ * fetched, plain lights stand in, so that the shape is never left unlit and a failed fetch does not unmount the page.
+ */
+function Lighting() {
+  const fallback = (
+    <>
+      <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
+      <directionalLight position={[300, 600, 400]} intensity={2.4} />
+    </>
+  )
+  return (
+    <LoadError fallback={fallback}>
+      <Suspense fallback={fallback}>
+        <Environment preset="apartment" />
+      </Suspense>
+    </LoadError>
+  )
+}
+
+/** Renders `fallback` instead of its children once they have thrown. */
+class LoadError extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
 }
 
 /** The build's error, once it is done; nothing when it went well. */
