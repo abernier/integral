@@ -195,9 +195,10 @@ function round(part: Part, planes: Planes, radius: (faces: string[]) => number |
 
 /**
  * Every straight edge broken at EDGE_BREAK, but those along both faces of a pair of `sharp`: EDGE_BREAK is the one
- * break of every exposed arris, an arris along a flush joint included (a small V at the joint, as on the chair). Sharp
- * are only the edges no one sees or touches once assembled: between two faces glued over their whole extent, in an
- * inside corner, along a dovetail's joint line, or under the cane's lap.
+ * break of the assembled chair's outside arrises, as if broken after glue-up and flush-planing, continuous across its
+ * members. Sharp are the edges along a flush glued seam, on both members (the joint one surface but for a hairline, no
+ * V), and those no one sees or touches once assembled: between two faces glued over their whole extent, in an inside
+ * corner, along a dovetail's joint line, or under the cane's lap.
  */
 const breakAllBut = (d: Dims, sharp: [string, string][]) => (faces: string[]) =>
   sharp.some(([a, b]) => faces.includes(a) && faces.includes(b)) ? undefined : d.EDGE_BREAK
@@ -424,14 +425,16 @@ function model(d: Dims): Named[] {
       align: [Align.MIN, Align.CENTER, Align.CENTER],
     }).translate(d.X_BOARD - d.TENON_IN_RAIL, y, d.Z_TENON),
   )
-  // Every board's arrises are broken before its joints are cut, those along the seam and under the armrest included,
-  // flush with the other board and the armrest: but the one between the seam and the top (both glued), and the top's
-  // one on the board's edge, in the inside corner under the armrest, which runs on past it. Its half of the spline's
-  // slot, the side rail's tenon's mortise.
-  const leg = (profile: Point[], sharp: [string, string][]) =>
-    round(sidePrism(profile, d.X_BOARD, d.LEG_T), prismPlanes(profile, d.X_BOARD, d.LEG_T), breakAllBut(d, sharp))
-  const front = leg(frontLeg, [['2', '3'], ['3', '4']]).cut(spline, tenons[0]) // seam 2, top 3, front edge 4
-  const rear = leg(rearLeg, [['3', '2'], ['2', '1']]).cut(spline, tenons[1]) // seam 3, top 2, rear edge 1
+  // Every board's arrises are broken before its joints are cut, but those on the seam and on the top: both glued flush
+  // over their whole extent, to the other board and under the armrest, the joint one surface but for a hairline (the
+  // seam's at the notch too, in the arch's inside corner). Its half of the spline's slot, the side rail's tenon's
+  // mortise.
+  const leg = (profile: Point[], seam: string, top: string) =>
+    round(sidePrism(profile, d.X_BOARD, d.LEG_T), prismPlanes(profile, d.X_BOARD, d.LEG_T), (faces) =>
+      faces.includes(seam) || faces.includes(top) ? undefined : d.EDGE_BREAK,
+    )
+  const front = leg(frontLeg, '2', '3').cut(spline, tenons[0])
+  const rear = leg(rearLeg, '3', '2').cut(spline, tenons[1])
   // Broken but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; its inner
   // face's bottom arris only between the cross rails, in the opening: under them it is flush with their bottoms, and a
   // round there would be a notch in their continuous round across the seat's front and back. The tenons' mortises,
@@ -453,10 +456,32 @@ function model(d: Dims): Named[] {
     .cut(frontTails, rearTails)
     .cut(seat.groove)
   const loose = tilt(d, armTenon(d))
-  // The nose's four edges (side 0) rounded at ARM_NOSE_R, every other arris broken: the underside's (side 3) too, free
-  // before and behind the boards and flush with them over their tops; the spline's and the tenon's mortises.
-  const nose = (faces: string[]) => (faces.includes('0') ? d.ARM_NOSE_R : d.EDGE_BREAK)
-  const arm = round(sidePrism(armProfile, d.X_BOARD, d.LEG_T), prismPlanes(armProfile, d.X_BOARD, d.LEG_T), nose).cut(spline, loose)
+  // The nose's four edges (side 0) rounded at ARM_NOSE_R, every other arris broken, but the underside's over the
+  // boards' tops, glued flush on them (sharp on the boards' too): before and behind the boards they are broken and run
+  // on into the round of the boards' edges. Made in three lengths, each rounded, then fused: before the boards, over
+  // them, behind them; the faces between two lengths, inside the armrest, sharp. The spline's and the tenon's mortises.
+  const armLength = (y0: number, y1: number, nose: boolean, end: boolean, glued: boolean) => {
+    const profile: Point[] = [
+      [y0, underside(d, y0)],
+      [y0, d.ARM_TOP],
+      [y1, d.ARM_TOP],
+      [y1, underside(d, y1)],
+    ]
+    const radius = (faces: string[]) => {
+      if (faces.includes('0')) return nose ? d.ARM_NOSE_R : undefined
+      if (faces.includes('2')) return end ? d.EDGE_BREAK : undefined
+      return faces.includes('3') && glued ? undefined : d.EDGE_BREAK
+    }
+    return round(sidePrism(profile, d.X_BOARD, d.LEG_T), prismPlanes(profile, d.X_BOARD, d.LEG_T), radius)
+  }
+  // Without EDGE_BREAK, one length: its nose's rounds alone.
+  const armStock = d.EDGE_BREAK
+    ? armLength(d.ARM_FRONT, d.ARM_EDGE_FRONT, true, false, false).fuse(
+        armLength(d.ARM_EDGE_FRONT, d.ARM_EDGE_REAR, false, false, true),
+        armLength(d.ARM_EDGE_REAR, d.ARM_END, false, true, false),
+      )
+    : armLength(d.ARM_FRONT, d.ARM_END, true, true, false)
+  const arm = armStock.cut(spline, loose)
   const side: Named[] = [
     { part: front, name: 'front leg' },
     { part: rear, name: 'rear leg' },
