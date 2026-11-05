@@ -409,6 +409,26 @@ async function column(api: Api, part: number, name: string, frame: Frame, at: Ve
   return created(api.v1.part.cylinder({ id: part, name, references: [base], diameter: expr(`2*${radius}`), height: expr(height) }))
 }
 
+// The frame the seat's side rails' arrises run along: u = x, v = z, w = -y; turned by 90 degrees about x, a work
+// coordinate system's z lies along -y, its y along z.
+const ALONG_Y_FRAME: Frame = { rotation: expr('[C:PI/2, 0, 0]'), at: ([u, v, w]) => [u, `-(${w})`, v] }
+
+/**
+ * The wood a round of EDGE_BREAK takes off a square arris, in a frame along its w from w0 to w1: the EDGE_BREAK square
+ * in the corner (u, v), the faces running on toward `toward` (+1 or -1 along u and v), less the round's cylinder.
+ * Null when EDGE_BREAK is 0: no round, nothing to take off.
+ */
+async function arrisSliver(api: Api, part: number, value: Value, name: string, frame: Frame, [u, v]: [string, string], toward: [number, number], [w0, w1]: [string, string]) {
+  if (value('$EDGE_BREAK') === 0) return null
+  const [su, sv] = toward.map((sign) => (sign > 0 ? '+' : '-'))
+  const min: Vec = [toward[0] > 0 ? u : `(${u}) - $EDGE_BREAK`, toward[1] > 0 ? v : `(${v}) - $EDGE_BREAK`, w0]
+  const square = await block(api, part, `${name}Square`, frame, min, ['$EDGE_BREAK', '$EDGE_BREAK', `(${w1}) - (${w0})`])
+  // Longer than the square, so that no two faces of the subtraction lie on one plane.
+  const axis: Vec = [`(${u}) ${su} $EDGE_BREAK`, `(${v}) ${sv} $EDGE_BREAK`, `(${w0}) - 1`]
+  const round = await column(api, part, `${name}Round`, frame, axis, '$EDGE_BREAK', `(${w1}) - (${w0}) + 2`)
+  return subtract(api, part, name, square, [round])
+}
+
 /**
  * A board, its arrises rounded before its joints are cut: the edges to round are told apart by the half-spaces the
  * board is cut by (`planes`, in the back's frame when `upright`), so they follow the masters.
@@ -491,6 +511,8 @@ async function roundRing(api: Api, part: number, value: Value, name: string, bod
   return fillet(api, part, `${name}Round`, edges.map(({ id }) => id), 'EDGE_BREAK')
 }
 
+/** The bodies of `bodies` that were made: an optional tool left out. */
+const present = (...bodies: (number | null)[]) => bodies.filter((body) => body !== null)
 const union = (api: Api, part: number, name: string, target: number, tools: number[]) =>
   created(api.v1.part.boolean({ id: part, name, type: 'UNION', target, tools }))
 const subtract = (api: Api, part: number, name: string, target: number, tools: number[]) =>
@@ -603,6 +625,9 @@ const ARMREST_ROUNDS: Rounds[] = [
 /** One side's boards, its +x side as written, the other mirrored. */
 function side(s: 'Left' | 'Right'): Record<string, Builder> {
   const m = (planes: HalfSpace[]) => (s === 'Left' ? planes : mirror(planes))
+  // A point's x on this side, and the sign of +x on it.
+  const x = (value: string) => (s === 'Left' ? value : `-(${value})`)
+  const sx = s === 'Left' ? 1 : -1
   // Every board's arrises are rounded before its joints are cut (`allBut`).
   return {
     // Rounded along the seam and under the armrest too, flush with the other board and the armrest: but between the
@@ -619,10 +644,13 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
         await board(api, part, 'Tenon', m(railTenon('$TENON_Y'))),
       ]),
     [`Spline${s}`]: (api, part) => board(api, part, 'Spline', m(SPLINE)),
-    // Rounded but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; the
+    // Rounded but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; its
+    // inner face's bottom arris only between the cross rails, in the opening (`arrisSliver`): under them it is flush with
+    // their bottoms, and a round there would be a notch in their continuous round across the seat's front and back. The
     // tenons' mortises, its pins (what the tails leave), the cane's groove.
     [`SideRail${s}`]: async (api, part, value) =>
-      subtract(api, part, 'MortisesSocketsAndGroove', await roundedBoard(api, part, value, 'Rail', m(SIDE_RAIL), [['EDGE_BREAK', allBut([], [['ThickMin', 'HighMax'], ['ThickMin', 'LongMin'], ['ThickMin', 'LongMax']])]]), [
+      subtract(api, part, 'MortisesSocketsAndGroove', await roundedBoard(api, part, value, 'Rail', m(SIDE_RAIL), [['EDGE_BREAK', allBut([], [['ThickMin', 'HighMax'], ['ThickMin', 'HighMin'], ['ThickMin', 'LongMin'], ['ThickMin', 'LongMax']])]]), [
+        ...present(await arrisSliver(api, part, value, 'Opening', ALONG_Y_FRAME, [x('$X_RAIL'), '$SEAT_TOP - $RAIL_H'], [sx, 1], ['-$REAR_RAIL_Y', '-$CANE_FRONT'])),
         await board(api, part, 'FrontTenon', m(railTenon('-$TENON_Y'))),
         await board(api, part, 'RearTenon', m(railTenon('$TENON_Y'))),
         await seatTails(api, part, 'FrontTails', m(seatTail(...FRONT_RAIL_Y))),
@@ -637,12 +665,15 @@ function side(s: 'Left' | 'Right'): Record<string, Builder> {
         await board(api, part, 'Spline', m(SPLINE)),
         await board(api, part, 'Tenon', m(tilt(ARM_TENON))),
       ]),
-    // Rounded but its front inner arris (the cane laps it, the rails' fronts are flush with it at their dovetails): its
-    // inner face's rear arris shows in the opening and is flush with the rails' rear faces at their joints, its ends'
-    // with the rails' tops and bottoms. Its ends cut into sockets by the rails' tails, the tenon's mortise, the cane's
-    // groove.
+    // Its arrises rounded as if after glue-up. Sharp are its front inner arris (the cane laps it, the rails' fronts are
+    // flush with it at their dovetails) and its inner face's arrises where the rails' ends cover it: its ends' (flush
+    // with the rails' tops and bottoms, the rails as deep as the post there) and its rear one over the rails' height
+    // (flush with their rear faces); a round there would be a notch in the rail's continuous round. Its rear one
+    // between the rails, in the opening, is rounded (`arrisSliver`): the round runs from rail to rail. Its ends cut
+    // into sockets by the rails' tails, the tenon's mortise, the cane's groove.
     [`BackPost${s}`]: async (api, part, value) =>
-      subtract(api, part, 'SocketsMortiseAndGroove', await roundedBoard(api, part, value, 'Post', m(POST), [['EDGE_BREAK', allBut([], [['AcrossMin', 'DeepMin']])]], true), [
+      subtract(api, part, 'SocketsMortiseAndGroove', await roundedBoard(api, part, value, 'Post', m(POST), [['EDGE_BREAK', allBut([], [['AcrossMin', 'DeepMin'], ['AcrossMin', 'DeepMax'], ['AcrossMin', 'LongMin'], ['AcrossMin', 'LongMax']])]], true), [
+        ...present(await arrisSliver(api, part, value, 'Opening', UPRIGHT_FRAME, [x('$X_POST'), '$POST_D/2'], [sx, -1], ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM'])),
         await board(api, part, 'LowTail', m(tilt(backTail(BACK_RAILS[0])))),
         await board(api, part, 'HighTail', m(tilt(backTail(BACK_RAILS[1])))),
         await board(api, part, 'Tenon', m(tilt(ARM_TENON))),
@@ -669,13 +700,19 @@ const crossRailBuilder = (y: readonly [string, string], lapped: string, outside:
 /**
  * A back rail: an arc between the posts' inner faces, its arcs rounded but the front one on the opening's side
  * (`lapped`, z0 or z1), which the cane laps (its ends are glued), its ends cut into tails through the posts, the
- * cane's groove in its front face.
+ * cane's groove in its front face. Each tail's end through the post is rounded as the post's own arris there, at the
+ * post's end (`end`: the low rail's bottom, the high rail's top): the post's round runs on across the tail, which
+ * would stand proud of it square.
  */
-const backRailBuilder = (z: readonly [string, string], lapped: string): Builder => async (api, part, value) => {
+const backRailBuilder = (z: readonly [string, string], lapped: string, end: 'HighMin' | 'HighMax'): Builder => async (api, part, value) => {
   const whole = await roundRing(api, part, value, 'Rail', await ring(api, part, 'Rail', '$R_OUT', '$R_IN', z), lapped)
+  const tail = async (name: string, planes: HalfSpace[]) =>
+    round(api, part, value, name, await board(api, part, name, planes), planes, [
+      ['EDGE_BREAK', (faces) => faces.includes('ThroughMax') && faces.includes(end)],
+    ])
   const rail = await union(api, part, 'Tails', await cut(api, part, 'Rail', whole, tilt(BETWEEN_POSTS)), [
-    await board(api, part, 'TailLeft', tilt(backTail(z))),
-    await board(api, part, 'TailRight', mirror(tilt(backTail(z)))),
+    await tail('TailLeft', tilt(backTail(z))),
+    await tail('TailRight', mirror(tilt(backTail(z)))),
   ])
   return subtract(api, part, 'Groove', rail, [await backGroove(api, part)])
 }
@@ -689,8 +726,8 @@ const BOARDS: Record<string, Builder> = {
   SeatCaneSpline: spline(seatBand),
   // The seat's panel in its opening, just under the rails' top, and up into the cane's sheet on it (`cane`).
   SeatCane: cane(seatBand, (api, part) => board(api, part, 'Cane', SEAT_CANE)),
-  LowBackRail: backRailBuilder(BACK_RAILS[0], BACK_RAILS[0][1]),
-  HighBackRail: backRailBuilder(BACK_RAILS[1], BACK_RAILS[1][0]),
+  LowBackRail: backRailBuilder(BACK_RAILS[0], BACK_RAILS[0][1], 'HighMin'),
+  HighBackRail: backRailBuilder(BACK_RAILS[1], BACK_RAILS[1][0], 'HighMax'),
   BackCaneSpline: spline(backBand),
   // The back's panel in its opening, just behind its front, and up into the cane's sheet on it (`cane`).
   BackCane: cane(backBand, (api, part) => arc(api, part, 'Cane', '$R_IN + $CANE_T', '$R_IN - $CANE_SHEET/2', ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM'])),

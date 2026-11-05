@@ -295,15 +295,31 @@ function armTenon(d: Dims): Part {
 }
 
 /**
- * In the back's frame: the +x post, its arrises broken but its front inner one (the cane laps it, the rails' fronts
- * are flush with it at their dovetails), its ends cut into sockets by the rails' tails, the tenon's mortise, the
- * cane's groove. Its inner face's other arrises are broken: its rear one shows in the opening and is flush with the
- * rails' rear faces at their joints, its ends' with the rails' tops and bottoms.
+ * The wood a round of radius r takes off a square arris, in the plane square to it: the r x r square in the corner
+ * at `corner`, the faces running on toward `toward` (+1 or -1 along each axis), less the round's circle.
+ */
+function arrisSliver(r: number, [u, v]: Point, [su, sv]: Point): Sketch {
+  return Rectangle(r, r)
+    .translate(u + (su * r) / 2, v + (sv * r) / 2, 0)
+    .cut(Circle(r).translate(u + su * r, v + sv * r, 0))
+}
+
+/**
+ * In the back's frame: the +x post, its arrises broken as if after glue-up, then its ends cut into sockets by the
+ * rails' tails, the tenon's mortise, the cane's groove. Sharp are its front inner arris (the cane laps it, the rails'
+ * fronts are flush with it at their dovetails) and its inner face's arrises where the rails' ends cover it: its ends'
+ * (flush with the rails' tops and bottoms, the rails as deep as the post there) and its rear one over the rails'
+ * height (flush with their rear faces); a round there would be a notch in the rail's continuous round. Its rear one
+ * between the rails, in the opening, is broken: the round runs from rail to rail.
  */
 function backPost(d: Dims, rails: Span[], groove: Part): Part {
   const post = Box(d.POST_W, d.POST_D, rails[1][1] - rails[0][0], { align: [Align.MIN, Align.CENTER, Align.MIN] })
   const stock = post.translate(d.X_POST, 0, rails[0][0])
-  return round(stock, boxPlanes(stock), breakAllBut(d, [['-x', '-y']]))
+  const glued: [string, string][] = [['-x', '-y'], ['-x', '+y'], ['-x', '-z'], ['-x', '+z']]
+  const rounded = round(stock, boxPlanes(stock), breakAllBut(d, glued))
+  const opening = () =>
+    arrisSliver(d.EDGE_BREAK, [d.X_POST, d.POST_D / 2], [1, -1]).extrude(rails[1][0] - rails[0][1]).translate(0, 0, rails[0][1])
+  return (d.EDGE_BREAK ? rounded.cut(opening()) : rounded)
     .cut(rails.map(([z0, z1]) => backTail(d, z0, z1)))
     .cut(armTenon(d), groove)
 }
@@ -344,7 +360,11 @@ function backRails(d: Dims, rails: Span[], groove: Part): Named[] {
     const rail = rounded.intersect(arcBand(d, d.R_OUT + 1, d.R_IN - 1).extrude(z1 - z0 + 2).translate(0, 0, z0 - 1))
     // The tails reach into the rail: its end face, as deep as the post, flush with its faces, and a tail's base on it
     // make a fuse the kernel fails for some values (W 471, LEG_T 26, POST_W 31, POST_D 41, BOW 9, BACK_TILT 19.5).
-    const tail = backTail(d, z0, z1, 1)
+    // Its end through the post rounded as the post's own arris there, at the post's end (the low rail's bottom, the
+    // high rail's top): the post's round runs on across the tail, which would stand proud of it square.
+    const end = i === 0 ? z0 : z1
+    const tailPlanes: Planes = { end: { at: [d.X_BOARD, 0, end], normal: [0, 0, 1] }, out: { at: [d.X_BOARD, 0, end], normal: [1, 0, 0] } }
+    const tail = round(backTail(d, z0, z1, 1), tailPlanes, (faces) => (faces.length === 2 ? d.EDGE_BREAK : undefined))
     return { part: rail.fuse(tail, tail.mirror(Plane.YZ)).cut(groove), name: 'back rail' }
   })
 }
@@ -412,14 +432,23 @@ function model(d: Dims): Named[] {
     round(sidePrism(profile, d.X_BOARD, d.LEG_T), prismPlanes(profile, d.X_BOARD, d.LEG_T), breakAllBut(d, sharp))
   const front = leg(frontLeg, [['2', '3'], ['3', '4']]).cut(spline, tenons[0]) // seam 2, top 3, front edge 4
   const rear = leg(rearLeg, [['3', '2'], ['2', '1']]).cut(spline, tenons[1]) // seam 3, top 2, rear edge 1
-  // Broken but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; the
-  // tenons' mortises, its pins (what the tails leave), the cane's groove.
+  // Broken but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; its inner
+  // face's bottom arris only between the cross rails, in the opening: under them it is flush with their bottoms, and a
+  // round there would be a notch in their continuous round across the seat's front and back. The tenons' mortises,
+  // its pins (what the tails leave), the cane's groove.
   const stock = Box(d.RAIL_T, d.SEAT_BACK - d.SEAT_FRONT, d.RAIL_H, { align: [Align.MAX, Align.MIN, Align.MAX] }).translate(
     d.X_BOARD,
     d.SEAT_FRONT,
     d.SEAT_TOP,
   )
-  const rail = round(stock, boxPlanes(stock), breakAllBut(d, [['-x', '+z'], ['-x', '-y'], ['-x', '+y']]))
+  const glued: [string, string][] = [['-x', '+z'], ['-x', '-y'], ['-x', '+y'], ['-x', '-z']]
+  const railRounded = round(stock, boxPlanes(stock), breakAllBut(d, glued))
+  const opening = () => {
+    const y0 = d.SEAT_FRONT + d.FRONT_RAIL_T
+    const sliver = arrisSliver(d.EDGE_BREAK, [d.X_RAIL, d.SEAT_TOP - d.RAIL_H], [1, 1]).on(Plane.XZ).extrude(d.SEAT_BACK - d.REAR_RAIL_T - y0)
+    return sliver.translate(0, y0 - sliver.bbox().min.y, 0)
+  }
+  const rail = (d.EDGE_BREAK ? railRounded.cut(opening()) : railRounded)
     .cut(tenons)
     .cut(frontTails, rearTails)
     .cut(seat.groove)
