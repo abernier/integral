@@ -48,7 +48,10 @@ const children = [
   }),
   spawn(bin('next'), ['dev', '-p', String(port)], {
     cwd: app,
-    env: docsEnv({ BASE_PATH: '', MDX_BASEURL: urls.files, NEXT_PUBLIC_URL: urls.site }),
+    // `buildConfigurator` (vite, in this process) set NODE_ENV=production, and `docsEnv` passes the environment on:
+    // Next's dev server must not inherit it (its MDX would take React's production jsx-runtime into a development
+    // React, and every page would answer 500).
+    env: docsEnv({ BASE_PATH: '', MDX_BASEURL: urls.files, NEXT_PUBLIC_URL: urls.site, NODE_ENV: 'development' }),
     stdio: 'inherit',
   }),
 ]
