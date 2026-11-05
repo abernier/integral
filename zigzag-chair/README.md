@@ -2,6 +2,11 @@
 
 Rietveld's 1934 Zig-Zag chair, parametric, in cherry.
 
+![Zigzag chair, three-quarter front](https://abernier.github.io/integral/zigzag-chair/renders/zigzag-chair.three-quarter.webp)
+![Zigzag chair, front](https://abernier.github.io/integral/zigzag-chair/renders/zigzag-chair.front.webp)
+![Zigzag chair, side](https://abernier.github.io/integral/zigzag-chair/renders/zigzag-chair.side.webp)
+![Zigzag chair, three-quarter back](https://abernier.github.io/integral/zigzag-chair/renders/zigzag-chair.back.webp)
+
 <Intro>
 
 Four boards in a Z: seat, slant and base mitred at 45° on glued cleats, the back dovetailed through the seat. Every dimension is a parameter: change one in the model or in Buerligons, the chair rebuilds.

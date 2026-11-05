@@ -10,6 +10,7 @@
     "build": "node scripts/build.ts",
     "build:parts": "node scripts/build.ts --parts-only",
     "cam": "node scripts/cam.ts",
+    "render": "node scripts/render.ts",
     "dev": "node scripts/dev.ts",
     "typecheck": "tsc --noEmit",
     "dev:configurator": "vite --config configurator/vite.config.ts",

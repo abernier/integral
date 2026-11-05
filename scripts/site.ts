@@ -3,7 +3,9 @@
 //
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
 // ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`), and a README.md; `<folder>/references/` holds
-// the images its README's `## References` shows (a strip to scroll sideways, on the site), served beside the built files.
+// the images its README's `## References` shows (a strip to scroll sideways, on the site), `<folder>/renders/` the
+// views `pnpm render` makes of it (render.ts), shown before its Intro (a slider, on the site); both served beside the
+// built files.
 // Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`, or
 // the folder `buildPart` is given (`pnpm cam '<link>'` builds into a temporary one);
 // `buildConfigurator` builds the configurator app into `.docs/configurator/`, and each part's page embeds it. The MDX folder also
@@ -155,10 +157,27 @@ function references(images: string) {
 }
 
 /**
+ * The renders before the Intro (one markdown image per line, as `references`) as a slider: one view wide, the next
+ * peeking in, snapping as the page scrolls it sideways; no script, CSS scroll snap. An MDX comment first, for
+ * whoever copies the page: where the views come from.
+ */
+function renders(part: string, images: string) {
+  const views = [...images.matchAll(/^!\[([^\]]*)\]\((\S+)\)$/gm)].map(
+    ([, alt, src]) => `<img src="${src}" alt="${alt}" style={{ flex: 'none', width: '85%', scrollSnapAlign: 'start', margin: 0, borderRadius: '0.75rem' }} />`,
+  )
+  return [
+    `{/* The renders: \`pnpm render ${part}\` (scripts/render.ts), Blender headless on the built GLB, scripts/render.blender.py holding the studio and the views; the files in ${part}/renders/, the slider made here from the README's image lines (\`renders\` in scripts/site.ts). */}`,
+    `<div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', scrollSnapType: 'x mandatory', scrollbarWidth: 'none', marginTop: '1.5rem' }}>`,
+    ...views,
+    '</div>',
+  ].join('\n')
+}
+
+/**
  * Turn a README into an MDX page: its first heading becomes the title, the line under it the description, links
  * to the site become local ones, and "Edit this page" opens the README on GitHub.
- * A part's page also gets its source, its render as the page's image, the render's tabs (`views`), and its
- * references as a strip (`references`).
+ * A part's page also gets its source, its render as the page's image, the render's tabs (`views`), its renders as a
+ * slider (`renders`), and its references as a strip (`references`).
  */
 function page(readme: string, nav: number, urls: Urls, part?: string) {
   const edit = `https://github.com/abernier/integral/edit/main/${relative(ROOT, readme)}`
@@ -178,7 +197,8 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
   const body = source
     .replace(/^# .+\n+/m, '')
     .replace(description ? `${description}\n` : '', '')
-    .replace(/^!\[([^\]]*)\]\((\S+)\)$/m, (image, alt, src) => (part && src === render ? views(part, alt) : image))
+    .replace(/^!\[([^\]]*)\]\((\S+)\)$/gm, (image, alt, src) => (part && src === render ? views(part, alt) : image))
+    .replace(/^((?:!\[[^\]]*\]\(\S+\)\n)+)(\n<Intro>)/m, (block, images, intro) => (part ? `${renders(part, images)}\n${intro}` : block))
     .replace(/^(## References\n\n)((?:!\[[^\]]*\]\(\S+\)\n)+)/m, (section, heading, images) => (part ? `${heading}${references(images)}\n` : section))
     // The parts table's thumbnails: a fixed size the table can't squeeze, and a small radius (the theme's is 2xl).
     // GitHub reads `width`; the site, the style.
@@ -240,9 +260,11 @@ export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, sha
   mkdirSync(join(MDX, 'things'), { recursive: true })
   parts().forEach((part, i) => {
     writeFileSync(join(MDX, `${partPage(part)}.mdx`), page(join(ROOT, part, 'README.md'), i + 1, urls, part))
-    // The part's reference images (`<part>/references/`), served beside its built files.
-    const references = join(ROOT, part, 'references')
-    if (existsSync(references)) cpSync(references, join(MDX, part, 'references'), { recursive: true })
+    // The part's reference images (`<part>/references/`) and renders (`<part>/renders/`), served beside its built files.
+    for (const folder of ['references', 'renders']) {
+      const files = join(ROOT, part, folder)
+      if (existsSync(files)) cpSync(files, join(MDX, part, folder), { recursive: true })
+    }
   })
   return relative(ROOT, MDX)
 }
