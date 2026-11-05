@@ -4,13 +4,15 @@
 // Next.js dev server on the MDX folder, as its dev.sh does. Like its CLI, it first copies the app out of
 // node_modules (to .pmndrs-docs/dev/): Node refuses to strip the types of a next.config.mts there.
 // A README's, a `docs/*.md`'s or a part's `references/` change rewrites the pages, and the page follows; a part's
-// script change rebuilds that part (about 5 s): reload the page for the new render.
+// script change rebuilds that part (about 5 s): reload the page for the new render. Its CAM STEP is not rebuilt but
+// removed, so `pnpm cam` asks for `nr build:parts` rather than cut the old geometry.
 
 import { spawn } from 'node:child_process'
-import { cpSync, rmSync, watch } from 'node:fs'
+import { cpSync, existsSync, rmSync, watch } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { openEngine } from './classcad.ts'
+import { camStepFile, loadMasters } from './masters.ts'
 import { MDX, ROOT, parts } from './paths.ts'
 import { HOME, buildConfigurator, buildPart, docsEnv, writePages } from './site.ts'
 
@@ -84,6 +86,11 @@ watch(ROOT, { recursive: true }, (_event, file) => {
   } else if (parts().includes(folder) && name === `${folder}.ts`) {
     later(folder, async () => {
       await buildPart(engine, folder)
+      const cam = camStepFile(await loadMasters(folder), join(MDX, folder), folder)
+      if (cam !== join(MDX, folder, `${folder}.step`) && existsSync(cam)) {
+        rmSync(cam)
+        console.log(`${folder}: removed its CAM STEP, now stale; \`nr build:parts\` rebuilds it`)
+      }
     })
   }
 })
