@@ -116,8 +116,8 @@ function derive(p: Masters, variant: Variant) {
 type Point = [number, number]
 type Span = [number, number] // [z0, z1]: a rail's extent along the posts, in the back's frame
 /**
- * What a mesh is, for the configurator's Show folder (`userData.role`): the teak frame, the cane and its splines, what
- * holds the upholstery (cleats, fillets, plywood), the upholstery.
+ * What a mesh is, for the configurator's Show folder (`userData.role`): the teak (the frame, and the leather variant's
+ * cleats and fillets, milled with it), the cane and its splines, the plywood that holds the upholstery, the upholstery.
  */
 type Role = 'wood' | 'cane' | 'support' | 'cushion'
 type Named = { part: Part; name: string; role: Role; color: string }
@@ -427,10 +427,10 @@ function leatherSeat(d: Dims): Named[] {
   const fill = (z0: number, z1: number) =>
     Box(2 * (d.X_RAIL - GAP), y1 - y0 - 2 * GAP, z1 - z0, { align: [Align.CENTER, Align.MIN, Align.MIN] }).translate(0, y0 + GAP, z0)
   return [
-    { part: side, name: 'seat cleat', role: 'support', color: TEAK },
-    { part: side.mirror(Plane.YZ), name: 'seat cleat', role: 'support', color: TEAK },
-    { part: stick(-x, x, y0, y0 + d.CLEAT), name: 'front seat cleat', role: 'support', color: TEAK },
-    { part: stick(-x, x, y1 - d.CLEAT, y1), name: 'rear seat cleat', role: 'support', color: TEAK },
+    { part: side, name: 'seat cleat', role: 'wood', color: TEAK },
+    { part: side.mirror(Plane.YZ), name: 'seat cleat', role: 'wood', color: TEAK },
+    { part: stick(-x, x, y0, y0 + d.CLEAT), name: 'front seat cleat', role: 'wood', color: TEAK },
+    { part: stick(-x, x, y1 - d.CLEAT, y1), name: 'rear seat cleat', role: 'wood', color: TEAK },
     { part: fill(z, boardTop), name: 'seat board', role: 'support', color: PLYWOOD },
     { part: fill(boardTop, d.SEAT_TOP + d.CUSHION_PROUD), name: 'seat cushion', role: 'cushion', color: LEATHER },
   ]
@@ -447,8 +447,8 @@ function leatherBack(d: Dims, rails: Span[]): Named[] {
   const arc = (rOut: number, rIn: number, z0: number, z1: number) => arcBand(d, rOut, rIn).extrude(z1 - z0).translate(0, 0, z0)
   const backer = d.R_OUT - d.FILLET // the backer's rear face
   return [
-    { part: arc(d.R_OUT, backer, low, low + d.FILLET), name: 'low back fillet', role: 'support', color: TEAK },
-    { part: arc(d.R_OUT, backer, high - d.FILLET, high), name: 'high back fillet', role: 'support', color: TEAK },
+    { part: arc(d.R_OUT, backer, low, low + d.FILLET), name: 'low back fillet', role: 'wood', color: TEAK },
+    { part: arc(d.R_OUT, backer, high - d.FILLET, high), name: 'high back fillet', role: 'wood', color: TEAK },
     { part: arc(backer, backer - d.BACK_BOARD_T, low, high), name: 'back board', role: 'support', color: PLYWOOD },
     { part: arc(backer - d.BACK_BOARD_T, d.R_IN - d.BACK_PAD_PROUD, low, high), name: 'back pad', role: 'cushion', color: LEATHER },
   ]

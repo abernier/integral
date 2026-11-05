@@ -859,21 +859,15 @@ const fill = (z0: string, z1: string) => [
 // front of them, the pad in front of it, to just proud of the rails' front face.
 /**
  * The bodies not of wood, by name, as the browser model's meshes (compass-armchair.model.ts): the cane and its
- * splines; the leather variant's cleats, fillets and plywood, which hold the upholstery, and the upholstery. The
- * build's image shows the wood alone.
+ * splines; the leather variant's plywood, which holds the upholstery, and the upholstery. Its teak cleats and fillets
+ * are wood, milled with the frame. The build's image shows the wood alone.
  */
 export const ROLES = {
   SeatCane: 'cane',
   BackCane: 'cane',
   SeatCaneSpline: 'cane',
   BackCaneSpline: 'cane',
-  SeatCleatLeft: 'support',
-  SeatCleatRight: 'support',
-  FrontSeatCleat: 'support',
-  RearSeatCleat: 'support',
   SeatBoard: 'support',
-  LowBackFillet: 'support',
-  HighBackFillet: 'support',
   BackBoard: 'support',
   SeatCushion: 'cushion',
   BackPad: 'cushion',
