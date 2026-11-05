@@ -23,7 +23,7 @@
     "@classcad/skill": "0.0.8",
     "@classcad/smlibwasm": "^0.6.2",
     "@modelcontextprotocol/sdk": "1.32.2",
-    "@pmndrs/docs": "4.27.0",
+    "@pmndrs/docs": "4.28.0",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "leva": "^0.10.1",

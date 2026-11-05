@@ -34,3 +34,13 @@ By hand (the files cut square, from the top):
 - the inside corners at the tool's radius: the mortises', the shoulders' of the rails and back posts: chisel square, or round the tenons;
 - the dovetail sockets' walls in the SideRails and BackPosts, 9° through the board, not cut: pare to the line;
 - below the rest pass's depth: the sockets between the FrontRail's and RearRail's twin tails, and the shoulders' corners below it: saw and chisel.
+
+## References
+
+![A cane office chair in teak](https://abernier.github.io/integral/compass-armchair/references/cane.webp)
+![The chair at a desk, with a seat cushion](https://abernier.github.io/integral/compass-armchair/references/desk.webp)
+![The Chandigarh armchair, drawn](https://abernier.github.io/integral/compass-armchair/references/drawing.jpg)
+![Pierre Jeanneret, and the chair's drawings](https://abernier.github.io/integral/compass-armchair/references/plans.jpg)
+![Reading in the chair, Chandigarh, 1950s](https://abernier.github.io/integral/compass-armchair/references/chandigarh.webp)
+![Le Corbusier and Pierre Jeanneret in Chandigarh](https://abernier.github.io/integral/compass-armchair/references/jeanneret.jpg)
+![A leather-upholstered one](https://abernier.github.io/integral/compass-armchair/references/leather.webp)

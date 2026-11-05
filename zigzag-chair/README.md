@@ -33,3 +33,9 @@ By hand (the files cut square, from the top):
 - the mitres, the Seat's nose, the Slant's two ends, the Base's foot, and the Base's planed sides: saw or plane to the line;
 - the Back's bottom edge, 8° to its faces, and its tails' flanks, 1 in 6 through the board, left at their widest: pare to the line;
 - the inside corners at the tool's radius: the roots of the Back's tails and of the Seat's sockets: chisel square.
+
+## References
+
+![A Zig-Zag chair in cherry, beside a glass table](https://abernier.github.io/integral/zigzag-chair/references/studio.webp)
+![A Zig-Zag chair at a hotel room's desk](https://abernier.github.io/integral/zigzag-chair/references/hotel-room.jpg)
+![A Zig-Zag chair on a rug, books under the seat](https://abernier.github.io/integral/zigzag-chair/references/rug.jpg)
