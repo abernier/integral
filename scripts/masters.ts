@@ -9,6 +9,7 @@
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { loadQuery } from '../configurator/src/App.url.ts'
+import { hasCamValues } from '../configurator/src/models.cam.ts'
 import type { Control, Variants } from '../configurator/src/models.ts'
 import { defaultVariant, variantSchema, variantsOf } from '../configurator/src/models.variants.ts'
 import { ROOT, partFile, parts } from './paths.ts'
@@ -107,17 +108,6 @@ export async function linkValues(link: string) {
 }
 
 /**
- * The values the CAM files' geometry is built with: `values`, but each master that has a `cam` value at that value (a
- * finish the router does not cut, such as an edge round, is 0 there and made by hand). The same object when no master
- * has one.
- */
-export function camValues(masters: Record<string, Control>, values: Values): Values {
-  const overrides = Object.entries(masters).filter(([, { cam }]) => cam !== undefined)
-  if (!overrides.length) return values
-  return { ...values, ...Object.fromEntries(overrides.map(([name, { cam }]) => [name, cam as number])) }
-}
-
-/**
  * The STEP `pnpm cam` reads for a model built into `folder` in one of its variants: `<model>[.<variant>].cam.step`
  * when some master has a `cam` value (`nr build:parts` writes it beside the plain STEP), else `<model>[.<variant>].step`
  * (paths.ts partFile: the default variant's names carry no variant).
@@ -126,6 +116,5 @@ export function camValues(masters: Record<string, Control>, values: Values): Val
  */
 export function camStepFile(masters: Record<string, Control>, folder: string, model: string, variants?: Variants, variant?: string) {
   const all = variantsOf(variants)
-  const hasCam = Object.values(masters).some(({ cam }) => cam !== undefined)
-  return join(folder, partFile(model, all, variant ?? defaultVariant(all), hasCam ? 'cam.step' : 'step'))
+  return join(folder, partFile(model, all, variant ?? defaultVariant(all), hasCamValues(masters) ? 'cam.step' : 'step'))
 }

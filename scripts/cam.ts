@@ -37,7 +37,8 @@ import {
   type Tool,
 } from './cam.machining.ts'
 import { configFile, loadConfig } from './cam.config.ts'
-import { type Values, camStepFile, camValues, checkedVariant, defaultValues, linkValues, loadMasters, loadVariants, mastersFile } from './masters.ts'
+import { camValues } from '../configurator/src/models.cam.ts'
+import { type Values, camStepFile, checkedVariant, defaultValues, linkValues, loadMasters, loadVariants, mastersFile } from './masters.ts'
 import { MDX, ROOT, camFolder, partFile, parts } from './paths.ts'
 import { stepParts } from './step-assembly.ts'
 

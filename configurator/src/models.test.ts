@@ -9,6 +9,7 @@ import { parts } from '../../scripts/paths.ts'
 import { RESERVED_KEYS } from './App.url.ts'
 import type { Control, Model } from './models.ts'
 import { defaultVariant, variantSchema, variantsOf } from './models.variants.ts'
+import { camValues, hasCamValues } from './models.cam.ts'
 
 /** The schema's defaults, by name. */
 function defaults(schema: Record<string, Control>) {
@@ -88,6 +89,13 @@ for (const part of parts()) {
       const box = new Box3().setFromObject(shape)
       assert.ok(!box.isEmpty(), 'empty bounding box')
       for (const n of [...box.min.toArray(), ...box.max.toArray()]) assert.ok(Number.isFinite(n), 'bounding box not finite')
+    })
+
+    // What the panel builds with "Hand finishing" off.
+    test(`${part}, ${id}: builds as the ShopBot cuts it (the masters' cam values)`, async () => {
+      const { schema, variants, build }: Model = await import(`../../${part}/${part}.model.ts`)
+      if (!hasCamValues(schema)) return
+      await assert.doesNotReject(async () => build(camValues(schema, defaults(variantSchema(schema, variants, id))), id))
     })
   }
 }

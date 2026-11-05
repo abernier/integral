@@ -7,7 +7,8 @@ import { MASTERS as COMPASS_ARMCHAIR } from '../compass-armchair/compass-armchai
 import type { Control, Variants } from '../configurator/src/models.ts'
 import { IMPLICIT_VARIANT } from '../configurator/src/models.variants.ts'
 import { MASTERS } from '../zigzag-chair/zigzag-chair.masters.ts'
-import { camStepFile, camValues, checkedVariant, defaultValues, linkValues, loadVariants, queryValues } from './masters.ts'
+import { camValues } from '../configurator/src/models.cam.ts'
+import { camStepFile, checkedVariant, defaultValues, linkValues, loadVariants, queryValues } from './masters.ts'
 
 /** A model of two variants, for the variant path: no part of the repository is needed for it. */
 const masters = {
