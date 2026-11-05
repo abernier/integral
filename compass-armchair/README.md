@@ -17,9 +17,18 @@ Each side is two tapered boards in a V and an armrest on edge, one plane, one th
 | Wood | teak, 30 mm boards; sheet cane seat and back, rattan splines |
 | Size | 480 × 553.1 × 794.7 mm |
 | Joints | 6 loose tenons; 8 through dovetails; 2 cane grooves |
-| Model | ClassCAD part, 26 named bodies; the site also runs it in the browser (smlibwasm) |
+| Model | ClassCAD part, 26 named bodies (32 with leather); the site also runs it in the browser (smlibwasm) |
 | Source | [smlibpy's `compass_armchair.py`](https://github.com/abernier/smlibpy/pull/11) |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
+
+## Variants
+
+- **Cane** (the default): the chair above, sheet cane on the seat and the back, in its groove.
+- **Leather cushion**: a black leather cushion in the seat frame, a little proud of the rails, and an upholstered panel filling the back between posts and rails. No groove and no spline, with no cane to hold; the side rail tenons go back to the middle of the rail's height. The cushion lies on a plywood board, the board on four teak cleats glued and screwed to the seat rails' inner faces: the rails are cut flat from the top, and a rebate on their inner face would be a side-machining operation (or a rebating bit by hand after the dovetails), while the cleats are more flat parts; they also let the board be screwed from below and the cushion lifted out. The back's panel is a bending-plywood backer and its pad, screwed from behind into two curved teak fillets on the low rail and under the high one: arc bands, flat parts too. The pad, the cushion and both plywood boards are not milled (`pnpm cam compass-armchair --variant leather`).
+
+[![download .ofb](https://img.shields.io/badge/download-.ofb-1f6feb)](https://abernier.github.io/integral/compass-armchair/compass-armchair.leather.ofb) [![download STEP](https://img.shields.io/badge/download-STEP-238636)](https://abernier.github.io/integral/compass-armchair/compass-armchair.leather.step) [![download GLB](https://img.shields.io/badge/download-GLB-8957e5)](https://abernier.github.io/integral/compass-armchair/compass-armchair.leather.glb) [![Open in the configurator](https://img.shields.io/badge/Open_in-configurator-c4553e)](https://abernier.github.io/integral/configurator/?part=compass-armchair&variant=leather)
+
+![Compass armchair with a leather cushion, from behind](https://abernier.github.io/integral/compass-armchair/compass-armchair.leather.png)
 
 ## ShopBot files
 
