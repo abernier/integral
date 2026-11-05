@@ -41,6 +41,7 @@ nr build      # parts + configurator + site into dist/
 </Steps>
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
+- Renders: `pnpm render <folder>` (Blender on this machine, headless) draws the part from four views in a studio style into `<folder>/renders/`, in git; its README shows them before the Intro (a strip to scroll sideways, on the site), one image line per view (`pnpm render --help` lists the flags; no model: every model)
 - Build cache: a part whose sources, masters, shared build scripts and lockfile are unchanged is not built again (its key sits beside its files, `.docs/<part>/<part>.key`); `nr build:parts --force` rebuilds every part
 - Engine patch (`patches/@classcad__mcp@0.6.1.patch`): the local WASM engine runs without structure-tree patches, which it otherwise computes over the whole tree after every command, making a build quadratic in its feature count (compass-armchair: 82.9 s to 19.2 s, same geometry); the build reads the tree itself (`nameSolids` pulls it), nothing here uses the patches
 - Configurator: `configurator/` (Vite + r3f + leva, the "Configurator" tab; `nr dev:configurator` runs it alone, `nr test` checks each model's schema and builds it in every variant, from its defaults, at its range's corners and as the ShopBot cuts it, its meshes' roles against the ClassCAD part's `ROLES` both ways, plus the query-string helpers, the docs' theme picks, the Show folder's roles, the variants (an unknown one throws), the masters' defaults and a link's values and variant, the build cache's key, and the CAM config following the values and the variant); it wears the docs' Material 3 theme and follows it live from their localStorage (light or dark, and the reader's primary color, contrast, scheme and color match), with no toggle of its own; a part is picked up from `<folder>/<folder>.model.ts` (`schema`, `build`), nothing to register; its parameters (default, range, hint; `main` puts a slider at the top, the rest go under Details) live in `<folder>/<folder>.masters.ts`, shared with the ClassCAD part; "Copy link" gives the link `pnpm cam` takes
@@ -52,7 +53,7 @@ nr build      # parts + configurator + site into dist/
 
 ## Pipeline
 
-From a part's code to the machine. `nr build` runs in CI; `pnpm cam` only on a machine with Fusion desktop open.
+From a part's code to the machine. `nr build` runs in CI; `pnpm cam` only on a machine with Fusion desktop open; `pnpm render` on one with Blender.
 
 ```mermaid
 flowchart TD
@@ -64,6 +65,8 @@ flowchart TD
   cfg --> site
   out --> bl["Buerligons<br/>edit online"]
   out -->|"pnpm cam<br/>part.cam.step, else part.step"| fusion["Fusion desktop<br/>local MCP server"]
+  out -->|"pnpm render<br/>part.glb, Blender headless"| renders["renders/<br/>four views, in git"]
+  renders --> site
   cfg -->|Copy link| link["configurator link<br/>part, the values off the defaults"]
   link -->|"pnpm cam 'link'<br/>STEP built by ClassCAD<br/>with the cam values, then CAM"| fusion
   ts -->|"CAM(values, variant)<br/>skips, wedge setups"| fusion

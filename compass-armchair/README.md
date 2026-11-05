@@ -2,6 +2,11 @@
 
 A cane armchair on compass legs, after the 1955 Chandigarh office chair, parametric, in teak.
 
+![Compass armchair, three-quarter front](https://abernier.github.io/integral/compass-armchair/renders/compass-armchair.three-quarter.webp)
+![Compass armchair, front](https://abernier.github.io/integral/compass-armchair/renders/compass-armchair.front.webp)
+![Compass armchair, side](https://abernier.github.io/integral/compass-armchair/renders/compass-armchair.side.webp)
+![Compass armchair, three-quarter back](https://abernier.github.io/integral/compass-armchair/renders/compass-armchair.back.webp)
+
 <Intro>
 
 Each side is two tapered boards in a V and an armrest on edge, one plane, one thickness. The seat frame takes the boards on loose tenons, its cross rails are dovetailed through. The arched back hangs between the armrests, on one loose tenon a post. The sheet cane is pressed into a groove around each opening, on the seat's top and the back's front, and held by a glued rattan spline. Every dimension is a parameter: change one in the model or in Buerligons, the chair rebuilds.
