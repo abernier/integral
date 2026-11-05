@@ -9,7 +9,7 @@ import { type PartModule, roleOf } from '../../scripts/part.ts'
 import { parts } from '../../scripts/paths.ts'
 import { RESERVED_KEYS } from './App.url.ts'
 import type { Control, Model } from './models.ts'
-import { defaultVariant, variantSchema, variantsOf } from './models.variants.ts'
+import { usedIn, variantSchema, variantsOf } from './models.variants.ts'
 import { camValues, hasCamValues } from './models.cam.ts'
 
 /** The schema's defaults, by name. */
@@ -17,9 +17,9 @@ function defaults(schema: Record<string, Control>) {
   return Object.fromEntries(Object.entries(schema).map(([name, { value }]) => [name, value]))
 }
 
-/** Every value at one end of its range. */
-function corner(schema: Record<string, Control>, end: 'min' | 'max') {
-  return Object.fromEntries(Object.entries(schema).map(([name, control]) => [name, control[end]]))
+/** Every value the variant uses at one end of its range; the masters it does not use at its defaults. */
+function corner(schema: Record<string, Control>, id: string, end: 'min' | 'max') {
+  return Object.fromEntries(Object.entries(schema).map(([name, control]) => [name, usedIn(control, id) ? control[end] : control.value]))
 }
 
 /** The names of the meshes in a built part. */
@@ -122,12 +122,15 @@ async function variantsOfPart(part: string) {
   return variants
 }
 
-// Its JSDoc promises that any combination of the sliders builds: the corners of the range are the hardest.
-for (const end of ['min', 'max'] as const) {
-  test(`compass-armchair: builds with every slider at its ${end}`, async () => {
-    const { schema, variants, build }: Model = await import('../../compass-armchair/compass-armchair.model.ts')
-    await assert.doesNotReject(async () => build(corner(schema, end), defaultVariant(variants)))
-  })
+// Its JSDoc promises that any combination of the sliders builds, in every variant: the corners of the range are the
+// hardest. Each variant's corner moves the masters it uses; the others keep the variant's defaults.
+for (const id of Object.keys(variantsOf(await variantsOfPart('compass-armchair')))) {
+  for (const end of ['min', 'max'] as const) {
+    test(`compass-armchair, ${id}: builds with every slider at its ${end}`, async () => {
+      const { schema, variants, build }: Model = await import('../../compass-armchair/compass-armchair.model.ts')
+      await assert.doesNotReject(async () => build(corner(variantSchema(schema, variants, id), id, end), id))
+    })
+  }
 }
 
 // The side rail tenons sit under the cane groove: the wood left above and below each one is a wall, thinnest at the
