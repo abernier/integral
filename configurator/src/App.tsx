@@ -7,8 +7,7 @@ import { Mtb, useMtb } from 'material-theme-builder/react'
 import { Sphere, Spherical, Vector3 } from 'three'
 import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
-import { changedParams, withQueryValues } from './App.query.ts'
-import { useSyncedUrl } from './App.url.ts'
+import { useQuery, queryUrl, type Values } from './App.url.ts'
 import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
 import { type Built, createBuilds } from './App.build.ts'
 import { fitDistance, focalShift, pictureShift } from './App.camera.ts'
@@ -40,9 +39,6 @@ const build = createBuilds(3)
 const spherical = new Spherical()
 const focalOffset = new Vector3()
 
-const query = new URLSearchParams(location.search)
-const part = query.get('part') ?? ''
-
 /** Copies text to the clipboard; the textarea route is for iframes and non-secure contexts. Never throws. */
 async function copyText(text: string) {
   try {
@@ -66,9 +62,9 @@ async function copyText(text: string) {
 }
 
 /** The schema as leva takes it, `main` left out: the main masters at the top level, every other one in a collapsed Details folder. */
-function panelSchema(schema: Model['schema']) {
-  const main: Record<string, Omit<Control, 'main'>> = {}
-  const details: Record<string, Omit<Control, 'main'>> = {}
+function panelSchema<C extends Control>(schema: Record<string, C>) {
+  const main: Record<string, Omit<C, 'main'>> = {}
+  const details: Record<string, Omit<C, 'main'>> = {}
   for (const [name, { main: isMain, ...control }] of Object.entries(schema)) {
     if (isMain) main[name] = control
     else details[name] = control
@@ -103,6 +99,7 @@ function useRoleColor() {
 
 function Page() {
   const color = useRoleColor()
+  const { part } = useQuery()
   const [model, setModel] = useState<Model>()
   const [error, setError] = useState<string>()
   // The leva panel fills a box of a fixed width at the right edge: the canvas shifts its picture by half of it. Collapsed, the panel covers next to nothing: no shift.
@@ -140,29 +137,44 @@ function Message({ children, color = 'var(--md-sys-color-error)' }: { children: 
   return <div style={{ padding: '8px 12px', background, borderRadius: 6, color }}>{children}</div>
 }
 
+/**
+ * The schema with the URL's values as the sliders' initial values, each slider writing its changes back to the URL
+ * (App.url.ts): the URL holds the state, leva shows it.
+ */
+function boundToUrl(schema: Model['schema'], values: Values, setValues: (values: Values) => unknown) {
+  return Object.fromEntries(
+    Object.entries(schema).map(([name, control]) => {
+      // leva calls it at once with the initial value, then on each change: only a change is written.
+      const onChange = (value: number, _path: string, { initial }: { initial: boolean }) => {
+        if (!initial) setValues({ [name]: value })
+      }
+      return [name, { ...control, value: values[name], onChange }]
+    }),
+  )
+}
+
 function Configurator({ model, shift }: { model: Model; shift: number }) {
   const [toast, setToast] = useState<string>()
-  // leva's `get`, `set` and `values` address an input by its own key, in a folder too (`W`, not `Details.W`).
-  const [values, set, get] = useControls(() => ({
+  // The state: the part and the sliders' values, in the URL.
+  const { part, values: numbers, setValues } = useQuery(model.schema)
+  // leva's `get` and `set` address an input by its own key, in a folder too (`W`, not `Details.W`).
+  const [, set, get] = useControls(() => ({
     'Copy link': button(async () => {
       const current = get as unknown as (name: string) => number
       const values = Object.fromEntries(Object.keys(model.schema).map((name) => [name, current(name)]))
-      const params = changedParams(model.schema, values, part)
-      const copied = await copyText(`${location.origin}${location.pathname}?${params}`)
+      // The address bar's own URL, as it is about to be once the sliders stay still.
+      const copied = await copyText(queryUrl(model.schema, { part, values }, location.href))
       setToast(copied ? 'Link copied' : 'Could not copy the link')
     }),
     Reset: button(() => set(Object.fromEntries(Object.entries(model.schema).map(([name, control]) => [name, control.value])))),
     // leva shows each control's `hint` on hover.
-    ...panelSchema(withQueryValues(model.schema, query)),
+    ...panelSchema(boundToUrl(model.schema, numbers, setValues)),
   }))
-  const numbers = values as unknown as Record<string, number>
   useEffect(() => {
     if (!toast) return
     const timer = setTimeout(() => setToast(undefined), 1500)
     return () => clearTimeout(timer)
   }, [toast])
-  // The address bar follows the panel, in the same parameters as Copy link: a reload or a shared address gives this state back.
-  useSyncedUrl(changedParams(model.schema, numbers, part))
 
   // Built once the sliders have stayed still; the last build stays on screen until the next one is done.
   const [key] = useDebounceValue(JSON.stringify(numbers), DEBOUNCE_MS)

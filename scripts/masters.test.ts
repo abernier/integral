@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { changedParams } from '../configurator/src/App.query.ts'
+import { queryUrl } from '../configurator/src/App.url.ts'
 import { MASTERS } from '../zigzag-chair/zigzag-chair.masters.ts'
 import { defaultValues, linkValues } from './masters.ts'
 
@@ -25,12 +25,12 @@ test('linkValues: a bare query is read like the full link', async () => {
   assert.deepEqual(bare, full)
 })
 
-// The writer of the link (the configurator's changedParams) and its reader (linkValues) live in two files: this ties them.
+// The writer of the link (the configurator's queryUrl) and its reader (linkValues) live in two files: this ties them.
 test('linkValues: reads back what the configurator writes into a link', async () => {
   const defaults = await defaultValues('zigzag-chair')
   const changed = { BACK_LEAN: 12, W_NOSE: 400 }
-  const params = changedParams(MASTERS, { ...defaults, ...changed }, 'zigzag-chair')
-  const { model, values } = await linkValues(`https://abernier.github.io/integral/configurator/?${params}`)
+  const link = queryUrl(MASTERS, { part: 'zigzag-chair', values: { ...defaults, ...changed } }, 'https://abernier.github.io/integral/configurator/')
+  const { model, values } = await linkValues(link)
   assert.equal(model, 'zigzag-chair')
   assert.deepEqual(values, { ...defaults, ...changed })
 })
