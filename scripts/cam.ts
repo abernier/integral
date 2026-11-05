@@ -203,7 +203,8 @@ const source = configFile(ROOT, model)
 const { library, tools } = loadTools()
 const materials = loadMaterials()
 // The config of the geometry cut: the `cam` values, as the STEP was built with (a part a hand finish adds, such as the
-// compass armchair's cane splines with its groove, is not in it).
+// compass armchair's cane splines with its groove, is not in it; its config skips them anyway, for a finished STEP
+// passed with --step).
 const config = await loadConfig(source, materials, camValues(masters, values), variant).catch((error: Error) => fail(error.message))
 // The file's geometry may be another model's, while its CAM config can only be computed from the defaults' values.
 if (flags.step !== undefined && (config.parts || config.defaults)) console.log(`cam: --step: the CAM config is the variant's defaults' (the file's geometry may be another model's)`)
@@ -222,7 +223,8 @@ const post = flags.post ?? config.defaults?.post ?? DEFAULT_POST
 
 const stepNames = stepParts(step)
 if (!stepNames.length) fail(`${shown(step)} is not an assembly (no NEXT_ASSEMBLY_USAGE_OCCURRENCE): rebuild it with \`nr build:parts\``)
-for (const name of Object.keys(partConfigs)) if (!stepNames.includes(name)) fail(`${shown(source)}: CAM.parts: no part ${name} in ${shown(step)}`)
+// A skip of a part the STEP lacks is harmless (the compass armchair's splines, in its CAM STEP); any other entry is a typo.
+for (const [name, part] of Object.entries(partConfigs)) if (!part.skip && !stepNames.includes(name)) fail(`${shown(source)}: CAM.parts: no part ${name} in ${shown(step)}`)
 for (const name of only ?? []) if (!stepNames.includes(name)) fail(`--only: no part ${name} in ${shown(step)} (${stepNames.join(', ')})`)
 const entryOf = (name: string) => partConfigs[name]
 const skipped = stepNames.filter((name) => entryOf(name)?.skip)

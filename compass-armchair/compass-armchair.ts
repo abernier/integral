@@ -38,10 +38,11 @@ type Variant = keyof typeof VARIANTS
 
 /**
  * How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. What is not milled depends on
- * the variant, and the splines on GROOVE (no groove, no spline: the CAM STEP has none, GROOVE's `cam` is 0). The
- * leather variant's cleats and fillets are teak, milled from the top as the other boards.
+ * the variant. The cane's rattan splines are skipped whatever GROOVE: the CAM STEP has none (GROOVE's `cam` is 0), a
+ * finished STEP passed with --step has them, and `pnpm cam` ignores a skip of a part its STEP lacks. The leather
+ * variant's cleats and fillets are teak, milled from the top as the other boards.
  */
-export function CAM(values: ChairValues, variant: string): CamConfig {
+export function CAM(_values: ChairValues, variant: string): CamConfig {
   return {
     defaults: { material: 'teak' },
     parts: {
@@ -66,8 +67,9 @@ export function CAM(values: ChairValues, variant: string): CamConfig {
             // Woven cane on its frame, not milled.
             SeatCane: { skip: true },
             BackCane: { skip: true },
-            // The rattan splines that hold the cane in its groove, glued in, not milled.
-            ...(grooved(variant, values.GROOVE) && { SeatCaneSpline: { skip: true }, BackCaneSpline: { skip: true } }),
+            // The rattan splines that hold the cane in its groove, glued in, not milled (in the STEP only with GROOVE).
+            SeatCaneSpline: { skip: true },
+            BackCaneSpline: { skip: true },
           }),
     },
   }
