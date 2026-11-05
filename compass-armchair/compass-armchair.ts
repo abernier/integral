@@ -9,9 +9,10 @@
 // arched rails dovetailed through the posts. The cane panels are flat, the weave is not modelled.
 // The chair faces -Y, x = 0 is its middle, the floor is z = 0; +x is the sitter's left.
 //
-// As for the zigzag chair, every flat board is a large box cut down by half-spaces: work planes whose position and
-// normal are expressions. The arched members are a cylinder less a smaller one, cut the same way. Changing a
-// parameter moves the planes and the whole history rebuilds. The chair is one part: its expressions are the
+// Every flat board is the intersection of half-spaces whose position and normal are expressions: a box, sized and
+// placed by expressions, holds those square to the board's frame (the chair's, or the back's leaned one), and work
+// planes slice off the sloped ones. The arched members are a cylinder less a smaller one, cut the same way. Changing
+// a parameter moves the box and the planes and the whole history rebuilds. The chair is one part: its expressions are the
 // parameters, and every board is a named body in it, so changing one rebuilds them all.
 
 import { type Api, created, nameSolids } from '../scripts/part.ts'
@@ -89,34 +90,44 @@ const DERIVED = {
 
 
 // A half-space: a point on its plane and its normal, pointing into the material. Components are expressions in
-// which `$X` stands for `@expr.X`.
+// which `$X` stands for `@expr.X`. One square to an axis of its board's frame is also a `bound` of that axis (its
+// lowest or highest value): the board's box takes it, instead of a work plane and a slice. `tilted` when the board's
+// frame is the back's (`tilt`).
 type Vec = [x: string, y: string, z: string]
-type HalfSpace = { name: string; at: Vec; normal: Vec }
+type Axis = 0 | 1 | 2
+type Bound = { axis: Axis; side: 'min' | 'max'; value: string }
+type HalfSpace = { name: string; at: Vec; normal: Vec; bound?: Bound; tilted?: boolean }
 const H = (name: string, at: Vec, normal: Vec): HalfSpace => ({ name, at, normal })
 
-/** A slab between two planes square to an axis: two half-spaces. */
-function slab(name: string, axis: 0 | 1 | 2, min: string, max: string): HalfSpace[] {
-  const point = (v: string): Vec => ['0', '0', '0'].map((zero, i) => (i === axis ? v : zero)) as Vec
-  const unit = (sign: string): Vec => ['0', '0', '0'].map((zero, i) => (i === axis ? sign : zero)) as Vec
-  return [H(`${name}Min`, point(min), unit('1')), H(`${name}Max`, point(max), unit('-1'))]
+/** A half-space square to an axis, the material on the `side` of `value` it names: a bound of that axis. */
+function bound(name: string, axis: Axis, side: 'min' | 'max', value: string): HalfSpace {
+  const point = ['0', '0', '0'].map((zero, i) => (i === axis ? value : zero)) as Vec
+  const normal = ['0', '0', '0'].map((zero, i) => (i === axis ? (side === 'min' ? '1' : '-1') : zero)) as Vec
+  return { ...H(name, point, normal), bound: { axis, side, value } }
 }
+
+/** A slab between two planes square to an axis: two half-spaces. */
+const slab = (name: string, axis: Axis, min: string, max: string) => [bound(`${name}Min`, axis, 'min', min), bound(`${name}Max`, axis, 'max', max)]
 
 /** The same half-spaces, mirrored about x = 0: the chair's other side. */
 const mirror = (planes: HalfSpace[]) =>
-  planes.map(({ name, at: [x, y, z], normal: [nx, ny, nz] }) => H(name, [`-(${x})`, y, z], [`-(${nx})`, ny, nz]))
+  planes.map(({ name, at: [x, y, z], normal: [nx, ny, nz], bound, tilted }): HalfSpace => ({
+    ...H(name, [`-(${x})`, y, z], [`-(${nx})`, ny, nz]),
+    // x's lowest value becomes its highest; mirroring commutes with the back's lean, about x.
+    bound: bound?.axis === 0 ? { axis: 0, side: bound.side === 'min' ? 'max' : 'min', value: `-(${bound.value})` } : bound,
+    tilted,
+  }))
 
-/**
- * From the back's own frame (upright, its origin on the posts' axis at seat height) to the chair: leaned back
- * BACK_TILT about x.
- */
+/** A point of the back's own frame (upright, its origin on the posts' axis at seat height), in the chair's. */
+const tiltPoint = ([x, y, z]: Vec): Vec => [x, `$POST_Y + (${y})*$CL + (${z})*$SL`, `$SEAT_TOP - (${y})*$SL + (${z})*$CL`]
+
+/** From the back's own frame to the chair: leaned back BACK_TILT about x. Bounds stay the back frame's. */
 const tilt = (planes: HalfSpace[]) =>
-  planes.map(({ name, at: [x, y, z], normal: [nx, ny, nz] }) =>
-    H(
-      name,
-      [x, `$POST_Y + (${y})*$CL + (${z})*$SL`, `$SEAT_TOP - (${y})*$SL + (${z})*$CL`],
-      [nx, `(${ny})*$CL + (${nz})*$SL`, `-(${ny})*$SL + (${nz})*$CL`],
-    ),
-  )
+  planes.map(({ name, at, normal: [nx, ny, nz], bound }): HalfSpace => ({
+    ...H(name, tiltPoint(at), [nx, `(${ny})*$CL + (${nz})*$SL`, `-(${ny})*$SL + (${nz})*$CL`]),
+    bound,
+    tilted: true,
+  }))
 
 // Everything below is the chair's +x side; `mirror` gives the other.
 
@@ -126,24 +137,24 @@ const UNDER_ARM = H('UnderArm', ['0', '0', '$U0'], ['0', '-$K', '-1'])
 // The side view, (y, z), as half-spaces: each edge's left normal, the polygons running counterclockwise.
 const FRONT_LEG = [
   ...BOARD,
-  H('Floor', ['0', '0', '0'], ['0', '0', '1']),
+  bound('Floor', 2, 'min', '0'),
   H('Back', ['0', '$FRONT_FOOT_BACK', '0'], ['0', '-$NOTCH_Z', '-$FRONT_FOOT_BACK']),
-  H('Seam', ['0', '0', '0'], ['0', '-1', '0']),
+  bound('Seam', 1, 'max', '0'),
   UNDER_ARM,
   H('Front', ['0', '$FRONT_FOOT_FRONT', '0'], ['0', '$U_FRONT', '$FRONT_FOOT_FRONT - $ARM_EDGE_FRONT']),
 ]
 const REAR_LEG = [
   ...BOARD,
-  H('Floor', ['0', '0', '0'], ['0', '0', '1']),
+  bound('Floor', 2, 'min', '0'),
   H('Back', ['0', '$REAR_FOOT_BACK', '0'], ['0', '-$U_REAR', '$ARM_EDGE_REAR - $REAR_FOOT_BACK']),
   UNDER_ARM,
-  H('Seam', ['0', '0', '0'], ['0', '1', '0']),
+  bound('Seam', 1, 'min', '0'),
   H('Front', ['0', '$REAR_FOOT_FRONT', '0'], ['0', '$NOTCH_Z', '$REAR_FOOT_FRONT']),
 ]
 const ARMREST = [
   ...BOARD,
   ...slab('Length', 1, '$ARM_FRONT', '$ARM_END'),
-  H('Top', ['0', '0', '$ARM_TOP'], ['0', '0', '-1']),
+  bound('Top', 2, 'max', '$ARM_TOP'),
   H('Underside', ['0', '0', '$U0'], ['0', '$K', '1']),
 ]
 const SPLINE = [
@@ -219,11 +230,31 @@ async function cut(api: Api, part: number, name: string, body: number, planes: H
   return body
 }
 
-/** A convex board: a large box cut down by half-spaces. */
+/**
+ * A convex board: a box between its bounds in the board's frame (BIG across where it has none), cut down by its
+ * other half-spaces.
+ */
 async function board(api: Api, part: number, name: string, planes: HalfSpace[]) {
-  const corner = await created(api.v1.part.workCSys({ id: part, name: `${name}Stock`, offset: [-BIG / 2, -BIG / 2, -BIG / 2] }))
-  const stock = await created(api.v1.part.box({ id: part, name: `${name}Stock`, length: BIG, width: BIG, height: BIG, references: [corner] }))
-  return cut(api, part, name, stock, planes)
+  const extent = [0, 1, 2].map(() => ({ min: `${-BIG / 2}`, max: `${BIG / 2}` }))
+  const taken = new Set<string>()
+  const sloped: HalfSpace[] = []
+  for (const plane of planes) {
+    const { bound } = plane
+    if (bound && !taken.has(`${bound.axis}${bound.side}`)) {
+      extent[bound.axis][bound.side] = bound.value
+      taken.add(`${bound.axis}${bound.side}`)
+    } else sloped.push(plane)
+  }
+  const tilted = planes.some((plane) => plane.tilted)
+  const low = extent.map(({ min }) => min) as Vec
+  const corner = await created(api.v1.part.workCSys({
+    id: part, name: `${name}Stock`,
+    offset: vector(tilted ? tiltPoint(low) : low),
+    ...(tilted && { rotation: '[-@expr.LEAN, 0, 0]' }),
+  }))
+  const [length, width, height] = extent.map(({ min, max }) => expr(`(${max}) - (${min})`))
+  const stock = await created(api.v1.part.box({ id: part, name: `${name}Stock`, length, width, height, references: [corner] }))
+  return cut(api, part, name, stock, sloped)
 }
 
 /** The seat tails at one end of a cross rail: the lowest, patterned up the rail. */
