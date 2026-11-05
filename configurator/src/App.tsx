@@ -16,6 +16,7 @@ import { type Built, buildKey, createBuilds } from './App.build.ts'
 import { switchedValues } from './App.variant.ts'
 import { rolesOf, showRoles } from './App.show.ts'
 import type { Role } from './models.roles.ts'
+import { loadModel, useBuilding } from './App.worker.ts'
 import { fitDistance, focalShift, pictureShift } from './App.camera.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
@@ -151,7 +152,8 @@ function Page() {
   useEffect(() => {
     // hasOwn: a plain lookup would also find inherited members such as `constructor`.
     if (!Object.hasOwn(models, part)) return setError(`Unknown part: ${JSON.stringify(part)}`)
-    models[part]().then(setModel, (e) => setError(String(e)))
+    // Loaded by the build worker, which builds it off this thread (App.worker.ts).
+    loadModel(part).then(setModel, (e) => setError(String(e)))
   }, [])
 
   return (
@@ -281,6 +283,7 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
   const [key] = useDebounceValue(buildKey(variant, shownValues), DEBOUNCE_MS)
   const shown = useDeferredValue(key)
   const built = build(model, shown)
+  const building = useBuilding()
 
   return (
     <>
@@ -297,6 +300,7 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
         {/* The first build also loads the kernel (about 3 MB of WebAssembly): a few seconds with nothing to see. */}
         <Suspense fallback={<Message color="var(--md-sys-color-on-surface-variant)">Building the model…</Message>}>
           <BuildError built={built} />
+          {building && <Message color="var(--md-sys-color-on-surface-variant)">Building…</Message>}
         </Suspense>
         {toast && <Message color="var(--md-sys-color-on-surface)">{toast}</Message>}
       </Messages>
