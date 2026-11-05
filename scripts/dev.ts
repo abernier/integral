@@ -3,8 +3,8 @@
 // It builds the parts, serves .docs/ (the pages' images and files) on a free port, and runs @pmndrs/docs' own
 // Next.js dev server on the MDX folder, as its dev.sh does. Like its CLI, it first copies the app out of
 // node_modules (to .pmndrs-docs/dev/): Node refuses to strip the types of a next.config.mts there.
-// A README's or a `docs/*.md`'s change rewrites its page, and the page follows; a part's script change rebuilds that part (about 5 s):
-// reload the page for the new render.
+// A README's, a `docs/*.md`'s or a part's `references/` change rewrites the pages, and the page follows; a part's
+// script change rebuilds that part (about 5 s): reload the page for the new render.
 
 import { spawn } from 'node:child_process'
 import { cpSync, rmSync, watch } from 'node:fs'
@@ -48,7 +48,10 @@ const children = [
   }),
   spawn(bin('next'), ['dev', '-p', String(port)], {
     cwd: app,
-    env: docsEnv({ BASE_PATH: '', MDX_BASEURL: urls.files, NEXT_PUBLIC_URL: urls.site }),
+    // `buildConfigurator` (vite, in this process) set NODE_ENV=production, and `docsEnv` passes the environment on:
+    // Next's dev server must not inherit it (its MDX would take React's production jsx-runtime into a development
+    // React, and every page would answer 500).
+    env: docsEnv({ BASE_PATH: '', MDX_BASEURL: urls.files, NEXT_PUBLIC_URL: urls.site, NODE_ENV: 'development' }),
     stdio: 'inherit',
   }),
 ]
@@ -75,7 +78,8 @@ const later = (key: string, task: () => Promise<void> | void) => {
 watch(ROOT, { recursive: true }, (_event, file) => {
   if (!file || /^(configurator|node_modules|\.docs|\.pmndrs-docs|dist)\b/.test(file)) return
   const [folder, name] = file.split('/')
-  if (file === 'README.md' || (name === 'README.md' && parts().includes(folder)) || (folder === 'docs' && name?.endsWith('.md'))) {
+  const ofPart = parts().includes(folder) && (name === 'README.md' || name === 'references')
+  if (file === 'README.md' || ofPart || (folder === 'docs' && name?.endsWith('.md'))) {
     later('pages', () => void writePages(urls))
   } else if (parts().includes(folder) && name === `${folder}.ts`) {
     later(folder, async () => {

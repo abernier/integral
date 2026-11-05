@@ -2,7 +2,8 @@
 // the MDX folder themselves: paths.ts).
 //
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
-// ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`), and a README.md.
+// ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`), and a README.md; `<folder>/references/` holds
+// the images its README's `## References` shows (a strip to scroll sideways, on the site), served beside the built files.
 // Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`, or
 // the folder `buildPart` is given (`pnpm cam '<link>'` builds into a temporary one);
 // `buildConfigurator` builds the configurator app into `.docs/configurator/`, and each part's page embeds it. The MDX folder also
@@ -139,9 +140,24 @@ function views(part: string, alt: string) {
 }
 
 /**
+ * The `## References` section's images (one markdown image per line, which GitHub shows stacked) as a strip the
+ * page scrolls sideways: the images at one height, each as wide as its ratio makes it, its alt under it.
+ * Inline styles, as `views`: the theme makes the article's direct children blocks, and the dev server's Tailwind
+ * does not scan these pages, so classes written here would not exist.
+ */
+function references(images: string) {
+  const figures = [...images.matchAll(/^!\[([^\]]*)\]\((\S+)\)$/gm)].map(
+    ([, alt, src]) =>
+      `<figure style={{ flex: 'none', width: 'min-content', margin: 0 }}><img src="${src}" alt="${alt}" style={{ height: '16rem', width: 'auto', maxWidth: 'none', margin: 0 }} /><figcaption style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>${alt}</figcaption></figure>`,
+  )
+  return [`<div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>`, ...figures, '</div>'].join('\n')
+}
+
+/**
  * Turn a README into an MDX page: its first heading becomes the title, the line under it the description, links
  * to the site become local ones, and "Edit this page" opens the README on GitHub.
- * A part's page also gets its source, its render as the page's image, and the render's tabs (`views`).
+ * A part's page also gets its source, its render as the page's image, the render's tabs (`views`), and its
+ * references as a strip (`references`).
  */
 function page(readme: string, nav: number, urls: Urls, part?: string) {
   const edit = `https://github.com/abernier/integral/edit/main/${relative(ROOT, readme)}`
@@ -162,6 +178,7 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
     .replace(/^# .+\n+/m, '')
     .replace(description ? `${description}\n` : '', '')
     .replace(/^!\[([^\]]*)\]\((\S+)\)$/m, (image, alt, src) => (part && src === render ? views(part, alt) : image))
+    .replace(/^(## References\n\n)((?:!\[[^\]]*\]\(\S+\)\n)+)/m, (section, heading, images) => (part ? `${heading}${references(images)}\n` : section))
     // The parts table's thumbnails: a fixed size the table can't squeeze, and a small radius (the theme's is 2xl).
     // GitHub reads `width`; the site, the style.
     .replaceAll(`width="${THUMB}" />`, `width="${THUMB}" style={{ width: '${THUMB / 16}rem', minWidth: '${THUMB / 16}rem', height: 'auto', borderRadius: '0.375rem' }} />`)
@@ -222,6 +239,9 @@ export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, sha
   mkdirSync(join(MDX, 'things'), { recursive: true })
   parts().forEach((part, i) => {
     writeFileSync(join(MDX, `${partPage(part)}.mdx`), page(join(ROOT, part, 'README.md'), i + 1, urls, part))
+    // The part's reference images (`<part>/references/`), served beside its built files.
+    const references = join(ROOT, part, 'references')
+    if (existsSync(references)) cpSync(references, join(MDX, part, 'references'), { recursive: true })
   })
   return relative(ROOT, MDX)
 }
