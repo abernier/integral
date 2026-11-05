@@ -37,6 +37,33 @@
       [class*='leva-'] button:not(:disabled) {
         color: var(--md-sys-color-on-primary-container);
       }
+      /* The leva panel, capped to the viewport whatever sits above its controls. leva's own cap is on its content
+         alone, `100vh - 20px - title bar`: it leaves out the search filter's row (30px, when open), so the panel then
+         runs past the window; and `vh` is the viewport with a mobile browser's toolbars retracted, which can hide the
+         panel's bottom. Here the panel itself is capped, to `dvh` (`vh` where unsupported) less leva's 10px offset
+         above and below, and lays out as a column: title bar and filter row keep their heights, the content takes
+         what is left and scrolls. Only while leva shows the panel: until there is a control it hides it, by an inline
+         `display: none`. */
+      .leva-panel {
+        display: contents;
+      }
+      .leva-panel > [style*='display: block'] {
+        display: flex !important;
+        flex-direction: column;
+        max-height: calc(100vh - 20px);
+        max-height: calc(100dvh - 20px);
+      }
+      .leva-panel > div > * {
+        flex-shrink: 0;
+      }
+      /* The content, leva's scroll container: it shrinks to what the column leaves, and a wheel or a swipe past its
+         end stays there instead of scrolling the page around it (the docs page, around the iframe embed). */
+      .leva-panel > div > :last-child {
+        flex-shrink: 1;
+        min-height: 0;
+        max-height: none;
+        overscroll-behavior: contain;
+      }
     </style>
   </head>
   <body>

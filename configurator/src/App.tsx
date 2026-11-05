@@ -24,11 +24,14 @@ const FOV = 15
  */
 const SMOOTH_TIME = 0.125
 
-/** The leva panel's box, at the right edge: leva's default root width (280) plus its margin. */
-const PANEL_WIDTH = 290
+/** The leva panel's width, in pixels: leva's own default, passed to leva as its theme's `sizes.rootWidth`. */
+const LEVA_ROOT_WIDTH = 280
 
-/** The gap between the leva panel and the window's top and right edges. */
-const PANEL_GAP = 10
+/** Leva's fixed root offset from the right edge of the window, in pixels: leva's own, not configurable. */
+const LEVA_ROOT_OFFSET = 10
+
+/** The width the leva panel takes at the right edge of the window, its offset from that edge included. */
+const PANEL_WIDTH = LEVA_ROOT_WIDTH + LEVA_ROOT_OFFSET
 
 const { ACTION } = CameraControlsImpl
 
@@ -104,7 +107,7 @@ function Page() {
   const color = useRoleColor()
   const [model, setModel] = useState<Model>()
   const [error, setError] = useState<string>()
-  // The leva panel fills a box of a fixed width at the right edge: the canvas shifts its picture by half of it. Collapsed, the panel covers next to nothing: no shift.
+  // Leva's panel sits at the right edge, PANEL_WIDTH wide: the canvas shifts its picture by half of it. Collapsed, the panel covers next to nothing: no shift.
   const [collapsed, setCollapsed] = useState(false)
 
   useEffect(() => {
@@ -115,10 +118,15 @@ function Page() {
 
   return (
     <>
-      {/* zIndex: the canvas, fixed too and later in the DOM, would cover the panel. */}
-      <div style={{ position: 'fixed', top: PANEL_GAP, right: 0, zIndex: 1, width: PANEL_WIDTH, paddingRight: PANEL_GAP, boxSizing: 'border-box' }}>
-        {/* No drag: leva would move its panel by a CSS transform, away from our box, and the shift would aim at the wrong space. */}
-        <Leva fill collapsed={{ collapsed, onChange: setCollapsed }} titleBar={{ title: part, drag: false }} theme={levaTheme(color)} />
+      {/* Not `fill`: leva then places the panel itself (fixed, 10px from the top right, above the canvas). No drag:
+          leva would move the panel by a CSS transform, away from the space the shift leaves free. The `leva-panel` box
+          (`display: contents`) is only a hook for index.html's rules, which cap the panel to the viewport. */}
+      <div className="leva-panel">
+        <Leva
+          collapsed={{ collapsed, onChange: setCollapsed }}
+          titleBar={{ title: part, drag: false }}
+          theme={{ ...levaTheme(color), sizes: { rootWidth: `${LEVA_ROOT_WIDTH}px` } }}
+        />
       </div>
       {model && <Configurator model={model} shift={collapsed ? 0 : PANEL_WIDTH / 2} />}
       <Messages>
