@@ -6,6 +6,7 @@
  */
 import { Mesh, type Object3D } from 'three'
 import type { Model } from './models.ts'
+import { Superseded } from './App.latest.ts'
 
 /** A build's outcome. A build that throws keeps the last good shape on screen, with its error. */
 export type Built = { shape?: Object3D; error?: string }
@@ -59,7 +60,15 @@ export function createBuilds(kept: number) {
           if (builds.get(key) === built) setLastGood(shape)
           return { shape }
         },
-        (e) => ({ shape: lastGood, error: e instanceof Error ? e.message : String(e) }),
+        (e) => {
+          // Replaced by a newer build before it ran (App.latest.ts): no error, and not kept, so that asking for these
+          // values again builds them.
+          if (e instanceof Superseded) {
+            if (builds.get(key) === built) builds.delete(key)
+            return { shape: lastGood }
+          }
+          return { shape: lastGood, error: e instanceof Error ? e.message : String(e) }
+        },
       )
     builds.set(key, built)
     for (const [oldKey, old] of builds) {

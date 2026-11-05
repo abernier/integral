@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { BufferGeometry, Mesh, MeshBasicMaterial, type Object3D } from 'three'
 
 import { buildKey, createBuilds } from './App.build.ts'
+import { Superseded } from './App.latest.ts'
 
 const disposed = new WeakSet<Object3D>()
 
@@ -129,4 +130,22 @@ test('the last good shape is kept while a failed build may borrow it, and freed 
   await flush()
   assert.ok(disposed.has(shapes.get('A')!), 'A, replaced by C, is freed')
   assert.ok(!disposed.has(shapes.get('C')!), 'C is on screen')
+})
+
+test('a superseded build shows the last good shape without an error, and is built again when asked again', async () => {
+  const build = createBuilds(3)
+  const { model, shapes, settle } = fakeModel()
+  build(model, key('A'))
+  await flush()
+  settle.get('A')!.resolve()
+  await flush()
+  let calls = 0
+  const superseding = { build: () => (calls++ === 0 ? Promise.reject(new Superseded()) : model.build({ B: 1 }, 'default')) }
+  const b = await build(superseding, key('B'))
+  assert.equal(b.error, undefined)
+  assert.equal(b.shape, shapes.get('A'))
+  const again = build(superseding, key('B'))
+  await flush()
+  settle.get('B')!.resolve()
+  assert.equal((await again).shape, shapes.get('B'))
 })
