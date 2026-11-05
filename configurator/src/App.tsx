@@ -266,14 +266,15 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
     return () => clearTimeout(timer)
   }, [toast])
 
-  // The Show folder's first checkbox, for a part with hand finishing (masters with a `cam` value): off, the part as the
-  // ShopBot cuts it, the masters' `cam` values on top of the sliders' (models.cam.ts). A view, not the object: not in the link.
+  // The Show folder's first checkbox, Handwork, for a part with hand finishing (masters with a `cam` value): off, the
+  // part as the ShopBot cuts it, the masters' `cam` values on top of the sliders' (models.cam.ts). A view, not the
+  // object: not in the link.
   const finishing = useControls(
     'Show',
-    hasCamValues(model.schema) ? { 'Hand finishing': { value: true, hint: 'Off: the part as the ShopBot cuts it, without what is made by hand' } } : {},
+    hasCamValues(model.schema) ? { Handwork: { value: true, hint: 'Off: the part as the ShopBot cuts it, without what is made by hand' } } : {},
     { order: ORDER.show },
-  ) as { 'Hand finishing'?: boolean }
-  const shownValues = finishing['Hand finishing'] === false ? camValues(model.schema, numbers) : numbers
+  ) as { Handwork?: boolean }
+  const shownValues = finishing.Handwork === false ? camValues(model.schema, numbers) : numbers
 
   // Built once the sliders have stayed still; the last build stays on screen until the next one is done.
   const [key] = useDebounceValue(buildKey(variant, shownValues), DEBOUNCE_MS)

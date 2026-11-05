@@ -1,7 +1,7 @@
 /**
  * The part as the ShopBot cuts it: the masters' `cam` values (models.ts `Control.cam`), the finishes made by hand on
  * the cut parts left out. The CAM STEP is built with them (scripts/site.ts buildCamStep), and the configurator shows
- * them when its Show folder's "Hand finishing" is off. Pure, without vite's `import.meta.glob`, so that the scripts can
+ * them when its Show folder's "Handwork" is off. Pure, without vite's `import.meta.glob`, so that the scripts can
  * use it under node.
  * @module
  */
