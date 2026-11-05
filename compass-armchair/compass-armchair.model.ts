@@ -29,7 +29,7 @@ import {
   type Sketch,
 } from '@classcad/smlibwasm'
 import type { Control } from '../configurator/src/models.ts'
-import { MASTERS, VARIANTS, edgeBreak } from './compass-armchair.masters.ts'
+import { MASTERS, VARIANTS, edgeBreak, grooved } from './compass-armchair.masters.ts'
 
 const TEAK = '#9b6a3c'
 const CANE_COLOR = '#e6d2a0'
@@ -85,12 +85,13 @@ function derive(p: Masters, variant: Variant) {
   // The back's tail, on a rail's end, centred on the post's axis: at the post's inner face and at its outer face.
   const BACK_TAIL_BASE = p.POST_D - 2 * p.BACK_TAIL_SHOULDER
   const BACK_TAIL_END = BACK_TAIL_BASE + 2 * p.POST_W * p.SLOPE
-  // The side rail tenons' middle height, in the middle of the wood the cane groove leaves under it; without a groove,
-  // the rail's middle.
+  // The side rail tenons' middle height, in the middle of the wood the cane groove leaves under it, routed or not
+  // (GROOVE); in the leather variant, the rail's middle.
   const Z_TENON = variant === 'cane' ? p.SEAT_TOP - (p.RAIL_H + p.GROOVE_D) / 2 : p.SEAT_TOP - p.RAIL_H / 2
   return {
     ...p,
     variant,
+    grooved: grooved(variant, p.GROOVE),
     X_BOARD,
     X_POST,
     X_RAIL,
@@ -273,15 +274,17 @@ function backLayer(d: Dims, d0: number, d1: number): Part {
 /**
  * The cane of an opening, pressed into a groove around it and held there by a glued spline: the groove (cut into the
  * frame), the spline in its outer half, and the cane: its `panel` across the opening, its sheet lapping the frame out
- * to the groove's middle and down the groove's inner half. `layer(d0, d1)` is the frame's depth between d0 and d1
- * below the face the cane lies on, `ring(o0, o1)` a band of the groove's outlines (`outline`) through it.
+ * to the groove's middle and down the groove's inner half. Without the groove (GROOVE off: routed by hand later), no
+ * groove and no spline, the sheet flat on the frame out to the groove's middle. `layer(d0, d1)` is the frame's depth
+ * between d0 and d1 below the face the cane lies on, `ring(o0, o1)` a band of the groove's outlines (`outline`) through it.
  */
 function caning(d: Dims, panel: Part, layer: (d0: number, d1: number) => Part, ring: (o0: number | null, o1: number) => Part) {
+  const lap = ring(null, d.GROOVE_INSET).intersect(layer(-d.CANE_SHEET, 0))
+  if (!d.grooved) return { groove: undefined, spline: undefined, cane: panel.fuse(lap) }
   const inner = d.GROOVE_INSET - d.GROOVE_W / 2
   const outer = d.GROOVE_INSET + d.GROOVE_W / 2
   const groove = ring(inner, outer).intersect(layer(-1, d.GROOVE_D))
   const spline = ring(d.GROOVE_INSET, outer).intersect(layer(-d.CANE_SHEET, d.GROOVE_D))
-  const lap = ring(null, d.GROOVE_INSET).intersect(layer(-d.CANE_SHEET, 0))
   const cane = panel.fuse(lap, ring(inner, d.GROOVE_INSET).intersect(layer(0, d.GROOVE_D)))
   return { groove, spline, cane }
 }
@@ -451,7 +454,10 @@ function leatherBack(d: Dims, rails: Span[]): Named[] {
   ]
 }
 
-/** The chair's bodies in its variant, in CAD coordinates (z up, facing -Y): 26 with cane, 32 with leather. */
+/**
+ * The chair's bodies in its variant, in CAD coordinates (z up, facing -Y): 26 with cane, 24 without its groove (no
+ * splines), 32 with leather.
+ */
 function model(d: Dims): Named[] {
   const cane = d.variant === 'cane'
   const rails: Span[] = [
@@ -496,9 +502,9 @@ function model(d: Dims): Named[] {
     .extrude(rails[1][0] - rails[0][1])
     .translate(0, 0, rails[0][1])
   const back = cane ? caning(d, backPanel, (d0, d1) => backLayer(d, d0, d1), (o0, o1) => backBand(d, o0, o1)) : undefined
-  // What the cane's grooves cut from the frame: nothing, with no cane to hold.
-  const seatGroove = seat ? [seat.groove] : []
-  const backGroove = back ? [back.groove] : []
+  // What the cane's grooves cut from the frame: nothing, with no cane to hold or the groove left to the hand.
+  const seatGroove = seat?.groove ? [seat.groove] : []
+  const backGroove = back?.groove ? [back.groove] : []
 
   // The +x side as written, the -x side its mirror image.
   const spline = Box(d.SPLINE_W, d.SPLINE_T, underside(d, 0) + d.SPLINE_IN_ARM - d.SPLINE_Z, {
@@ -619,8 +625,10 @@ function model(d: Dims): Named[] {
   if (seat && back) {
     // The cane is flat: the weave is not modelled. The splines are rattan, glued in.
     const caned = (part: Part, name: string): Named => ({ part, name, role: 'cane', color: CANE_COLOR })
-    parts.push(caned(seat.spline, 'seat cane spline'), caned(seat.cane, 'seat cane'))
-    parts.push(caned(tilt(d, back.spline), 'back cane spline'), caned(tilt(d, back.cane), 'back cane'))
+    if (seat.spline) parts.push(caned(seat.spline, 'seat cane spline'))
+    parts.push(caned(seat.cane, 'seat cane'))
+    if (back.spline) parts.push(caned(tilt(d, back.spline), 'back cane spline'))
+    parts.push(caned(tilt(d, back.cane), 'back cane'))
   } else {
     parts.push(...leatherSeat(d))
     for (const named of leatherBack(d, rails)) parts.push({ ...named, part: tilt(d, named.part) })
@@ -662,7 +670,7 @@ function toGeometryData(part: Part) {
 
 /**
  * Builds the chair from the masters in `values` (missing ones take their default, extra ones are ignored), in one of
- * its variants. It returns a Group of named meshes (26 with cane, 32 with leather), each with its `userData.role`, in
+ * its variants. It returns a Group of named meshes (26 with cane, 24 without its groove, 32 with leather), each with its `userData.role`, in
  * mm, standing on y = 0, facing +z, x = 0 its middle.
  *
  * @param values The masters to change, keyed by the names in `schema`; a missing key takes its default.

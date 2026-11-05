@@ -41,6 +41,9 @@ export const MASTERS = {
   SEAT_TOP: { main: true, value: 437, min: 425, max: 450, step: 1, hint: 'Height of the seat frame top' },
   RAIL_H: { value: 60, min: 55, max: 65, step: 1, hint: 'Height of the seat rails' },
   RAIL_T: { value: 25, min: 22, max: 28, step: 1, hint: 'Thickness of the side rails' },
+  // The groove is routed by hand round each opening after glue-up, across the joints: the CAM files leave it out
+  // (`cam`). Off, the cane's sheet lies flat on the frame, the side rail tenons still under GROOVE_D.
+  GROOVE: { value: 1, min: 0, max: 1, step: 1, variants: ['cane'], cam: 0, hint: 'Cane groove and spline, 1 on, 0 off; routed by hand after glue-up' },
   CANE_T: { value: 8, min: 6, max: 10, step: 0.5, variants: ['cane'], hint: 'Thickness of the cane panels' },
   CANE_SHEET: { value: 2, min: 1.5, max: 3, step: 0.5, variants: ['cane'], hint: 'Thickness of the sheet cane where it laps the frame into its groove' },
   GROOVE_W: { value: 6, min: 5, max: 8, step: 0.5, variants: ['cane'], hint: 'Width of the cane groove around each opening' },
@@ -92,6 +95,15 @@ export const MASTERS = {
   ARM_NOSE_R: { value: 8, min: 0, max: 12, step: 0.5, cam: 0, hint: "Round on the armrest nose's edges, by hand" },
   EDGE_BREAK: { value: 2.5, min: 0, max: 4, step: 0.5, cam: 0, hint: 'Round on every other outside arris of the assembled chair, by hand; flush glued seams stay sharp; under 1 mm, none' },
 } satisfies Record<string, Control>
+
+/**
+ * Whether the chair has the cane's groove and splines: in the cane variant, GROOVE on (1). Off, the frame is cut
+ * without it and the cane lies flat on it, the side rail tenons where GROOVE_D puts them all the same (the groove is
+ * routed by hand later, to that depth).
+ */
+export function grooved(variant: string, value: number) {
+  return variant === 'cane' && value >= 0.5
+}
 
 /** The smallest EDGE_BREAK that is made: a round under it is no round. */
 export const MIN_EDGE_BREAK = 1

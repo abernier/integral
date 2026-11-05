@@ -91,7 +91,7 @@ for (const part of parts()) {
       for (const n of [...box.min.toArray(), ...box.max.toArray()]) assert.ok(Number.isFinite(n), 'bounding box not finite')
     })
 
-    // What the panel builds with "Hand finishing" off.
+    // What the panel builds with "Handwork" off.
     test(`${part}, ${id}: builds as the ShopBot cuts it (the masters' cam values)`, async () => {
       const { schema, variants, build }: Model = await import(`../../${part}/${part}.model.ts`)
       if (!hasCamValues(schema)) return
@@ -120,4 +120,24 @@ test('compass-armchair: the side rail tenons keep a 2.5 mm wall of wood above an
   const { schema }: Model = await import('../../compass-armchair/compass-armchair.model.ts')
   const wall = (schema.RAIL_H.min - schema.GROOVE_D.max - schema.TENON_H.max) / 2
   assert.ok(wall >= 2.5, `wall of ${wall} mm, under 2.5 mm`)
+})
+
+// GROOVE off, the groove left to the hand: no groove, no spline, the side rail tenons where GROOVE_D puts them.
+test('compass-armchair: GROOVE 0 builds the cane without its splines, the rail tenons in place', async () => {
+  const { schema, build }: Model = await import('../../compass-armchair/compass-armchair.model.ts')
+  const tenons = (shape: Object3D) => {
+    const corners: number[][] = []
+    shape.traverse((object) => {
+      if (object instanceof Mesh && object.name === 'rail tenon') corners.push(new Box3().setFromObject(object).min.toArray())
+    })
+    return corners
+  }
+  const on = await build(defaults(schema), 'cane')
+  const off = await build({ ...defaults(schema), GROOVE: 0 }, 'cane')
+  assert.equal(meshNames(on).filter((name) => name.endsWith('cane spline')).length, 2)
+  assert.deepEqual(meshNames(off).filter((name) => name.endsWith('cane spline')), [])
+  assert.equal(meshNames(off).length, meshNames(on).length - 2)
+  assert.ok(meshNames(off).includes('seat cane') && meshNames(off).includes('back cane'))
+  assert.equal(tenons(on).length, 4)
+  assert.deepEqual(tenons(off), tenons(on))
 })

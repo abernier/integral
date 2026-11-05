@@ -202,7 +202,9 @@ if (!existsSync(step)) fail(`no STEP at ${shown(step)}: run \`nr build:parts\` f
 const source = configFile(ROOT, model)
 const { library, tools } = loadTools()
 const materials = loadMaterials()
-const config = await loadConfig(source, materials, values, variant).catch((error: Error) => fail(error.message))
+// The config of the geometry cut: the `cam` values, as the STEP was built with (a part a hand finish adds, such as the
+// compass armchair's cane splines with its groove, is not in it).
+const config = await loadConfig(source, materials, camValues(masters, values), variant).catch((error: Error) => fail(error.message))
 // The file's geometry may be another model's, while its CAM config can only be computed from the defaults' values.
 if (flags.step !== undefined && (config.parts || config.defaults)) console.log(`cam: --step: the CAM config is the variant's defaults' (the file's geometry may be another model's)`)
 const partConfigs = config.parts ?? {}
