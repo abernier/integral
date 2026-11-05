@@ -3,8 +3,8 @@
 // It builds the parts, serves .docs/ (the pages' images and files) on a free port, and runs @pmndrs/docs' own
 // Next.js dev server on the MDX folder, as its dev.sh does. Like its CLI, it first copies the app out of
 // node_modules (to .pmndrs-docs/dev/): Node refuses to strip the types of a next.config.mts there.
-// A README's, a `docs/*.md`'s or a part's `references/` or `renders/` change rewrites the pages, and the page follows; a part's
-// script change rebuilds that part (about 5 s): reload the page for the new render.
+// A README's, a `docs/*.md`'s or a part's `references/` or `renders/` change rewrites the pages, and the page follows; a
+// part's script change rebuilds that part, every variant of it (about 5 s each): reload the page for the new render.
 
 import { spawn } from 'node:child_process'
 import { cpSync, rmSync, watch } from 'node:fs'
@@ -12,7 +12,7 @@ import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { openEngine } from './classcad.ts'
 import { MDX, ROOT, parts } from './paths.ts'
-import { HOME, buildConfigurator, buildPart, docsEnv, writePages } from './site.ts'
+import { HOME, buildConfigurator, buildVariants, docsEnv, writePages } from './site.ts'
 
 const freePort = () =>
   new Promise<number>((done) => {
@@ -28,7 +28,7 @@ const files = `http://localhost:${filesPort}`
 const urls = { site: `http://localhost:${port}`, files, shared: files }
 
 const engine = await openEngine()
-for (const part of parts()) await buildPart(engine, part)
+for (const part of parts()) await buildVariants(engine, part)
 writePages(urls)
 await buildConfigurator(true) // rebuilt as its files change; reload the page
 
@@ -83,7 +83,7 @@ watch(ROOT, { recursive: true }, (_event, file) => {
     later('pages', () => void writePages(urls))
   } else if (parts().includes(folder) && name === `${folder}.ts`) {
     later(folder, async () => {
-      await buildPart(engine, folder)
+      await buildVariants(engine, folder)
     })
   }
 })

@@ -7,9 +7,10 @@
 //
 // `schema` is the masters (compass-armchair.masters.ts), one Control per master. Their ranges keep every joint
 // valid (a tenon in its mortise, a tail in its socket): `build` does not throw for any combination of values inside
-// them, W and BOW included (a shallow bow on a wide chair is a long, flat arc, which the span must reach). Checked on
-// the all-min and all-max corners, W max x BOW min, and 600 random in-range combinations. Values outside the ranges
-// are not guaranteed.
+// them, W and BOW included (a shallow bow on a wide chair is a long, flat arc, which the span must reach), in both
+// variants (`variants`: cane, or a leather cushion). Checked on the all-min and all-max corners, W max x BOW min, and
+// 600 random in-range combinations (a back rail's round the kernel refuses is a chamfer: breakRing). Values outside
+// the ranges are not guaranteed.
 
 import * as THREE from 'three'
 import {
@@ -23,17 +24,27 @@ import {
   Rectangle,
   Rot,
   scope,
+  type Edge,
   type Part,
   type Sketch,
 } from '@classcad/smlibwasm'
 import type { Control } from '../configurator/src/models.ts'
-import { MASTERS } from './compass-armchair.masters.ts'
+import type { Role } from '../configurator/src/models.roles.ts'
+import { MASTERS, VARIANTS, edgeBreak, grooved, variantOf } from './compass-armchair.masters.ts'
 
 const TEAK = '#9b6a3c'
 const CANE_COLOR = '#e6d2a0'
+const LEATHER = '#1d1b1a'
+const PLYWOOD = '#c8c3b9' // birch plywood, a cool grey-beige: told apart from the cane's warm straw at a glance
 
 /** The configurator's controls: every master with its default, range, step and meaning. */
 export const schema: Record<keyof typeof MASTERS, Control> = MASTERS
+
+/** The chair's variants (compass-armchair.masters.ts): cane, the default, or a leather cushion. */
+export const variants = VARIANTS
+
+/** A variant's id. */
+type Variant = keyof typeof VARIANTS
 
 /** The masters' values, by name. */
 type Masters = { [K in keyof typeof MASTERS]: number }
@@ -41,7 +52,7 @@ type Masters = { [K in keyof typeof MASTERS]: number }
 /** The masters and everything derived from them: the model's dimensions. */
 type Dims = ReturnType<typeof derive>
 
-function derive(p: Masters) {
+function derive(p: Masters, variant: Variant) {
   const X_BOARD = p.W / 2 - p.LEG_T // the side boards' inner face, on which the posts' outer face lies
   const X_POST = X_BOARD - p.POST_W // the posts' inner face
   const X_RAIL = X_BOARD - p.RAIL_T // the side rails' inner face
@@ -53,14 +64,13 @@ function derive(p: Masters) {
   const K = (p.ARM_BACK_H - p.ARM_NOSE_H) / (p.ARM_BACK_Y - p.ARM_FRONT)
   const U0 = p.ARM_TOP - p.ARM_NOSE_H + K * p.ARM_FRONT
   const POST_Y = p.POST_Y_AT_ARM - (p.ARM_TOP - p.SEAT_TOP) * TL // the posts' axis at seat height
-  // The back rails' faces, two arcs about one centre. The rails are BOW less deep than the posts: their rear face is
-  // flush with the posts' rear face in the middle, their front face with the posts' front face at the ends, so that
-  // nothing of the back shows beyond the posts in a side view.
-  const RAIL_D = p.POST_D - p.BOW
-  const R_BACK = (X_POST ** 2 + p.BOW ** 2) / (2 * p.BOW) + RAIL_D / 2 // the arc's middle line, the cane's
-  const R_OUT = R_BACK + RAIL_D / 2
-  const R_IN = R_BACK - RAIL_D / 2
-  const ARC_Y = p.POST_D / 2 - R_OUT // the centre, in the back's frame
+  // The back rails' faces, two arcs about one centre on the back's axis, flush with the posts' faces at their inner
+  // face: the rear one through the posts' rear inner corners and BOW behind them in the middle, the front one through
+  // their front inner corners. The rail is a little less deep in the middle than the posts (R_OUT - R_IN), its ends
+  // exactly as deep.
+  const R_OUT = (X_POST ** 2 + p.BOW ** 2) / (2 * p.BOW)
+  const ARC_Y = p.POST_D / 2 + p.BOW - R_OUT // the centre, in the back's frame
+  const R_IN = Math.hypot(X_POST, ARC_Y + p.POST_D / 2)
   // Where the posts' rear face crosses the armrest's underside, in the side view; the armrest's square rear end.
   const POST_REAR_0 = POST_Y - p.SEAT_TOP * TL + p.POST_D / 2 / CL
   const MEET_Y = (POST_REAR_0 + TL * U0) / (1 + TL * K)
@@ -76,8 +86,13 @@ function derive(p: Masters) {
   // The back's tail, on a rail's end, centred on the post's axis: at the post's inner face and at its outer face.
   const BACK_TAIL_BASE = p.POST_D - 2 * p.BACK_TAIL_SHOULDER
   const BACK_TAIL_END = BACK_TAIL_BASE + 2 * p.POST_W * p.SLOPE
+  // The side rail tenons' middle height, in the middle of the wood the cane groove leaves under it, routed or not
+  // (GROOVE); in the leather variant, the rail's middle.
+  const Z_TENON = variant === 'cane' ? p.SEAT_TOP - (p.RAIL_H + p.GROOVE_D) / 2 : p.SEAT_TOP - p.RAIL_H / 2
   return {
     ...p,
+    variant,
+    grooved: grooved(variant, p.GROOVE),
     X_BOARD,
     X_POST,
     X_RAIL,
@@ -88,7 +103,6 @@ function derive(p: Masters) {
     R_OUT,
     ARC_Y,
     R_IN,
-    R_BACK,
     ARM_END,
     ARM_TENON_TOP,
     ARM_TENON_BOTTOM,
@@ -96,12 +110,15 @@ function derive(p: Masters) {
     SEAT_TAIL_BASE,
     BACK_TAIL_BASE,
     BACK_TAIL_END,
+    Z_TENON,
   }
 }
 
 type Point = [number, number]
 type Span = [number, number] // [z0, z1]: a rail's extent along the posts, in the back's frame
-type Named = { part: Part; name: string }
+// What a mesh is (`userData.role`, a Role: models.roles.ts): the teak (the frame, and the leather variant's cleats and
+// fillets, milled with it), the cane and its splines, the plywood that holds the upholstery, the upholstery.
+type Named = { part: Part; name: string; role: Role; color: string }
 
 /** The armrest's lower face: a straight slope from the nose to the back. */
 const underside = (d: Dims, y: number) => d.U0 - d.K * y
@@ -115,6 +132,11 @@ function sidePrism(profile: Point[], xMin: number, thickness: number): Part {
 /** From the back's own frame (upright, its origin at seat height) to the chair: leaned back. */
 function tilt<T extends Part>(d: Dims, shape: T): T {
   return Pos(0, d.POST_Y, d.SEAT_TOP).mul(Rot(-d.BACK_TILT).mul(shape)) as T
+}
+
+/** From the chair to the back's own frame: `tilt` undone. */
+function untilt<T extends Part>(d: Dims, shape: T): T {
+  return Rot(d.BACK_TILT).mul(Pos(0, -d.POST_Y, -d.SEAT_TOP).mul(shape)) as T
 }
 
 /** The back's curve between two radii, from post to post: concave toward the sitter. The span reaches up to the
@@ -136,6 +158,135 @@ function trapezoid(xEnd: number, xBase: number, middle: number, end: number, bas
   ]
 }
 
+/**
+ * The planes a body's straight edges are told apart by: an edge lies on the two faces whose planes hold both its ends.
+ * Each plane is a point on it and its normal, by the face's name.
+ */
+type Planes = Record<string, { at: [number, number, number]; normal: [number, number, number] }>
+
+/** The names of the planes of `planes` that hold both ends of `edge`. */
+function facesOf(edge: Edge, planes: Planes) {
+  const on = ({ at, normal }: Planes[string], point: { x: number; y: number; z: number }) =>
+    Math.abs((point.x - at[0]) * normal[0] + (point.y - at[1]) * normal[1] + (point.z - at[2]) * normal[2]) < 1e-6
+  return Object.keys(planes).filter((name) => on(planes[name], edge.start) && on(planes[name], edge.end))
+}
+
+/** A box's six faces, by name: `-x` and `+x` its faces square to x at its least and its greatest x, and so on. */
+function boxPlanes(part: Part): Planes {
+  const { min, max } = part.bbox()
+  const planes: Planes = {}
+  for (const [axis, i] of [['x', 0], ['y', 1], ['z', 2]] as const) {
+    const normal: [number, number, number] = [0, 0, 0]
+    normal[i] = 1
+    planes[`-${axis}`] = { at: [min.x, min.y, min.z], normal }
+    planes[`+${axis}`] = { at: [max.x, max.y, max.z], normal }
+  }
+  return planes
+}
+
+/** A side-view prism's faces (`sidePrism`): its profile's sides by their index (side i from point i to point i + 1),
+ * `in` and `out` its faces at x_min and x_min + thickness. */
+function prismPlanes(profile: Point[], xMin: number, thickness: number): Planes {
+  const planes: Planes = { in: { at: [xMin, 0, 0], normal: [1, 0, 0] }, out: { at: [xMin + thickness, 0, 0], normal: [1, 0, 0] } }
+  profile.forEach(([y, z], i) => {
+    const [y1, z1] = profile[(i + 1) % profile.length]
+    const length = Math.hypot(y1 - y, z1 - z)
+    planes[i] = { at: [0, y, z], normal: [0, -(z1 - z) / length, (y1 - y) / length] }
+  })
+  return planes
+}
+
+/**
+ * Round the straight edges of `part` that `radius` gives a radius, from the names of the two faces each lies on
+ * (`planes`); 0 or undefined leaves an edge sharp. The rounds are made by hand on the cut parts: EDGE_BREAK and
+ * ARM_NOSE_R are 0 in the CAM files' geometry (their masters' `cam`), which this leaves square.
+ */
+function round(part: Part, planes: Planes, radius: (faces: string[]) => number | undefined): Part {
+  const edges: Edge[] = []
+  const radii: number[] = []
+  for (const edge of part.edges()) {
+    const r = edge.geomType === 'line' ? radius(facesOf(edge, planes)) : undefined
+    if (!r) continue
+    edges.push(edge)
+    radii.push(r)
+  }
+  return edges.length ? part.fillet(edges, radii) : part
+}
+
+/**
+ * Every straight edge broken at EDGE_BREAK, but those along both faces of a pair of `sharp`: EDGE_BREAK is the one
+ * break of the assembled chair's outside arrises, as if broken after glue-up and flush-planing, continuous across its
+ * members. Sharp are the edges along a flush glued seam, on both members (the joint one surface but for a hairline, no
+ * V), and those no one sees or touches once assembled: between two faces glued over their whole extent, in an inside
+ * corner, along a dovetail's joint line, or under the cane's lap.
+ */
+const breakAllBut = (d: Dims, sharp: [string, string][]) => (faces: string[]) =>
+  sharp.some(([a, b]) => faces.includes(a) && faces.includes(b)) ? undefined : d.EDGE_BREAK
+
+/**
+ * The cane groove's outlines, in the plane of a frame: a rectangle around the opening (u from -halfU to halfU, v from
+ * v0 to v1), `o` out from its edges, its corners rounded on the groove's middle radius `o` out as well. At o =
+ * GROOVE_INSET it is the groove's middle line; GROOVE_W/2 less, its inner edge; GROOVE_W/2 more, its outer edge.
+ */
+function outline(d: Dims, halfU: number, v0: number, v1: number, o: number): Sketch {
+  const r = d.GROOVE_R + o - d.GROOVE_INSET
+  return Rectangle(2 * (halfU + o), v1 - v0 + 2 * o, { fillet: r }).translate(0, (v0 + v1) / 2, 0)
+}
+
+/** The band between two of the groove's outlines (o0 inside o1), or the whole of outline o1 when o0 is null. */
+const band = (d: Dims, halfU: number, v0: number, v1: number, o0: number | null, o1: number) =>
+  o0 === null ? outline(d, halfU, v0, v1, o1) : outline(d, halfU, v0, v1, o1).cut(outline(d, halfU, v0, v1, o0))
+
+/** In the seat: a band of the groove's outlines around the cane's opening, through the rails' height and above. */
+function seatBand(d: Dims, o0: number | null, o1: number): Part {
+  const front = d.SEAT_FRONT + d.FRONT_RAIL_T
+  const z0 = d.SEAT_TOP - d.RAIL_H
+  return band(d, d.X_RAIL, front, d.SEAT_BACK - d.REAR_RAIL_T, o0, o1)
+    .extrude(d.RAIL_H + d.CANE_SHEET + 1)
+    .translate(0, 0, z0)
+}
+
+/** In the seat: the layer between `d0` and `d1` below the rails' top face (above it where negative). */
+function seatLayer(d: Dims, d0: number, d1: number): Part {
+  return Box(2 * d.W, 2 * d.W, d1 - d0, { align: [Align.CENTER, Align.CENTER, Align.MAX] }).translate(0, 0, d.SEAT_TOP - d0)
+}
+
+/** In the back's frame: a band of the groove's outlines around the cane's opening, through the back's depth. */
+function backBand(d: Dims, o0: number | null, o1: number): Part {
+  const prism = band(d, d.X_POST, d.LOW_RAIL_TOP, d.HIGH_RAIL_BOTTOM, o0, o1).on(Plane.XZ).extrude(4 * d.POST_D)
+  return prism.translate(0, -2 * d.POST_D - prism.bbox().min.y, 0)
+}
+
+/**
+ * In the back's frame: the layer between `d0` and `d1` behind the face the cane lies on, its front (in front of it
+ * where negative): the rails' arc between the posts, the posts' front faces on either side.
+ */
+function backLayer(d: Dims, d0: number, d1: number): Part {
+  const z0 = d.LOW_RAIL_BOTTOM - 1
+  const z1 = d.HIGH_RAIL_TOP + 1
+  const rails = arcBand(d, d.R_IN + d1, d.R_IN + d0).extrude(z1 - z0).translate(0, 0, z0)
+  const post = Box(d.POST_W, d1 - d0, z1 - z0, { align: [Align.MIN, Align.MIN, Align.MIN] }).translate(d.X_POST, -d.POST_D / 2 + d0, z0)
+  return rails.fuse(post, post.mirror(Plane.YZ))
+}
+
+/**
+ * The cane of an opening, pressed into a groove around it and held there by a glued spline: the groove (cut into the
+ * frame), the spline in its outer half, and the cane: its `panel` across the opening, its sheet lapping the frame out
+ * to the groove's middle and down the groove's inner half. Without the groove (GROOVE off: routed by hand later), no
+ * groove and no spline, the sheet flat on the frame out to the groove's middle. `layer(d0, d1)` is the frame's depth
+ * between d0 and d1 below the face the cane lies on, `ring(o0, o1)` a band of the groove's outlines (`outline`) through it.
+ */
+function caning(d: Dims, panel: Part, layer: (d0: number, d1: number) => Part, ring: (o0: number | null, o1: number) => Part) {
+  const lap = ring(null, d.GROOVE_INSET).intersect(layer(-d.CANE_SHEET, 0))
+  if (!d.grooved) return { groove: undefined, spline: undefined, cane: panel.fuse(lap) }
+  const inner = d.GROOVE_INSET - d.GROOVE_W / 2
+  const outer = d.GROOVE_INSET + d.GROOVE_W / 2
+  const groove = ring(inner, outer).intersect(layer(-1, d.GROOVE_D))
+  const spline = ring(d.GROOVE_INSET, outer).intersect(layer(-d.CANE_SHEET, d.GROOVE_D))
+  const cane = panel.fuse(lap, ring(inner, d.GROOVE_INSET).intersect(layer(0, d.GROOVE_D)))
+  return { groove, spline, cane }
+}
+
 /** The tails at the +x end of a cross rail between y0 and y1: trapezoids on its face (x, z), through its
  * thickness, wide at the side rail's outer face; the side rail's pins are what they leave of it. */
 function seatTails(d: Dims, y0: number, y1: number): Part {
@@ -151,9 +302,10 @@ function seatTails(d: Dims, y0: number, y1: number): Part {
 
 /** In the back's frame: the tail at the +x end of a back rail, a trapezoid in plan (x, y) through the rail's
  * height, from the post's inner face to its outer face; it slides in along the post, and locks the rail against
- * pulling out of it. */
-function backTail(d: Dims, z0: number, z1: number): Part {
-  const tail = Polygon(...trapezoid(d.X_BOARD, d.X_POST, 0, d.BACK_TAIL_END, d.BACK_TAIL_BASE))
+ * pulling out of it. `into`: on, past the post's inner face, into the rail it is fused onto. */
+function backTail(d: Dims, z0: number, z1: number, into = 0): Part {
+  const base = d.BACK_TAIL_BASE - 2 * into * d.SLOPE // on its flanks, `into` past the post's inner face
+  const tail = Polygon(...trapezoid(d.X_BOARD, d.X_POST - into, 0, d.BACK_TAIL_END, base))
   return tail.extrude(z1 - z0).translate(0, 0, z0)
 }
 
@@ -165,31 +317,147 @@ function armTenon(d: Dims): Part {
   return tenon.translate(d.X_BOARD, 0, d.ARM_TENON_BOTTOM)
 }
 
-/** In the back's frame: the +x post, its ends cut into sockets by the rails' tails, the tenon's mortise. */
-function backPost(d: Dims, rails: Span[]): Part {
+/**
+ * The wood a round of radius r takes off a square arris, in the plane square to it: the r x r square in the corner
+ * at `corner`, the faces running on toward `toward` (+1 or -1 along each axis), less the round's circle.
+ */
+function arrisSliver(r: number, [u, v]: Point, [su, sv]: Point): Sketch {
+  return Rectangle(r, r)
+    .translate(u + (su * r) / 2, v + (sv * r) / 2, 0)
+    .cut(Circle(r).translate(u + su * r, v + sv * r, 0))
+}
+
+/**
+ * In the back's frame: the +x post, its arrises broken as if after glue-up, then its ends cut into sockets by the
+ * rails' tails, the tenon's mortise, the cane's groove. Sharp are its front inner arris (the cane laps it, the rails'
+ * fronts are flush with it at their dovetails) and its inner face's arrises where the rails' ends cover it: its ends'
+ * (flush with the rails' tops and bottoms, the rails as deep as the post there) and its rear one over the rails'
+ * height (flush with their rear faces); a round there would be a notch in the rail's continuous round. Its rear one
+ * between the rails, in the opening, is broken: the round runs from rail to rail.
+ */
+function backPost(d: Dims, rails: Span[], groove: Part[], armrest: Part): Part {
   const post = Box(d.POST_W, d.POST_D, rails[1][1] - rails[0][0], { align: [Align.MIN, Align.CENTER, Align.MIN] })
-  return post
-    .translate(d.X_POST, 0, rails[0][0])
+  const stock = post.translate(d.X_POST, 0, rails[0][0])
+  const glued: [string, string][] = [['-x', '-y'], ['-x', '+y'], ['-x', '-z'], ['-x', '+z']]
+  const rounded = round(stock, boxPlanes(stock), breakAllBut(d, glued))
+  const opening = () =>
+    arrisSliver(d.EDGE_BREAK, [d.X_POST, d.POST_D / 2], [1, -1]).extrude(rails[1][0] - rails[0][1]).translate(0, 0, rails[0][1])
+  // Its outer face's front and rear arrises against the armrest (`armrest`, its outline in the back's frame).
+  const againstArmrest = () =>
+    ([[-1, 1], [1, -1]] as const).map(([side, toward]) =>
+      arrisSliver(d.EDGE_BREAK, [d.X_BOARD, (side * d.POST_D) / 2], [-1, toward])
+        .extrude(rails[1][1] - rails[0][0])
+        .translate(0, 0, rails[0][0])
+        .intersect(armrest),
+    )
+  return (d.EDGE_BREAK ? rounded.cut(opening()).fuse(...againstArmrest()) : rounded)
     .cut(rails.map(([z0, z1]) => backTail(d, z0, z1)))
     .cut(armTenon(d))
+    .cut(...groove)
 }
 
-/** The back's rails and cane panel, in the back's own frame: arcs between the posts' inner faces, the rails' ends
- * cut into tails through the posts. */
-function backFrame(d: Dims, rails: Span[]): Named[] {
-  const members: Named[] = []
-  for (const [z0, z1] of rails) {
-    const rail = arcBand(d, d.R_OUT, d.R_IN).extrude(z1 - z0).translate(0, 0, z0)
-    const tail = backTail(d, z0, z1)
-    members.push({ part: rail.fuse(tail, tail.mirror(Plane.YZ)), name: 'back rail' })
+/**
+ * A back rail's ring with its edges rounded at `radius`; chamfered at it instead when the round fails, as the ClassCAD
+ * part does (scripts' `fillet`). The ring's circles are metres across on a shallow bow: smlibwasm checks a round by the
+ * volume it takes off, a bound its arcs of that size can overshoot for some widths and bows (W 473, POST_D 38, BOW
+ * 9), though the round is a few millimetres by hand either way. Sharp, with a warning, if the chamfer fails too.
+ */
+function breakRing(ring: Part, edges: Edge[], radius: number): Part {
+  try {
+    return ring.fillet(edges, radius)
+  } catch (error) {
+    console.warn(`back rail: ${(error as Error).message}; chamfered at ${radius} instead`)
   }
-  const panel = arcBand(d, d.R_BACK + d.CANE_T / 2, d.R_BACK - d.CANE_T / 2).extrude(rails[1][0] - rails[0][1])
-  members.push({ part: panel.translate(0, 0, rails[0][1]), name: 'back cane' })
-  return members
+  try {
+    return ring.chamfer(edges, radius)
+  } catch (error) {
+    console.warn(`back rail: ${(error as Error).message}; left sharp`)
+    return ring
+  }
 }
 
-/** The chair's 24 bodies, in CAD coordinates (z up, facing -Y). */
+/**
+ * The back's rails, in the back's own frame: arcs between the posts' inner faces, their arcs broken but the front one
+ * on the opening's side, which the cane laps (their ends are glued), their ends cut into tails through the posts, the
+ * cane's groove in their front face.
+ */
+function backRails(d: Dims, rails: Span[], groove: Part[]): Named[] {
+  return rails.map(([z0, z1], i) => {
+    // Rounded as a whole ring, then cut to the posts: a round that stops on the end face, at a slant to it, is a
+    // corner the kernel cannot build.
+    const ring = Circle(d.R_OUT).cut(Circle(d.R_IN)).translate(0, d.ARC_Y, 0).extrude(z1 - z0).translate(0, 0, z0)
+    const lapped = i === 0 ? z1 : z0
+    const broken = ring.edges().filter((edge) => !(Math.abs(edge.start.z - lapped) < 1e-6 && Math.abs(edge.radius - d.R_IN) < 1e-6))
+    const rounded = d.EDGE_BREAK > 0 ? breakRing(ring, broken, d.EDGE_BREAK) : ring
+    const rail = rounded.intersect(arcBand(d, d.R_OUT + 1, d.R_IN - 1).extrude(z1 - z0 + 2).translate(0, 0, z0 - 1))
+    // The tails reach into the rail: its end face, as deep as the post, flush with its faces, and a tail's base on it
+    // make a fuse the kernel fails for some values (W 471, LEG_T 26, POST_W 31, POST_D 41, BOW 9, BACK_TILT 19.5).
+    // Its end through the post rounded as the post's own arris there, at the post's end (the low rail's bottom, the
+    // high rail's top): the post's round runs on across the tail, which would stand proud of it square.
+    const end = i === 0 ? z0 : z1
+    const tailPlanes: Planes = { end: { at: [d.X_BOARD, 0, end], normal: [0, 0, 1] }, out: { at: [d.X_BOARD, 0, end], normal: [1, 0, 0] } }
+    const tail = round(backTail(d, z0, z1, 1), tailPlanes, (faces) => (faces.length === 2 ? d.EDGE_BREAK : undefined))
+    return { part: rail.fuse(tail, tail.mirror(Plane.YZ)).cut(...groove), name: 'back rail', role: 'wood', color: TEAK }
+  })
+}
+
+/** The clearance between the seat board and cushion and the rails, all round. */
+const GAP = 1
+
+/**
+ * The leather variant's seat, in its opening between the rails: a plywood board on teak cleats, the cushion on it.
+ *
+ * The board rests on cleats glued and screwed to the four rails' inner faces rather than in a rebate milled into them:
+ * the rails are cut flat from the top on the ShopBot, and a rebate on their inner face is a side-machining operation
+ * (or a rebating bit by hand after the dovetails), while the cleats are more flat parts, cut from the top like any
+ * board. They also let the board be screwed from below, and the cushion lifted out.
+ */
+function leatherSeat(d: Dims): Named[] {
+  const x = d.X_RAIL - d.CLEAT // the front and rear cleats' ends, against the side cleats
+  const y0 = d.SEAT_FRONT + d.FRONT_RAIL_T // the opening, between the cross rails
+  const y1 = d.SEAT_BACK - d.REAR_RAIL_T
+  const boardTop = d.SEAT_TOP - d.SEAT_BOARD_DOWN
+  const z = boardTop - d.SEAT_BOARD_T // the cleats' top, under the board
+  const stick = (xMin: number, xMax: number, yMin: number, yMax: number) =>
+    Box(xMax - xMin, yMax - yMin, d.CLEAT, { align: [Align.MIN, Align.MIN, Align.MAX] }).translate(xMin, yMin, z)
+  const side = stick(x, d.X_RAIL, y0, y1)
+  // The board and the cushion fill the opening, GAP short of the rails all round.
+  const fill = (z0: number, z1: number) =>
+    Box(2 * (d.X_RAIL - GAP), y1 - y0 - 2 * GAP, z1 - z0, { align: [Align.CENTER, Align.MIN, Align.MIN] }).translate(0, y0 + GAP, z0)
+  return [
+    { part: side, name: 'seat cleat', role: 'wood', color: TEAK },
+    { part: side.mirror(Plane.YZ), name: 'seat cleat', role: 'wood', color: TEAK },
+    { part: stick(-x, x, y0, y0 + d.CLEAT), name: 'front seat cleat', role: 'wood', color: TEAK },
+    { part: stick(-x, x, y1 - d.CLEAT, y1), name: 'rear seat cleat', role: 'wood', color: TEAK },
+    { part: fill(z, boardTop), name: 'seat board', role: 'support', color: PLYWOOD },
+    { part: fill(boardTop, d.SEAT_TOP + d.CUSHION_PROUD), name: 'seat cushion', role: 'cushion', color: LEATHER },
+  ]
+}
+
+/**
+ * The leather variant's back, in the back's frame: an upholstered panel between the posts and the rails, a
+ * bending-plywood backer and its pad, screwed from behind through the backer into two curved teak fillets. The rails
+ * are arcs in plan, so the fillets are flat parts too: arc bands at the rails' rear face, on the low rail and under the
+ * high one. The backer is just in front of them, the pad in front of it, to just proud of the rails' front face.
+ */
+function leatherBack(d: Dims, rails: Span[]): Named[] {
+  const [low, high] = [rails[0][1], rails[1][0]] // the opening, between the rails
+  const arc = (rOut: number, rIn: number, z0: number, z1: number) => arcBand(d, rOut, rIn).extrude(z1 - z0).translate(0, 0, z0)
+  const backer = d.R_OUT - d.FILLET // the backer's rear face
+  return [
+    { part: arc(d.R_OUT, backer, low, low + d.FILLET), name: 'low back fillet', role: 'wood', color: TEAK },
+    { part: arc(d.R_OUT, backer, high - d.FILLET, high), name: 'high back fillet', role: 'wood', color: TEAK },
+    { part: arc(backer, backer - d.BACK_BOARD_T, low, high), name: 'back board', role: 'support', color: PLYWOOD },
+    { part: arc(backer - d.BACK_BOARD_T, d.R_IN - d.BACK_PAD_PROUD, low, high), name: 'back pad', role: 'cushion', color: LEATHER },
+  ]
+}
+
+/**
+ * The chair's bodies in its variant, in CAD coordinates (z up, facing -Y): 26 with cane, 24 without its groove (no
+ * splines), 32 with leather.
+ */
 function model(d: Dims): Named[] {
+  const cane = d.variant === 'cane'
   const rails: Span[] = [
     [d.LOW_RAIL_BOTTOM, d.LOW_RAIL_TOP],
     [d.HIGH_RAIL_BOTTOM, d.HIGH_RAIL_TOP],
@@ -218,10 +486,23 @@ function model(d: Dims): Named[] {
   ]
 
   const xMid = d.X_BOARD + d.LEG_T / 2 // the middle of a board's thickness, where the spline sits
-  const zTenon = d.SEAT_TOP - d.RAIL_H / 2
   const frontTails = seatTails(d, d.SEAT_FRONT, d.SEAT_FRONT + d.FRONT_RAIL_T)
   const rearTails = seatTails(d, d.SEAT_BACK - d.REAR_RAIL_T, d.SEAT_BACK)
   const parts: Named[] = []
+
+  // The cane lies on the seat's top and on the back's front, the sitter's side, as on the chair it follows; each panel
+  // in its opening, just under that face. The back's in the back's frame.
+  const seatPanel = Box(2 * d.X_RAIL, d.SEAT_BACK - d.REAR_RAIL_T - d.SEAT_FRONT - d.FRONT_RAIL_T, d.CANE_T, {
+    align: [Align.CENTER, Align.MIN, Align.MAX],
+  }).translate(0, d.SEAT_FRONT + d.FRONT_RAIL_T, d.SEAT_TOP)
+  const seat = cane ? caning(d, seatPanel, (d0, d1) => seatLayer(d, d0, d1), (o0, o1) => seatBand(d, o0, o1)) : undefined
+  const backPanel = arcBand(d, d.R_IN + d.CANE_T, d.R_IN)
+    .extrude(rails[1][0] - rails[0][1])
+    .translate(0, 0, rails[0][1])
+  const back = cane ? caning(d, backPanel, (d0, d1) => backLayer(d, d0, d1), (o0, o1) => backBand(d, o0, o1)) : undefined
+  // What the cane's grooves cut from the frame: nothing, with no cane to hold or the groove left to the hand.
+  const seatGroove = seat?.groove ? [seat.groove] : []
+  const backGroove = back?.groove ? [back.groove] : []
 
   // The +x side as written, the -x side its mirror image.
   const spline = Box(d.SPLINE_W, d.SPLINE_T, underside(d, 0) + d.SPLINE_IN_ARM - d.SPLINE_Z, {
@@ -231,49 +512,125 @@ function model(d: Dims): Named[] {
   const tenons = [-d.TENON_Y, d.TENON_Y].map((y) =>
     Box(d.TENON_IN_RAIL + d.TENON_LEN, d.TENON_T, d.TENON_H, {
       align: [Align.MIN, Align.CENTER, Align.CENTER],
-    }).translate(d.X_BOARD - d.TENON_IN_RAIL, y, zTenon),
+    }).translate(d.X_BOARD - d.TENON_IN_RAIL, y, d.Z_TENON),
   )
-  // its half of the spline's slot, and the side rail's tenon's mortise
-  const front = sidePrism(frontLeg, d.X_BOARD, d.LEG_T).cut(spline, tenons[0])
-  const rear = sidePrism(rearLeg, d.X_BOARD, d.LEG_T).cut(spline, tenons[1])
-  // the tenons' mortises; its pins, what the tails leave
-  const rail = Box(d.RAIL_T, d.SEAT_BACK - d.SEAT_FRONT, d.RAIL_H, { align: [Align.MAX, Align.MIN, Align.MAX] })
-    .translate(d.X_BOARD, d.SEAT_FRONT, d.SEAT_TOP)
+  // Every board's arrises are broken before its joints are cut, but those on the seam and on the top: both glued flush
+  // over their whole extent, to the other board and under the armrest, the joint one surface but for a hairline (the
+  // seam's at the notch too, in the arch's inside corner). Its half of the spline's slot, the side rail's tenon's
+  // mortise.
+  const leg = (profile: Point[], seam: string, top: string) =>
+    round(sidePrism(profile, d.X_BOARD, d.LEG_T), prismPlanes(profile, d.X_BOARD, d.LEG_T), (faces) =>
+      faces.includes(seam) || faces.includes(top) ? undefined : d.EDGE_BREAK,
+    )
+  const front = leg(frontLeg, '2', '3').cut(spline, tenons[0])
+  const rear = leg(rearLeg, '3', '2').cut(spline, tenons[1])
+  // Broken but its inner face's top arris, which the cane laps, and its ends', on the dovetails' joint lines; its inner
+  // face's bottom arris only between the cross rails, in the opening: under them it is flush with their bottoms, and a
+  // round there would be a notch in their continuous round across the seat's front and back. The tenons' mortises,
+  // its pins (what the tails leave), the cane's groove.
+  // What the side rails' and the posts' outer faces lie against, seen from the side, square to x through them: the
+  // side's two boards (their hull less the V between them under the notch) and the armrest. The arrises of those faces
+  // are sharp where they lie against it, in an inside corner, rounded beyond it, their round running on into the
+  // board's face: the wood their round took off is put back there (`arrisSliver`, cut to the outline).
+  const outlineX = d.X_BOARD - d.EDGE_BREAK - 1
+  const outlineT = d.EDGE_BREAK + 2
+  const sideOutline = sidePrism(
+    [frontLeg[0], frontLeg[1], [0, d.NOTCH_Z], rearLeg[0], rearLeg[1], rearLeg[2], frontLeg[4]],
+    outlineX,
+    outlineT,
+  )
+  const armOutline = sidePrism(armProfile, outlineX, outlineT)
+  const stock = Box(d.RAIL_T, d.SEAT_BACK - d.SEAT_FRONT, d.RAIL_H, { align: [Align.MAX, Align.MIN, Align.MAX] }).translate(
+    d.X_BOARD,
+    d.SEAT_FRONT,
+    d.SEAT_TOP,
+  )
+  const glued: [string, string][] = [['-x', '+z'], ['-x', '-y'], ['-x', '+y'], ['-x', '-z']]
+  const railRounded = round(stock, boxPlanes(stock), breakAllBut(d, glued))
+  const opening = () => {
+    const y0 = d.SEAT_FRONT + d.FRONT_RAIL_T
+    const sliver = arrisSliver(d.EDGE_BREAK, [d.X_RAIL, d.SEAT_TOP - d.RAIL_H], [1, 1]).on(Plane.XZ).extrude(d.SEAT_BACK - d.REAR_RAIL_T - y0)
+    return sliver.translate(0, y0 - sliver.bbox().min.y, 0)
+  }
+  // Its outer face's top and bottom arrises against the boards (`sideOutline`).
+  const againstBoards = () =>
+    ([[d.SEAT_TOP, -1], [d.SEAT_TOP - d.RAIL_H, 1]] as const).map(([z, toward]) => {
+      const sliver = arrisSliver(d.EDGE_BREAK, [d.X_BOARD, z], [-1, toward]).on(Plane.XZ).extrude(d.SEAT_BACK - d.SEAT_FRONT)
+      return sliver.translate(0, d.SEAT_FRONT - sliver.bbox().min.y, 0).intersect(sideOutline)
+    })
+  const rail = (d.EDGE_BREAK ? railRounded.cut(opening()).fuse(...againstBoards()) : railRounded)
     .cut(tenons)
     .cut(frontTails, rearTails)
+    .cut(...seatGroove)
   const loose = tilt(d, armTenon(d))
-  const arm = sidePrism(armProfile, d.X_BOARD, d.LEG_T).cut(spline, loose) // the spline's and the tenon's mortises
+  // The nose's four edges (side 0) rounded at ARM_NOSE_R, every other arris broken, but the underside's over the
+  // boards' tops, glued flush on them (sharp on the boards' too): before and behind the boards they are broken and run
+  // on into the round of the boards' edges. Made in three lengths, each rounded, then fused: before the boards, over
+  // them, behind them; the faces between two lengths, inside the armrest, sharp. The spline's and the tenon's mortises.
+  const armLength = (y0: number, y1: number, nose: boolean, end: boolean, glued: boolean) => {
+    const profile: Point[] = [
+      [y0, underside(d, y0)],
+      [y0, d.ARM_TOP],
+      [y1, d.ARM_TOP],
+      [y1, underside(d, y1)],
+    ]
+    const radius = (faces: string[]) => {
+      if (faces.includes('0')) return nose ? d.ARM_NOSE_R : undefined
+      if (faces.includes('2')) return end ? d.EDGE_BREAK : undefined
+      return faces.includes('3') && glued ? undefined : d.EDGE_BREAK
+    }
+    return round(sidePrism(profile, d.X_BOARD, d.LEG_T), prismPlanes(profile, d.X_BOARD, d.LEG_T), radius)
+  }
+  // Without EDGE_BREAK, one length: its nose's rounds alone.
+  const armStock = d.EDGE_BREAK
+    ? armLength(d.ARM_FRONT, d.ARM_EDGE_FRONT, true, false, false).fuse(
+        armLength(d.ARM_EDGE_FRONT, d.ARM_EDGE_REAR, false, false, true),
+        armLength(d.ARM_EDGE_REAR, d.ARM_END, false, true, false),
+      )
+    : armLength(d.ARM_FRONT, d.ARM_END, true, true, false)
+  const arm = armStock.cut(spline, loose)
+  const wood = (part: Part, name: string): Named => ({ part, name, role: 'wood', color: TEAK })
   const side: Named[] = [
-    { part: front, name: 'front leg' },
-    { part: rear, name: 'rear leg' },
-    { part: spline, name: 'spline' },
-    { part: rail, name: 'side rail' },
-    { part: tenons[0], name: 'rail tenon' },
-    { part: tenons[1], name: 'rail tenon' },
-    { part: arm, name: 'armrest' },
-    { part: tilt(d, backPost(d, rails)), name: 'back post' },
-    { part: loose, name: 'arm tenon' },
+    wood(front, 'front leg'),
+    wood(rear, 'rear leg'),
+    wood(spline, 'spline'),
+    wood(rail, 'side rail'),
+    wood(tenons[0], 'rail tenon'),
+    wood(tenons[1], 'rail tenon'),
+    wood(arm, 'armrest'),
+    wood(tilt(d, backPost(d, rails, backGroove, untilt(d, armOutline))), 'back post'),
+    wood(loose, 'arm tenon'),
   ]
   for (const mirrored of [false, true]) {
-    for (const { part, name } of side) parts.push({ part: mirrored ? part.mirror(Plane.YZ) : part, name })
+    for (const named of side) parts.push({ ...named, part: mirrored ? named.part.mirror(Plane.YZ) : named.part })
   }
 
-  // A cross rail to the side rails' outer faces, its ends cut into tails.
-  const crossRail = (y0: number, t: number, tails: Part, name: string): Named => {
-    const whole = Box(2 * d.X_BOARD, t, d.RAIL_H, { align: [Align.CENTER, Align.MIN, Align.MAX] }).translate(0, y0, d.SEAT_TOP)
-    const end = Box(d.RAIL_T, t, d.RAIL_H, { align: [Align.MIN, Align.MIN, Align.MAX] })
-      .translate(d.X_RAIL, y0, d.SEAT_TOP)
-      .cut(tails)
-    return { part: whole.cut(end, end.mirror(Plane.YZ)), name }
+  // A cross rail between the side rails' inner faces, its tails through them, the cane's groove in its top. Its
+  // arrises broken but on its ends (glued to the side rails) and the top one on the opening's side, which the cane
+  // laps; its tails' corner on the seat's outside, as the side rail's own corner there.
+  const crossRail = (y0: number, t: number, tails: Part, outside: '-y' | '+y', name: string): Named => {
+    const stock = Box(2 * d.X_RAIL, t, d.RAIL_H, { align: [Align.CENTER, Align.MIN, Align.MAX] }).translate(0, y0, d.SEAT_TOP)
+    const lapped = outside === '-y' ? '+y' : '-y'
+    const middle = round(stock, boxPlanes(stock), (faces) =>
+      faces.includes('-x') || faces.includes('+x') || (faces.includes(lapped) && faces.includes('+z')) ? undefined : d.EDGE_BREAK,
+    )
+    const end = round(tails, boxPlanes(tails), (faces) => (faces.includes('+x') && faces.includes(outside) ? d.EDGE_BREAK : undefined))
+    return wood(middle.fuse(end, end.mirror(Plane.YZ)).cut(...seatGroove), name)
   }
-  parts.push(crossRail(d.SEAT_FRONT, d.FRONT_RAIL_T, frontTails, 'front rail'))
-  parts.push(crossRail(d.SEAT_BACK - d.REAR_RAIL_T, d.REAR_RAIL_T, rearTails, 'rear rail'))
-  // The cane is a flat panel that touches its rails: the weave is not modelled.
-  const seat = Box(2 * d.X_RAIL, d.SEAT_BACK - d.REAR_RAIL_T - d.SEAT_FRONT - d.FRONT_RAIL_T, d.CANE_T, {
-    align: [Align.CENTER, Align.MIN, Align.MAX],
-  })
-  parts.push({ part: seat.translate(0, d.SEAT_FRONT + d.FRONT_RAIL_T, d.SEAT_TOP), name: 'seat cane' })
-  for (const { part, name } of backFrame(d, rails)) parts.push({ part: tilt(d, part), name })
+  parts.push(crossRail(d.SEAT_FRONT, d.FRONT_RAIL_T, frontTails, '-y', 'front rail'))
+  parts.push(crossRail(d.SEAT_BACK - d.REAR_RAIL_T, d.REAR_RAIL_T, rearTails, '+y', 'rear rail'))
+  for (const named of backRails(d, rails, backGroove)) parts.push({ ...named, part: tilt(d, named.part) })
+  if (seat && back) {
+    // The cane is flat: the weave is not modelled. The splines are rattan, glued in.
+    const caned = (part: Part, name: string): Named => ({ part, name, role: 'cane', color: CANE_COLOR })
+    if (seat.spline) parts.push(caned(seat.spline, 'seat cane spline'))
+    parts.push(caned(seat.cane, 'seat cane'))
+    if (back.spline) parts.push(caned(tilt(d, back.spline), 'back cane spline'))
+    parts.push(caned(tilt(d, back.cane), 'back cane'))
+  } else {
+    parts.push(...leatherSeat(d))
+    for (const named of leatherBack(d, rails)) parts.push({ ...named, part: tilt(d, named.part) })
+  }
   return parts
 }
 
@@ -310,27 +667,31 @@ function toGeometryData(part: Part) {
 }
 
 /**
- * Builds the chair from the masters in `values` (missing ones take their default, extra ones are ignored). It
- * returns a Group of 24 named meshes, in mm, standing on y = 0, facing +z, x = 0 its middle.
+ * Builds the chair from the masters in `values` (missing ones take their default, extra ones are ignored), in one of
+ * its variants. It returns a Group of named meshes (26 with cane, 24 without its groove, 32 with leather), each with its `userData.role`, in
+ * mm, standing on y = 0, facing +z, x = 0 its middle.
  *
  * @param values The masters to change, keyed by the names in `schema`; a missing key takes its default.
+ * @param variant The variant's id (`variants`), cane when omitted; an unknown one throws, naming the known ones.
  */
-export async function build(values: Record<string, number> = {}): Promise<THREE.Object3D> {
+export async function build(values: Record<string, number> = {}, variant = 'cane'): Promise<THREE.Object3D> {
   const p = {} as Masters
   for (const name of Object.keys(MASTERS) as (keyof Masters)[]) p[name] = values[name] ?? MASTERS[name].value
-  const d = derive(p)
+  p.EDGE_BREAK = edgeBreak(p.EDGE_BREAK) // under 1 mm, no round (as the ClassCAD part)
+  const d = derive(p, variantOf(variant))
   // The kernel's bodies are freed once their triangles are copied out; only plain arrays leave the scope.
-  const bodies = scope(() => model(d).map(({ part, name }) => ({ name, ...toGeometryData(part) })))
+  const bodies = scope(() => model(d).map(({ part, name, role, color }) => ({ name, role, color, ...toGeometryData(part) })))
   const chair = new THREE.Group()
   chair.name = 'compass armchair'
-  for (const { name, position, normal } of bodies) {
+  for (const { name, role, color, position, normal } of bodies) {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3))
     if (normal) geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3))
     else geometry.computeVertexNormals()
-    const color = name.includes('cane') ? CANE_COLOR : TEAK
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, roughness: 0.7 }))
+    const roughness = role === 'cushion' ? 0.5 : 0.7
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, roughness }))
     mesh.name = name
+    mesh.userData.role = role
     chair.add(mesh)
   }
   return chair

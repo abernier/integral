@@ -12,7 +12,7 @@ import { connect } from '@classcad/mcp/dist/client.js'
 import { wasmOptionsFromEnv } from '@classcad/mcp/dist/engine/wasm.js'
 import { buildScene, sceneToGlb } from '@classcad/mcp/dist/viewer/scene.js'
 import { buildScriptApi } from '@classcad/script'
-import { renderSession } from '@classcad/renderer/node'
+import { fetchGraphic, renderSession } from '@classcad/renderer/node'
 import type { Api } from './part.ts'
 import { stepAssembly } from './step-assembly.ts'
 
@@ -72,8 +72,11 @@ export async function glb(engine: Engine, path: string) {
   return data.length
 }
 
-/** Render the drawing to `path` as a PNG, one color per body, seen from behind and above. */
-export async function render(engine: Engine, path: string) {
+/**
+ * Render the drawing to `path` as a PNG, one color per body, seen from behind and above; `keep`, when given, picks
+ * the bodies shown by their solid's name (the others are left out of the image, not of the drawing).
+ */
+export async function render(engine: Engine, path: string, keep?: (name: string) => boolean) {
   const dir = join(path, '..')
   mkdirSync(dir, { recursive: true })
   const [first] = await renderSession(engine.client, 'render', dir, {
@@ -83,6 +86,34 @@ export async function render(engine: Engine, path: string) {
     layers: ['solid'],
     colors: 'distinct',
     view: { azimuth: 215, elevation: 22 },
+    // Without `keep`, renderSession fetches the tree and the graphic itself.
+    ...(keep && (await keptGraphic(engine, keep))),
   })
   renameSync(join(dir, first.file), path)
+}
+
+/**
+ * The tree and graphic `render` hands renderSession when it leaves bodies out: the renderer draws a fetched graphic
+ * as is, so the containers owned by a solid `keep` rejects are dropped here. They are fetched the way renderSession
+ * fetches them, after the database settings it applies first: without those the engine omits the edges, and the
+ * image would have none.
+ */
+async function keptGraphic(engine: Engine, keep: (name: string) => boolean) {
+  try {
+    await engine.client.execute({
+      'v1.common.setDatabaseSettings': [
+        { isGraphicEnabled: true, isCCGraphicEnabled: true, isSketchGraphicEnabled: true, doCurveTessellation: true },
+      ],
+    })
+  } catch {
+    // Older engines may not support it: render without edges, as renderSession does.
+  }
+  const tree = (await engine.client.getTree()) as Record<string, { class?: string; name?: string }>
+  const graphic = (await fetchGraphic(engine.client)) as { containers?: { owner?: number }[] }
+  // A container is drawn for its owner, a solid.
+  const kept = (owner?: number) => {
+    const solid = owner === undefined ? undefined : tree[owner]
+    return solid?.class !== 'CC_Solid' || keep(solid.name ?? '')
+  }
+  return { tree, graphic: { ...graphic, containers: graphic.containers?.filter(({ owner }) => kept(owner)) } }
 }

@@ -50,6 +50,9 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "sharp"
-    ]
+    ],
+    "patchedDependencies": {
+      "@classcad/mcp@0.6.1": "patches/@classcad__mcp@0.6.1.patch"
+    }
   }
 }

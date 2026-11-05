@@ -1,5 +1,6 @@
 /**
- * The configurator's build cache: a part built once per set of values, the last few kept for `use()`, the rest freed.
+ * The configurator's build cache: a part built once per variant and set of values, the last few kept for `use()`, the
+ * rest freed.
  * Pure of React, so that it is testable under node.
  * @module
  */
@@ -9,8 +10,13 @@ import type { Model } from './models.ts'
 /** A build's outcome. A build that throws keeps the last good shape on screen, with its error. */
 export type Built = { shape?: Object3D; error?: string }
 
+/** A build's key: the variant and the values, as JSON, so that it is a string a debounce and a cache can compare. */
+export function buildKey(variant: string, values: Record<string, number>) {
+  return JSON.stringify({ variant, values })
+}
+
 /**
- * A builder that keeps the last few builds, by their values, for `use()`: the build on screen and the one rendering in
+ * A builder that keeps the last few builds, by their key (`buildKey`), for `use()`: the build on screen and the one rendering in
  * its place may differ, and the same key gives the same promise. Least recently used first out: the component asks
  * for the shown key on every render, so the build on screen is always the latest hit and never the one pushed out. A
  * build pushed out is disposed, since `<primitive>` frees nothing it did not create; three uploads it again should it
@@ -18,7 +24,7 @@ export type Built = { shape?: Object3D; error?: string }
  * @param kept How many builds to keep.
  * @example
  * const build = createBuilds(3)
- * const { shape, error } = use(build(model, JSON.stringify(values)))
+ * const { shape, error } = use(build(model, buildKey(variant, values)))
  */
 export function createBuilds(kept: number) {
   const builds = new Map<string, Promise<Built>>()
@@ -43,7 +49,10 @@ export function createBuilds(kept: number) {
     }
     // `Promise.resolve().then`: a `build` that throws at once rejects like one that rejects later.
     const built: Promise<Built> = Promise.resolve()
-      .then(() => model.build(JSON.parse(key)))
+      .then(() => {
+        const { variant, values }: { variant: string; values: Record<string, number> } = JSON.parse(key)
+        return model.build(values, variant)
+      })
       .then(
         (shape) => {
           // A build pushed out before it resolved is freed by its eviction: it must not become the last good shape.
