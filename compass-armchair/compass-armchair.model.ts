@@ -29,6 +29,7 @@ import {
   type Sketch,
 } from '@classcad/smlibwasm'
 import type { Control } from '../configurator/src/models.ts'
+import type { Role } from '../configurator/src/models.roles.ts'
 import { MASTERS, VARIANTS, edgeBreak, grooved, variantOf } from './compass-armchair.masters.ts'
 
 const TEAK = '#9b6a3c'
@@ -115,11 +116,8 @@ function derive(p: Masters, variant: Variant) {
 
 type Point = [number, number]
 type Span = [number, number] // [z0, z1]: a rail's extent along the posts, in the back's frame
-/**
- * What a mesh is, for the configurator's Show folder (`userData.role`): the teak (the frame, and the leather variant's
- * cleats and fillets, milled with it), the cane and its splines, the plywood that holds the upholstery, the upholstery.
- */
-type Role = 'wood' | 'cane' | 'support' | 'cushion'
+// What a mesh is (`userData.role`, a Role: models.roles.ts): the teak (the frame, and the leather variant's cleats and
+// fillets, milled with it), the cane and its splines, the plywood that holds the upholstery, the upholstery.
 type Named = { part: Part; name: string; role: Role; color: string }
 
 /** The armrest's lower face: a straight slope from the nose to the back. */

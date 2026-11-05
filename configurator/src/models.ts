@@ -57,8 +57,8 @@ export type Variants = Record<string, Variant>
 /**
  * What a part's model file exports: its leva `schema`, its `variants` (the masters module's `VARIANTS`, when it has
  * any), and the `build` that makes the part from the schema's values in one of its variants. Each mesh of the built
- * part may name its role in `userData.role` (`wood`, `cane`, `cushion`...): the panel's Show folder hides or shows
- * the meshes by role; a mesh without one is `part`.
+ * part may name its role in `userData.role` (a `Role`, models.roles.ts): the panel's Show folder hides or shows the
+ * meshes by role; a mesh without one is wood (`roleOf`).
  */
 export type Model = {
   schema: Record<string, Control>

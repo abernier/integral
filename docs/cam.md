@@ -29,6 +29,7 @@ pnpm cam --help                        # every flag, its default
 pnpm cam --list-tools                  # what Fusion's MCP server offers
 pnpm cam zigzag-chair --dry-run        # the plan, nothing sent
 pnpm cam zigzag-chair --force --keep   # then Simulate the setups in Fusion
+pnpm cam compass-armchair --variant leather --force   # a variant other than the default
 pnpm cam --force                       # every model, every file made again
 ```
 

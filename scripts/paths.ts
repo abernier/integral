@@ -39,7 +39,7 @@ function variantName(variants: Variants, variant: string) {
  * @param variants The part's variants (masters.ts loadVariants).
  * @param variant The variant's id.
  * @param ext The file's extension: `ofb`, `step`, `glb`, `png`.
- * @example partFile('compass-armchair', VARIANTS, 'cushion', 'step') // 'compass-armchair.cushion.step'
+ * @example partFile('compass-armchair', VARIANTS, 'leather', 'step') // 'compass-armchair.leather.step'
  */
 export function partFile(part: string, variants: Variants, variant: string, ext: string) {
   const name = variantName(variants, variant)

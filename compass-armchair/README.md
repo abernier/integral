@@ -14,9 +14,9 @@ Each side is two tapered boards in a V and an armrest on edge, one plane, one th
 
 | | |
 |---|---|
-| Wood | teak, 30 mm boards; sheet cane seat and back, rattan splines |
+| Wood | teak, 30 mm boards; sheet cane seat and back, rattan splines (cane); a black leather cushion and back pad on plywood, teak cleats and fillets (leather) |
 | Size | 480 × 553.1 × 794.7 mm |
-| Joints | 6 loose tenons; 8 through dovetails; 2 cane grooves |
+| Joints | 6 loose tenons; 8 through dovetails; 2 cane grooves (cane) |
 | Model | ClassCAD part, 26 named bodies (32 with leather); the site also runs it in the browser (smlibwasm) |
 | Source | [smlibpy's `compass_armchair.py`](https://github.com/abernier/smlibpy/pull/11) |
 | Engine | ClassCAD WASM 21.2, free plan (non-commercial) |
@@ -33,10 +33,11 @@ Each side is two tapered boards in a V and an armrest on edge, one plane, one th
 ## ShopBot files
 
 ```sh
-pnpm cam compass-armchair --force
+pnpm cam compass-armchair --force                    # cane, the default
+pnpm cam compass-armchair --variant leather --force  # leather cushion
 ```
 
-How it works, in the workshop: [CAM](https://abernier.github.io/integral/integral/cam). What is cut how, per part (skips, the loose tenons' grain): `CAM` in [compass-armchair.ts](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts). The files and what each holds: `.docs/compass-armchair/cam/cam.json`, out of git.
+How it works, in the workshop: [CAM](https://abernier.github.io/integral/integral/cam). What is cut how, per part (skips, the loose tenons' grain): `CAM` in [compass-armchair.ts](https://github.com/abernier/integral/blob/main/compass-armchair/compass-armchair.ts). The files and what each holds: `.docs/compass-armchair/cam/cam.json` (leather: `cam/leather/cam.json`), out of git.
 
 By hand (the files cut square, from the top):
 

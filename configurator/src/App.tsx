@@ -11,10 +11,11 @@ import { type Control, type Model, models } from './models.ts'
 import { usedIn, variantSchema, variantsOf } from './models.variants.ts'
 import { camValues, hasCamValues } from './models.cam.ts'
 import { useQuery, queryUrl, type Values } from './App.url.ts'
-import { levaTheme, type Role, useDocsTheme } from './App.theme.ts'
+import { type ColorRole, levaTheme, useDocsTheme } from './App.theme.ts'
 import { type Built, buildKey, createBuilds } from './App.build.ts'
 import { switchedValues } from './App.variant.ts'
 import { rolesOf, showRoles } from './App.show.ts'
+import type { Role } from './models.roles.ts'
 import { fitDistance, focalShift, pictureShift } from './App.camera.ts'
 
 /** How long the sliders stay still before the part is rebuilt. */
@@ -136,7 +137,7 @@ export function App() {
 function useRoleColor() {
   const { dark } = useDocsTheme()
   const { getMtbColor } = useMtb()
-  return (role: Role) => getMtbColor(role, dark ? 'dark' : 'light')
+  return (role: ColorRole) => getMtbColor(role, dark ? 'dark' : 'light')
 }
 
 function Page() {
@@ -438,11 +439,11 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
 function useShow(shape: Object3D | undefined) {
   const roles = shape ? rolesOf(shape) : []
   const schema = roles.length < 2 ? {} : Object.fromEntries(roles.map((role) => [role, { value: true, label: role[0].toUpperCase() + role.slice(1) }]))
-  const shown = useControls('Show', schema, { order: ORDER.show }, [roles.join()]) as Record<string, boolean>
+  const shown = useControls('Show', schema, { order: ORDER.show }, [roles.join()]) as Partial<Record<Role, boolean>>
   const key = JSON.stringify(shown)
   // Before the frame is drawn: the shape never shows a hidden role.
   useLayoutEffect(() => {
-    if (shape) showRoles(shape, JSON.parse(key) as Record<string, boolean>)
+    if (shape) showRoles(shape, JSON.parse(key) as Partial<Record<Role, boolean>>)
   }, [shape, key])
   return key
 }

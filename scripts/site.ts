@@ -28,7 +28,8 @@ import { keyFile } from './build.cache.ts'
 import { type Engine, glb, render, run, save } from './classcad.ts'
 import { camValues, hasCamValues } from '../configurator/src/models.cam.ts'
 import { type Values, camStepFile, checkedVariant, defaultValues, loadMasters, loadVariants } from './masters.ts'
-import { type PartModule, roleOf } from './part.ts'
+import { roleOf } from '../configurator/src/models.roles.ts'
+import type { PartModule } from './part.ts'
 import { MDX, ROOT, partFile, parts } from './paths.ts'
 
 export const DIST = join(ROOT, 'dist')
@@ -82,7 +83,7 @@ async function loadPart(part: string) {
 
 /** Render the drawing, the part's wood alone, to `path` (classcad.ts render). */
 function renderWood(engine: Engine, path: string, { ROLES }: PartModule) {
-  return render(engine, path, (name) => roleOf(ROLES, name) === 'wood')
+  return render(engine, path, (name) => roleOf(ROLES?.[name]) === 'wood')
 }
 
 /** How `buildPart` builds a part: in which variant, with which values, into which folder. */

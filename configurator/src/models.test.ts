@@ -5,12 +5,13 @@ import { test } from 'node:test'
 import { Box3, Mesh, type Object3D } from 'three'
 
 import { loadMasters } from '../../scripts/masters.ts'
-import { type PartModule, roleOf } from '../../scripts/part.ts'
+import type { PartModule } from '../../scripts/part.ts'
 import { parts } from '../../scripts/paths.ts'
 import { RESERVED_KEYS } from './App.url.ts'
 import type { Control, Model } from './models.ts'
 import { usedIn, variantSchema, variantsOf } from './models.variants.ts'
 import { camValues, hasCamValues } from './models.cam.ts'
+import { roleOf } from './models.roles.ts'
 
 /** The schema's defaults, by name. */
 function defaults(schema: Record<string, Control>) {
@@ -90,17 +91,17 @@ for (const part of parts()) {
       assert.ok(names.length >= 1, 'no mesh')
       for (const name of names) assert.ok(name.trim() !== '', 'mesh without a name')
       shape.traverse((object) => {
-        const { role } = object.userData
-        if (object instanceof Mesh && role !== undefined) assert.ok(typeof role === 'string' && role.trim() !== '', `${object.name}: a role, but not a name`)
+        // A role that is none of models.roles.ts's throws.
+        if (object instanceof Mesh) roleOf(object.userData.role)
       })
       // The ClassCAD part's roles (ROLES, the build's image shows the wood alone) are the meshes' (wood when unset).
       const { ROLES }: PartModule = await import(`../../${part}/${part}.ts`)
       shape.traverse((object) => {
         if (!(object instanceof Mesh)) return
-        const role = object.userData.role ?? 'wood'
+        const role = roleOf(object.userData.role)
         const listed = Object.keys(ROLES ?? {}).filter((name) => bodyKey(name) === bodyKey(object.name))
         if (listed.length === 0) assert.equal(role, 'wood', `${object.name}: ${role}, but not in ${part}.ts ROLES`)
-        for (const name of listed) assert.equal(roleOf(ROLES, name), role, `${object.name}: ${role}, but ${name} is ${roleOf(ROLES, name)} in ${part}.ts ROLES`)
+        for (const name of listed) assert.equal(roleOf(ROLES?.[name]), role, `${object.name}: ${role}, but ${name} is ${roleOf(ROLES?.[name])} in ${part}.ts ROLES`)
       })
       const box = new Box3().setFromObject(shape)
       assert.ok(!box.isEmpty(), 'empty bounding box')
@@ -166,3 +167,18 @@ test('compass-armchair: an unknown variant throws in the browser model, naming t
   await assert.rejects(build({}, 'cushion'), /no variant cushion \(known: cane, leather\)/)
   await assert.rejects(build({}, ''), /no variant '' \(known: cane, leather\)/)
 })
+
+// The other way: every body the ClassCAD part's ROLES names is a mesh of the browser model in one of its variants, so
+// that a name mistyped in ROLES (taken for wood by the build's image) fails here.
+for (const part of parts()) {
+  test(`${part}: every body its ROLES names is a mesh of the browser model, in some variant`, async () => {
+    const { ROLES }: PartModule = await import(`../../${part}/${part}.ts`)
+    const { schema, variants, build }: Model = await import(`../../${part}/${part}.model.ts`)
+    const meshes = new Set<string>()
+    for (const id of Object.keys(variantsOf(variants))) {
+      const shape = await build(defaults(variantSchema(schema, variants, id)), id)
+      for (const name of meshNames(shape)) meshes.add(bodyKey(name))
+    }
+    for (const name of Object.keys(ROLES ?? {})) assert.ok(meshes.has(bodyKey(name)), `${part}.ts ROLES names ${name}, which no variant's mesh is`)
+  })
+}
