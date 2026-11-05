@@ -118,14 +118,16 @@ function Page() {
 
   return (
     <>
-      {/* Not `fill`: leva then places the panel itself (fixed, 10px from the top right, above the canvas) and only then
-          caps its content to the window's height, scrollable. No drag: leva would move the panel by a CSS transform,
-          away from the space the shift leaves free. */}
-      <Leva
-        collapsed={{ collapsed, onChange: setCollapsed }}
-        titleBar={{ title: part, drag: false }}
-        theme={{ ...levaTheme(color), sizes: { rootWidth: `${LEVA_ROOT_WIDTH}px` } }}
-      />
+      {/* Not `fill`: leva then places the panel itself (fixed, 10px from the top right, above the canvas). No drag:
+          leva would move the panel by a CSS transform, away from the space the shift leaves free. The `leva-panel` box
+          (`display: contents`) is only a hook for index.html's rules, which cap the panel to the viewport. */}
+      <div className="leva-panel">
+        <Leva
+          collapsed={{ collapsed, onChange: setCollapsed }}
+          titleBar={{ title: part, drag: false }}
+          theme={{ ...levaTheme(color), sizes: { rootWidth: `${LEVA_ROOT_WIDTH}px` } }}
+        />
+      </div>
       {model && <Configurator model={model} shift={collapsed ? 0 : PANEL_WIDTH / 2} />}
       <Messages>
         {error && !model && <Message>{error}</Message>}
