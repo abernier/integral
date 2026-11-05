@@ -159,7 +159,12 @@ function references(images: string) {
 /**
  * The renders before the Intro (one markdown image per line, as `references`) as a strip the page scrolls
  * sideways, no snapping: the views at one height (10rem, Tailwind's h-40, under the references' 16rem), each as
- * wide as its ratio makes it. An MDX comment first, for whoever copies the page: where the views come from.
+ * wide as its ratio makes it. Full width, as the theme's Sandpack: `.post-container > *` caps a block at 4xl from
+ * lg and `.sandpack` lifts the cap from xl (globals.css); `maxWidth: none` inline lifts it at every width, the same
+ * thing in practice (under xl the column is narrower than the cap). The views are centred while they fit, and
+ * scroll from the left once they do not: `width: max-content; margin-inline: auto` on the row inside the scroller
+ * (centring with `justify-content` would hide the left of an overflowing row). An MDX comment first, for whoever
+ * copies the page: where the views come from.
  */
 function renders(part: string, images: string) {
   const views = [...images.matchAll(/^!\[([^\]]*)\]\((\S+)\)$/gm)].map(
@@ -167,8 +172,10 @@ function renders(part: string, images: string) {
   )
   return [
     `{/* The renders: \`pnpm render ${part}\` (scripts/render.ts), Blender headless on the built GLB, scripts/render.blender.py holding the studio and the views; the files in ${part}/renders/, the strip made here from the README's image lines (\`renders\` in scripts/site.ts). */}`,
-    `<div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem', marginTop: '1.5rem' }}>`,
+    `<div style={{ maxWidth: 'none', overflowX: 'auto', paddingBottom: '0.5rem', marginTop: '1.5rem' }}>`,
+    `<div style={{ display: 'flex', gap: '1rem', width: 'max-content', marginInline: 'auto' }}>`,
     ...views,
+    '</div>',
     '</div>',
   ].join('\n')
 }
