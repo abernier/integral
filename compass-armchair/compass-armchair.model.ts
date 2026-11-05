@@ -28,7 +28,7 @@ import {
   type Sketch,
 } from '@classcad/smlibwasm'
 import type { Control } from '../configurator/src/models.ts'
-import { MASTERS } from './compass-armchair.masters.ts'
+import { MASTERS, edgeBreak } from './compass-armchair.masters.ts'
 
 const TEAK = '#9b6a3c'
 const CANE_COLOR = '#e6d2a0'
@@ -477,6 +477,7 @@ function toGeometryData(part: Part) {
 export async function build(values: Record<string, number> = {}): Promise<THREE.Object3D> {
   const p = {} as Masters
   for (const name of Object.keys(MASTERS) as (keyof Masters)[]) p[name] = values[name] ?? MASTERS[name].value
+  p.EDGE_BREAK = edgeBreak(p.EDGE_BREAK) // under 1 mm, no round (as the ClassCAD part)
   const d = derive(p)
   // The kernel's bodies are freed once their triangles are copied out; only plain arrays leave the scope.
   const bodies = scope(() => model(d).map(({ part, name }) => ({ name, ...toGeometryData(part) })))

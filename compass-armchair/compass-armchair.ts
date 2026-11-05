@@ -20,7 +20,7 @@
 import { type Api, created, nameSolids } from '../scripts/part.ts'
 import type { CamConfig } from '../scripts/cam.config.ts'
 import type { Values } from '../scripts/masters.ts'
-import type { MASTERS } from './compass-armchair.masters.ts'
+import { type MASTERS, edgeBreak } from './compass-armchair.masters.ts'
 
 const TEAK: [number, number, number] = [155, 106, 60] // #9b6a3c
 const CANE: [number, number, number] = [230, 210, 160] // #e6d2a0
@@ -690,9 +690,11 @@ const BOARDS: Record<string, Builder> = {
 /**
  * Build the chair: one part whose expressions drive every board, each board a named body in it; returns the part,
  * the boards' feature ids and their volumes.
- * @param values Every master's value: the masters are the part's first expressions.
+ * @param given Every master's value: the masters are the part's first expressions (EDGE_BREAK under 1 mm taken as 0).
  */
-export default async function build(api: Api, values: ChairValues) {
+export default async function build(api: Api, given: ChairValues) {
+  // Under 1 mm, no round (as the browser model): the part's EDGE_BREAK is the one built.
+  const values = { ...given, EDGE_BREAK: edgeBreak(given.EDGE_BREAK) }
   const part = await created(api.v1.part.create({ name: 'CompassArmchair' }))
   await api.v1.part.expression({
     id: part,

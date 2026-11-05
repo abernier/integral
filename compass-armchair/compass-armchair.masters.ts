@@ -67,5 +67,16 @@ export const MASTERS = {
   BACK_TAIL_SHOULDER: { value: 12, min: 10, max: 14, step: 0.5, hint: 'Shoulders either side of a back rail tail' },
   // The rounds are made by hand on the cut parts: the CAM files are cut square (`cam`).
   ARM_NOSE_R: { value: 8, min: 0, max: 12, step: 0.5, cam: 0, hint: "Round on the armrest nose's edges, by hand" },
-  EDGE_BREAK: { value: 2.5, min: 0, max: 4, step: 0.5, cam: 0, hint: 'Round on the other outside arrises, by hand' },
+  EDGE_BREAK: { value: 2.5, min: 0, max: 4, step: 0.5, cam: 0, hint: 'Round on the other outside arrises, by hand; under 1 mm, none' },
 } satisfies Record<string, Control>
+
+/** The smallest EDGE_BREAK that is made: a round under it is no round. */
+export const MIN_EDGE_BREAK = 1
+
+/**
+ * The EDGE_BREAK both kernels build with: 0 under MIN_EDGE_BREAK. A sub-millimetre round is sanding, not a feature, and
+ * on a back rail's ring the kernel refuses one as close to the largest its edges allow (W 465, POST_D 36, BOW 9).
+ */
+export function edgeBreak(value: number) {
+  return value < MIN_EDGE_BREAK ? 0 : value
+}
