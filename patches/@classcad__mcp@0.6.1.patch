@@ -1,0 +1,15 @@
+diff --git a/dist/engine/wasm-worker.js b/dist/engine/wasm-worker.js
+index 7e992a865ee4fd41ea37755cdf3d0f2615f495a7..c6def41b71ac42cd2316753dc68e061d76c8f199 100644
+--- a/dist/engine/wasm-worker.js
++++ b/dist/engine/wasm-worker.js
+@@ -100,7 +100,9 @@ async function init(msg) {
+     engine.init(JSON.stringify({
+         configurationType: 'file',
+         configurationData: '/home/web_user/ClassCAD/classcad.ini',
+-        sendTreePatches: true,
++        // integral: off. A tree patch is computed over the whole tree after every command, which makes a build
++        // quadratic in its feature count (compass-armchair: 77 s -> 19 s). The build pulls the tree itself.
++        sendTreePatches: false,
+         compression: false,
+         siteLocation: JSON.stringify(loc),
+     }), false);
