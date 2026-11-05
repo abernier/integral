@@ -1,10 +1,10 @@
 // `?part=<folder>`: that part's model, a slider per parameter, and the part itself, rebuilt as a slider moves.
-import { type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Component, type ComponentRef, type ReactNode, Suspense, use, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { CameraControls, CameraControlsImpl } from '@react-three/drei'
+import { CameraControls, CameraControlsImpl, ContactShadows, Environment, Stage } from '@react-three/drei'
 import { button, folder, Leva, useControls } from 'leva'
 import { Mtb, useMtb } from 'material-theme-builder/react'
-import { Sphere, Spherical, Vector3 } from 'three'
+import { Box3, Sphere, Spherical, Vector3 } from 'three'
 import { useDebounceValue } from 'usehooks-ts'
 import { type Control, type Model, models } from './models.ts'
 import { useQuery, queryUrl, type Values } from './App.url.ts'
@@ -33,6 +33,13 @@ const LEVA_ROOT_OFFSET = 10
 /** The width the leva panel takes at the right edge of the window, its offset from that edge included. */
 const PANEL_WIDTH = LEVA_ROOT_WIDTH + LEVA_ROOT_OFFSET
 
+/**
+ * The environment that lights the shape: drei's `apartment` preset (Poly Haven's "Lebombo", CC0, at 1k), the same file,
+ * served from the configurator's own `public/` folder rather than drei's CDN. Through Vite's base URL, so that it
+ * resolves beside the page wherever that is served (dev, the built site, the docs' iframe under `/integral/`).
+ */
+const ENVIRONMENT_URL = `${import.meta.env.BASE_URL}lebombo_1k.hdr`
+
 const { ACTION } = CameraControlsImpl
 
 /** The last few builds, by their values: the build on screen and the one rendering in its place may differ. */
@@ -41,6 +48,12 @@ const build = createBuilds(3)
 /** Scratch objects for the frame loop: nothing allocated per frame. */
 const spherical = new Spherical()
 const focalOffset = new Vector3()
+const box = new Box3()
+const boxSize = new Vector3()
+const boxCenter = new Vector3()
+
+/** The shape's footprint, in world space, as the contact shadow needs it. */
+type Bounds = { floor: number; x: number; z: number; height: number; radius: number }
 
 /** Copies text to the clipboard; the textarea route is for iframes and non-secure contexts. Never throws. */
 async function copyText(text: string) {
@@ -212,8 +225,9 @@ function Configurator({ model, shift }: { model: Model; shift: number }) {
 }
 
 /**
- * The scene, once the build is done: the shape, lit, on a grid, fitted at first, the orbit around that fit; its
- * picture shifted left by `shift` pixels.
+ * The scene, once the build is done: the shape on drei's `<Stage>` (centered at the origin, lit by an environment, a
+ * contact shadow under it), on a grid, fitted at first, the orbit around that fit; its picture shifted left by `shift`
+ * pixels.
  */
 function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   // R3F bridges the Mtb context into the Canvas.
@@ -221,6 +235,8 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   const { shape } = use(built)
   const size = useThree((state) => state.size)
   const controls = useRef<ComponentRef<typeof CameraControls>>(null)
+  // The current shape's bounds, where Stage's `<Center>` has put it: the floor, the grid and the contact shadow under it.
+  const [bounds, setBounds] = useState<Bounds>()
   // Our part of the focal offset, as last applied: see the frame loop below.
   const applied = useRef<number>(undefined)
   // Frames the first shape, before it is drawn, into the space the panel leaves free: the orbit around the center of its
@@ -229,8 +245,17 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   // user left it.
   const fitted = useRef(false)
   useLayoutEffect(() => {
+    if (!shape) return
+    // Stage's `<Center>` has just moved the shape, in its own layout effect: its world matrices are not updated yet.
+    shape.updateWorldMatrix(true, true)
+    // Every shape, not only the first: a part grown with a slider keeps its whole shadow.
+    box.setFromObject(shape, true)
+    box.getSize(boxSize)
+    box.getCenter(boxCenter)
+    const radius = boxSize.length() / 2
+    setBounds({ floor: box.min.y, x: boxCenter.x, z: boxCenter.z, height: boxSize.y, radius })
     const current = controls.current
-    if (!shape || !current || fitted.current) return
+    if (!current || fitted.current) return
     fitted.current = true
     const sphere = CameraControlsImpl.createBoundingSphere(shape, new Sphere())
     sphere.radius *= 1.1
@@ -263,10 +288,33 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
   if (!shape) return null
   return (
     <>
-      <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
-      <directionalLight position={[300, 600, 400]} intensity={2.4} />
-      <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} />
-      <primitive object={shape} />
+      {/* The framing above is ours (beside the panel, an orbit that stays on the shape): Stage does not touch the camera.
+          Its spot and fill lights decay over the part's millimetres to nearly nothing: the environment lights it. Stage
+          centers the first shape only (Center's `cacheKey`): later ones keep its offset, so the floor stays put.
+          `apartment`: a soft light from all around, that keeps the woods' colors where `city` and `studio` wash out the
+          faces turned up. The environment is loaded beside Stage, in its own boundary, the plain lights standing in while
+          it loads or if it cannot. The contact shadow is ours, not Stage's: Stage sizes its own from the first shape only. */}
+      <Stage adjustCamera={false} environment={null} shadows={false}>
+        <primitive object={shape} />
+      </Stage>
+      <Lighting />
+      {bounds && (
+        <>
+          {/* Contact shadows: no shadow maps to set up. Sized from the current shape, as Stage would (four times its bounding
+              radius, wide enough for the blur), its camera reaching the shape's top. Drawn once per shape (`frames`,
+              remounted by the key): the part does not move between builds, so the shadow is not redrawn every frame. */}
+          <ContactShadows
+            key={shape.uuid}
+            frames={1}
+            position={[bounds.x, bounds.floor, bounds.z]}
+            scale={bounds.radius * 4}
+            far={bounds.height}
+            blur={2}
+          />
+          {/* A millimetre under the floor: out of reach of the contact shadow's camera, which would darken the plane with its lines. */}
+          <gridHelper args={[2000, 40, color('outline'), color('outlineVariant')]} position-y={bounds.floor - 1} />
+        </>
+      )}
       {/* A pan slides the picture (the focal offset), not the orbit's center: that stays on the shape. */}
       <CameraControls
         ref={controls}
@@ -278,6 +326,39 @@ function Scene({ built, shift }: { built: Promise<Built>; shift: number }) {
       />
     </>
   )
+}
+
+/**
+ * The environment that lights the shape (`ENVIRONMENT_URL`). Until it is loaded, and for good if it cannot be fetched,
+ * plain lights stand in, so that the shape is never left unlit and a failed fetch does not unmount the page.
+ */
+function Lighting() {
+  const fallback = (
+    <>
+      <hemisphereLight args={['#ffffff', '#8d96a3', 2.2]} />
+      <directionalLight position={[300, 600, 400]} intensity={2.4} />
+    </>
+  )
+  return (
+    <LoadError fallback={fallback}>
+      <Suspense fallback={fallback}>
+        <Environment files={ENVIRONMENT_URL} />
+      </Suspense>
+    </LoadError>
+  )
+}
+
+/** Renders `fallback` instead of its children once they have thrown. */
+class LoadError extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
 }
 
 /** The build's error, once it is done; nothing when it went well. */
