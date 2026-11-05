@@ -5,6 +5,7 @@ import { test } from 'node:test'
 import { Box3, Mesh, type Object3D } from 'three'
 
 import { loadMasters } from '../../scripts/masters.ts'
+import { type PartModule, roleOf } from '../../scripts/part.ts'
 import { parts } from '../../scripts/paths.ts'
 import { RESERVED_KEYS } from './App.url.ts'
 import type { Control, Model } from './models.ts'
@@ -29,6 +30,12 @@ function meshNames(shape: Object3D) {
   })
   return names
 }
+
+/**
+ * A body's name as both kernels spell it, for matching: the ClassCAD solid's (`SeatCleatLeft`) and the mesh's
+ * (`seat cleat`) alike, lowercase, no spaces, no side.
+ */
+const bodyKey = (name: string) => name.toLowerCase().replaceAll(' ', '').replace(/(left|right)$/, '')
 
 for (const part of parts()) {
   test(`${part}: every slider has its default in range, a positive step and a hint`, async () => {
@@ -85,6 +92,15 @@ for (const part of parts()) {
       shape.traverse((object) => {
         const { role } = object.userData
         if (object instanceof Mesh && role !== undefined) assert.ok(typeof role === 'string' && role.trim() !== '', `${object.name}: a role, but not a name`)
+      })
+      // The ClassCAD part's roles (ROLES, the build's image shows the wood alone) are the meshes' (wood when unset).
+      const { ROLES }: PartModule = await import(`../../${part}/${part}.ts`)
+      shape.traverse((object) => {
+        if (!(object instanceof Mesh)) return
+        const role = object.userData.role ?? 'wood'
+        const listed = Object.keys(ROLES ?? {}).filter((name) => bodyKey(name) === bodyKey(object.name))
+        if (listed.length === 0) assert.equal(role, 'wood', `${object.name}: ${role}, but not in ${part}.ts ROLES`)
+        for (const name of listed) assert.equal(roleOf(ROLES, name), role, `${object.name}: ${role}, but ${name} is ${roleOf(ROLES, name)} in ${part}.ts ROLES`)
       })
       const box = new Box3().setFromObject(shape)
       assert.ok(!box.isEmpty(), 'empty bounding box')

@@ -6,6 +6,7 @@
 // VARIANTS (`<part>/<part>.masters.ts`, the first the default), or `default` for a part that has none
 // (configurator/src/models.variants.ts): the values already hold the variant's defaults, so a build or a CAM reads
 // the variant only for what no master says (a cane seat or a cushion). A part of one variant may leave it out.
+// Its optional `ROLES` export (`Roles`) says what each body is; the build's image shows the wood alone.
 
 import type { V1T } from '@classcad/api-js'
 import type { Values } from './masters.ts'
@@ -21,6 +22,24 @@ export type Api = {
  * returns is printed after the build (ids, volumes).
  */
 export type PartBuild = (api: Api, values: Values, variant: string) => Promise<unknown>
+
+/**
+ * What a body is, as the browser model's meshes say it (`userData.role`): the wood, the cane and its splines, what
+ * holds the upholstery (cleats, fillets, plywood), the upholstery.
+ */
+export type Role = 'wood' | 'cane' | 'support' | 'cushion'
+
+/**
+ * A part module's optional `ROLES` export: the role of each body not of wood, by its solid's name (`nameSolids`);
+ * any name not listed is wood (`roleOf`).
+ */
+export type Roles = Record<string, Role>
+
+/** A body's role, by its solid's name: wood when `roles` does not list it. */
+export const roleOf = (roles: Roles | undefined, name: string): Role => roles?.[name] ?? 'wood'
+
+/** A part's module, `<part>/<part>.ts`, as the build imports it. */
+export type PartModule = { default: PartBuild; ROLES?: Roles }
 
 /** The id a call created; the engine answers null when it created nothing. */
 export async function created(call: Promise<{ result: number | null }>) {

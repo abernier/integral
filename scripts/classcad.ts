@@ -72,10 +72,20 @@ export async function glb(engine: Engine, path: string) {
   return data.length
 }
 
-/** Render the drawing to `path` as a PNG, one color per body, seen from behind and above. */
-export async function render(engine: Engine, path: string) {
+/**
+ * Render the drawing to `path` as a PNG, one color per body, seen from behind and above; `keep`, when given, picks
+ * the bodies shown by their solid's name (the others are left out of the image, not of the drawing).
+ */
+export async function render(engine: Engine, path: string, keep?: (name: string) => boolean) {
   const dir = join(path, '..')
   mkdirSync(dir, { recursive: true })
+  const tree = (await engine.client.getTree()) as Record<string, { class?: string; name?: string }>
+  const graphic = (await engine.client.getGraphic()) as { containers?: { owner?: number }[] }
+  // A container is drawn for its owner, a solid: the renderer takes a fetched graphic, so the others are dropped here.
+  const kept = (owner?: number) => {
+    const solid = owner === undefined ? undefined : tree[owner]
+    return !keep || solid?.class !== 'CC_Solid' || keep(solid.name ?? '')
+  }
   const [first] = await renderSession(engine.client, 'render', dir, {
     width: 1200,
     height: 1200,
@@ -83,6 +93,8 @@ export async function render(engine: Engine, path: string) {
     layers: ['solid'],
     colors: 'distinct',
     view: { azimuth: 215, elevation: 22 },
+    tree,
+    graphic: { ...graphic, containers: graphic.containers?.filter(({ owner }) => kept(owner)) },
   })
   renameSync(join(dir, first.file), path)
 }

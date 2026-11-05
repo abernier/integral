@@ -20,7 +20,7 @@
 // rebuilds. The chair is one part: its expressions are the parameters, and every board is a named body in it, so
 // changing one rebuilds them all.
 
-import { type Api, created, nameSolids } from '../scripts/part.ts'
+import { type Api, type Roles, created, nameSolids } from '../scripts/part.ts'
 import type { CamConfig } from '../scripts/cam.config.ts'
 import type { Values } from '../scripts/masters.ts'
 import { type MASTERS, type VARIANTS, edgeBreak, grooved } from './compass-armchair.masters.ts'
@@ -857,6 +857,28 @@ const fill = (z0: string, z1: string) => [
 // pad, screwed from behind through the backer into two curved teak fillets. The rails are arcs in plan, so the fillets
 // are flat parts too: arc bands at the rails' rear face, on the low rail and under the high one. The backer is just in
 // front of them, the pad in front of it, to just proud of the rails' front face.
+/**
+ * The bodies not of wood, by name, as the browser model's meshes (compass-armchair.model.ts): the cane and its
+ * splines; the leather variant's cleats, fillets and plywood, which hold the upholstery, and the upholstery. The
+ * build's image shows the wood alone.
+ */
+export const ROLES = {
+  SeatCane: 'cane',
+  BackCane: 'cane',
+  SeatCaneSpline: 'cane',
+  BackCaneSpline: 'cane',
+  SeatCleatLeft: 'support',
+  SeatCleatRight: 'support',
+  FrontSeatCleat: 'support',
+  RearSeatCleat: 'support',
+  SeatBoard: 'support',
+  LowBackFillet: 'support',
+  HighBackFillet: 'support',
+  BackBoard: 'support',
+  SeatCushion: 'cushion',
+  BackPad: 'cushion',
+} satisfies Roles
+
 // The arcs' heights are written z1 - z0 (`ring`): an expression for z0 goes in parentheses.
 const BACK_OPEN = ['$LOW_RAIL_TOP', '$HIGH_RAIL_BOTTOM'] as const
 
