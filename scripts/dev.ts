@@ -11,7 +11,7 @@ import { cpSync, rmSync, watch } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { openEngine } from './classcad.ts'
-import { MDX, ROOT, parts } from './paths.ts'
+import { MDX, PART_ASSETS, ROOT, parts } from './paths.ts'
 import { HOME, buildConfigurator, buildVariants, docsEnv, writePages } from './site.ts'
 
 const freePort = () =>
@@ -78,7 +78,8 @@ const later = (key: string, task: () => Promise<void> | void) => {
 watch(ROOT, { recursive: true }, (_event, file) => {
   if (!file || /^(configurator|node_modules|\.docs|\.pmndrs-docs|dist)\b/.test(file)) return
   const [folder, name] = file.split('/')
-  const ofPart = parts().includes(folder) && (name === 'README.md' || name === 'references' || name === 'renders')
+  const assets: readonly string[] = PART_ASSETS
+  const ofPart = parts().includes(folder) && (name === 'README.md' || assets.includes(name))
   if (file === 'README.md' || ofPart || (folder === 'docs' && name?.endsWith('.md'))) {
     later('pages', () => void writePages(urls))
   } else if (parts().includes(folder) && name === `${folder}.ts`) {

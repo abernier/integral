@@ -31,12 +31,10 @@ import { camValues, hasCamValues } from '../configurator/src/models.cam.ts'
 import { type Values, camStepFile, checkedVariant, defaultValues, loadMasters, loadVariants } from './masters.ts'
 import { roleOf } from '../configurator/src/models.roles.ts'
 import type { PartModule } from './part.ts'
-import { MDX, ROOT, partFile, parts } from './paths.ts'
+import { MDX, PAGES_URL, PART_ASSETS, ROOT, partFile, parts } from './paths.ts'
 
 export const DIST = join(ROOT, 'dist')
 
-/** Where GitHub Pages serves the site: the READMEs link pages and files by this URL. */
-const PAGES_URL = 'https://abernier.github.io/integral'
 /** Where this build is served: GitHub Pages, or on Vercel the preview's branch URL, at its root. */
 const VERCEL_HOST = process.env.VERCEL_BRANCH_URL ?? process.env.VERCEL_URL
 export const SITE_URL = process.env.SITE_URL ?? (VERCEL_HOST ? `https://${VERCEL_HOST}` : PAGES_URL)
@@ -62,6 +60,14 @@ function buerligonsUrl(shared: string, path: string) {
   if (!bypass) return `${shared}${path}`
   return encodeURIComponent(`https://${process.env.VERCEL_URL}${path}?x-vercel-protection-bypass=${bypass}`)
 }
+
+/**
+ * A markdown image line, `![alt](src)`, alone on its line: alt then src. The source of `IMAGE_LINES` (each line, for
+ * `references`, `renders` and the render's tabs) and `IMAGE_BLOCK` (a run of them, for the strips).
+ */
+const IMAGE_LINE = String.raw`!\[([^\]]*)\]\((\S+)\)`
+const IMAGE_LINES = new RegExp(`^${IMAGE_LINE}$`, 'gm')
+const IMAGE_BLOCK = String.raw`(?:${IMAGE_LINE}\n)+`
 
 /** A part's page, under "Things" in the sidebar. */
 const partPage = (part: string) => `things/${part}`
@@ -227,7 +233,7 @@ function views(part: string, alt: string) {
  * does not scan these pages, so classes written here would not exist.
  */
 function references(images: string) {
-  const figures = [...images.matchAll(/^!\[([^\]]*)\]\((\S+)\)$/gm)].map(
+  const figures = [...images.matchAll(IMAGE_LINES)].map(
     ([, alt, src]) =>
       `<figure style={{ flex: 'none', width: 'min-content', margin: 0 }}><img src="${src}" alt="${alt}" style={{ height: '16rem', width: 'auto', maxWidth: 'none', margin: 0 }} /><figcaption style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>${alt}</figcaption></figure>`,
   )
@@ -237,20 +243,21 @@ function references(images: string) {
 /**
  * The renders before the Intro (one markdown image per line, as `references`) as a strip the page scrolls
  * sideways, no snapping: the views at one height (10rem, Tailwind's h-40, under the references' 16rem), each as
- * wide as its ratio makes it. Full width, as the theme's Sandpack: `.post-container > *` caps a block at 4xl from
- * lg and `.sandpack` lifts the cap from xl (globals.css); `maxWidth: none` inline lifts it at every width, the same
- * thing in practice (under xl the column is narrower than the cap). The views are centred while they fit, and
- * scroll from the left once they do not: `width: max-content; margin-inline: auto` on the row inside the scroller
- * (centring with `justify-content` would hide the left of an overflowing row). An MDX comment first, for whoever
- * copies the page: where the views come from.
+ * wide as its ratio makes it. Full width from xl, as the theme's Sandpack, the theme's cap below (globals.css:
+ * `.post-container > *` caps a block at 4xl from lg, `.sandpack` lifts it from xl). Centred while the row fits,
+ * scrolling from the left once it overflows. An MDX comment first, for whoever copies the page: where the views
+ * come from.
  */
 function renders(part: string, images: string) {
-  const views = [...images.matchAll(/^!\[([^\]]*)\]\((\S+)\)$/gm)].map(
+  const views = [...images.matchAll(IMAGE_LINES)].map(
     ([, alt, src]) => `<img src="${src}" alt="${alt}" style={{ flex: 'none', height: '10rem', width: 'auto', maxWidth: 'none', margin: 0, borderRadius: '0.5rem' }} />`,
   )
   return [
-    `{/* The renders: \`pnpm render ${part}\` (scripts/render.ts), Blender headless on the built GLB, scripts/render.blender.py holding the studio and the views; the files in ${part}/renders/, the strip made here from the README's image lines (\`renders\` in scripts/site.ts). */}`,
-    `<div style={{ maxWidth: 'none', overflowX: 'auto', paddingBottom: '0.5rem', marginTop: '1.5rem' }}>`,
+    `{/* The renders: \`pnpm render ${part}\` (scripts/render.ts), Blender headless on the built GLB, scripts/render.blender.py holding the studio, scripts/render.readme.ts the views; the files in ${part}/renders/, the strip made here from the README's image lines (\`renders\` in scripts/site.ts). */}`,
+    // The cap lifts at a breakpoint, which an inline style cannot say: a style element, on the strip's attribute.
+    '<style>{`@media (min-width: 80rem) { [data-renders] { max-width: none } }`}</style>',
+    `<div data-renders="" style={{ overflowX: 'auto', paddingBottom: '0.5rem', marginTop: '1.5rem' }}>`,
+    // `width: max-content; margin-inline: auto`, not `justify-content: center`: it would hide the left of an overflowing row.
     `<div style={{ display: 'flex', gap: '1rem', width: 'max-content', marginInline: 'auto' }}>`,
     ...views,
     '</div>',
@@ -263,8 +270,12 @@ function renders(part: string, images: string) {
  * to the site become local ones, and "Edit this page" opens the README on GitHub.
  * A part's page also gets its source, its render as the page's image, the render's tabs (`views`), its renders as a
  * strip before the Intro (`renders`), and its references as a strip (`references`).
+ * @param readme The README's absolute path.
+ * @param nav The page's rank in its sidebar group.
+ * @param urls Where the page's links point (`Urls`).
+ * @param part The part's name (its folder), for a part's page; undefined for the root README's and a `docs/` page.
  */
-function page(readme: string, nav: number, urls: Urls, part?: string) {
+export function page(readme: string, nav: number, urls: Urls, part?: string) {
   const edit = `https://github.com/abernier/integral/edit/main/${relative(ROOT, readme)}`
   const source = readFileSync(readme, 'utf8')
   const title = source.match(/^# (.+)$/m)?.[1] ?? 'Untitled'
@@ -282,9 +293,11 @@ function page(readme: string, nav: number, urls: Urls, part?: string) {
   const body = source
     .replace(/^# .+\n+/m, '')
     .replace(description ? `${description}\n` : '', '')
-    .replace(/^!\[([^\]]*)\]\((\S+)\)$/gm, (image, alt, src) => (part && src === render ? views(part, alt) : image))
-    .replace(/^((?:!\[[^\]]*\]\(\S+\)\n)+)(\n<Intro>)/m, (block, images, intro) => (part ? `${renders(part, images)}\n${intro}` : block))
-    .replace(/^(## References\n\n)((?:!\[[^\]]*\]\(\S+\)\n)+)/m, (section, heading, images) => (part ? `${heading}${references(images)}\n` : section))
+    .replace(IMAGE_LINES, (image, alt, src) => (part && src === render ? views(part, alt) : image))
+    // The strip keeps the block's trailing newline and the blank lines before <Intro>, however many; the block's
+    // own groups (its last line's alt and src) sit between it and the Intro.
+    .replace(new RegExp(`^(${IMAGE_BLOCK})(\\n*<Intro>)`, 'm'), (block, images, _alt, _src, intro) => (part ? `${renders(part, images)}\n${intro}` : block))
+    .replace(new RegExp(`^(## References\\n\\n)(${IMAGE_BLOCK})`, 'm'), (section, heading, images) => (part ? `${heading}${references(images)}\n` : section))
     // The parts table's thumbnails: a fixed size the table can't squeeze, and a small radius (the theme's is 2xl).
     // GitHub reads `width`; the site, the style.
     .replaceAll(`width="${THUMB}" />`, `width="${THUMB}" style={{ width: '${THUMB / 16}rem', minWidth: '${THUMB / 16}rem', height: 'auto', borderRadius: '0.375rem' }} />`)
@@ -345,9 +358,9 @@ export function writePages(urls: Urls = { site: BASE_PATH, files: BASE_PATH, sha
   mkdirSync(join(MDX, 'things'), { recursive: true })
   parts().forEach((part, i) => {
     writeFileSync(join(MDX, `${partPage(part)}.mdx`), page(join(ROOT, part, 'README.md'), i + 1, urls, part))
-    // The part's reference images (`<part>/references/`) and renders (`<part>/renders/`), served beside its built
-    // files. The copy replaces the previous one, so that an image deleted from the part does not stay in .docs/.
-    for (const folder of ['references', 'renders']) {
+    // The part's folders served beside its built files (paths.ts PART_ASSETS). The copy replaces the previous one,
+    // so that an image deleted from the part does not stay in .docs/.
+    for (const folder of PART_ASSETS) {
       const files = join(ROOT, part, folder)
       rmSync(join(MDX, part, folder), { recursive: true, force: true })
       if (existsSync(files)) cpSync(files, join(MDX, part, folder), { recursive: true })

@@ -5,7 +5,7 @@ import { test } from 'node:test'
 
 import type { Variants } from '../configurator/src/models.ts'
 import { variantsOf } from '../configurator/src/models.variants.ts'
-import { MDX, camFolder, partFile } from './paths.ts'
+import { MDX, PART_ASSETS, camFolder, partFile } from './paths.ts'
 
 const variants = {
   cane: { label: 'Cane', hint: 'a cane seat' },
@@ -21,4 +21,8 @@ test("partFile: the default variant's file has the part's name, another's the va
 test("camFolder: the default variant's is the model's cam/, another's a folder in it", () => {
   assert.equal(camFolder('armchair', variants, 'cane'), join(MDX, 'armchair', 'cam'))
   assert.equal(camFolder('armchair', variants, 'cushion'), join(MDX, 'armchair', 'cam', 'cushion'))
+})
+
+test('PART_ASSETS: the references and the renders are served beside the built files', () => {
+  assert.deepEqual([...PART_ASSETS], ['references', 'renders'])
 })

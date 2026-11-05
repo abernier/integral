@@ -1,19 +1,21 @@
 # Runs inside Blender, headless, for `pnpm render` (render.ts): one part's GLB rendered from several views in the
 # site's studio style, into WebP files. Not a Blender addon: Blender is just the renderer.
 #
-#   blender --background --factory-startup --python scripts/render.blender.py -- <glb> <out dir> <stem> [samples]
+#   blender --background --factory-startup --python scripts/render.blender.py -- <glb> <out dir> <stem> <samples> <views>
 #
-# Writes `<out dir>/<stem>.<view>.webp` for every view of VIEWS, printing `render: <file>` for each.
+# `<views>` is JSON, each view's name to its azimuth (`{"front": 0, ...}`): render.ts builds it from its VIEWS, the one
+# place the views are defined. Writes `<out dir>/<stem>.<view>.webp` for every view, printing `render: <file>` for each.
 #
 # The style, bright and matte (a product-shot studio): a pale grey floor big enough to hide the horizon, a dim
 # white dome, one large key light high in front that moves with the camera (so the lit face is the one seen) and
 # throws the soft shadow under the part, a weak fill and a weak rim; every material matte, its GLB colour muted
 # (`pastel`); AgX with a medium-high contrast look. Cycles on the GPU when there is one, denoised.
 #
-# To add a view, add it to VIEWS: a name and the azimuth, degrees around the part from its front (the GLB's -Y),
-# clockwise seen from above; the elevation is ELEVATION for all.
+# A view's azimuth is degrees around the part from its front (the GLB's -Y), clockwise seen from above; the elevation
+# is ELEVATION for all. Blender 5.2: every material has a node tree (`use_nodes` is deprecated).
 
 import colorsys
+import json
 import math
 import sys
 
@@ -21,18 +23,26 @@ import bpy
 from mathutils import Vector
 
 argv = sys.argv[sys.argv.index("--") + 1 :]
+if len(argv) != 5:
+    sys.exit("render: usage: render.blender.py -- <glb> <out dir> <stem> <samples> <views as JSON>; render.ts passes them")
 GLB, OUT, STEM = argv[:3]
-SAMPLES = int(argv[3]) if len(argv) > 3 else 64
+SAMPLES = int(argv[3])
+VIEWS = json.loads(argv[4])  # {view: azimuth}, from render.ts
 
-VIEWS = {"three-quarter": 40, "front": 0, "side": 90, "back": 140}
 ELEVATION = math.radians(22)
 RESOLUTION = (1200, 900)
 LENS = 90  # mm: a long lens, a flat perspective
+# The key light moves with the camera, so the lit face is the one seen: KEY_REACH along the camera's azimuth,
+# KEY_OFFSET towards the front and the right, KEY_HEIGHT above the part's centre.
+KEY_HEIGHT = 4.2
+KEY_REACH = 1.5
+KEY_OFFSET = Vector((0.9, -1.8, 0))
 
 
 def principled(material):
-    if not material.use_nodes:
-        material.use_nodes = True
+    """The material's Principled BSDF node, or None when its tree has none."""
+    if material.node_tree is None:
+        return None
     return next((n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
 
 
@@ -91,6 +101,7 @@ bpy.ops.mesh.primitive_plane_add(size=60, location=(centre.x, centre.y, low.z))
 ground = bpy.context.active_object
 ground.name = "Ground"
 ground_material = bpy.data.materials.new("Ground")
+assert ground_material.node_tree is not None, "render: a new material has no node tree: Blender 5.2 or later is needed"
 bsdf = principled(ground_material)
 bsdf.inputs["Base Color"].default_value = (0.62, 0.63, 0.66, 1)
 bsdf.inputs["Roughness"].default_value = 0.85
@@ -103,7 +114,7 @@ background = next(n for n in world.node_tree.nodes if n.type == "BACKGROUND")
 background.inputs["Color"].default_value = (0.85, 0.87, 0.9, 1)
 background.inputs["Strength"].default_value = 0.35
 
-key = area_light("Key", centre + Vector((1.2, -1.8, 4.5)), 450, 2.5, centre)
+key = area_light("Key", centre, 450, 2.5, centre)  # placed per view, below
 area_light("Fill", centre + Vector((-4.5, -2.0, 2.0)), 70, 6.0, centre)
 area_light("Rim", centre + Vector((0.5, 4.0, 2.5)), 40, 4.0, centre)
 
@@ -153,7 +164,7 @@ for view, azimuth in VIEWS.items():
     around = Vector((math.sin(a), -math.cos(a), 0))
     camera.location = centre + (around * math.cos(ELEVATION) + Vector((0, 0, math.sin(ELEVATION)))) * distance
     aim(camera, centre)
-    key.location = centre + (around * 0.5 + Vector((0.3, -0.6, 0))) * 3 + Vector((0, 0, 4.2))
+    key.location = centre + around * KEY_REACH + KEY_OFFSET + Vector((0, 0, KEY_HEIGHT))
     aim(key, centre)
     scene.render.filepath = f"{OUT}/{STEM}.{view}.webp"
     bpy.ops.render.render(write_still=True)

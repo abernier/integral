@@ -1,6 +1,6 @@
-// Where things are, for every script: the repository, the folder the build writes into, the models, and how a
-// variant's built files and CAM folder are named. Nothing here
-// loads ClassCAD, so `pnpm cam` can use it.
+// Where things are, for every script: the repository, the folder the build writes into, the models, the folders of a
+// part that are served beside its built files, where GitHub Pages serves the site, and how a variant's built files and
+// CAM folder are named. Nothing here loads ClassCAD, so `pnpm cam` and `pnpm render` can use it.
 
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -15,6 +15,15 @@ export const ROOT = resolve(import.meta.dirname, '..')
  * @pmndrs/docs takes every file whose path contains `.md` for a page.
  */
 export const MDX = join(ROOT, '.docs')
+
+/** Where GitHub Pages serves the site: the READMEs link pages and files by this URL. */
+export const PAGES_URL = 'https://abernier.github.io/integral'
+
+/**
+ * The folders of a part served beside its built files (`.docs/<part>/<folder>/`): `references/`, the images its
+ * README's `## References` shows, and `renders/`, the views `pnpm render` makes of it.
+ */
+export const PART_ASSETS = ['references', 'renders'] as const
 
 /** The models (parts): each folder at the root holding its `<folder>/<folder>.ts`, by name. */
 export function parts() {
