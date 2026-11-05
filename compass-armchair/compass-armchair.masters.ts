@@ -14,6 +14,15 @@ export const VARIANTS = {
 } satisfies Variants
 
 /**
+ * The variant `id` names: one of VARIANTS, or a throw naming them. Both kernels build only the variants they know: an
+ * unknown id is a mistake to report, not the default to fall back to.
+ */
+export function variantOf(id: string): keyof typeof VARIANTS {
+  if (!Object.hasOwn(VARIANTS, id)) throw new Error(`compass-armchair: no variant ${id || "''"} (known: ${Object.keys(VARIANTS).join(', ')})`)
+  return id as keyof typeof VARIANTS
+}
+
+/**
  * The parameters a maker changes, in mm (angles in degrees): each with its default, its range, its step and what it
  * means. The ranges keep every joint valid (a tenon in its mortise, a tail in its socket) at every corner of the box:
  * the browser model does not throw for any combination of values inside them. Values outside are not guaranteed.

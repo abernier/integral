@@ -83,6 +83,7 @@ test('loadQuery: the variant, or the default for one unknown, and the values on 
 test('loadQuery, strict: an unknown variant throws, naming the known ones', () => {
   const part = { schema, variants }
   assert.throws(() => loadQuery(part, '?part=p&variant=nope', { strict: true }), /no variant nope \(known: thin, thick\)/)
+  assert.throws(() => loadQuery(part, '?part=p&variant=', { strict: true }), /no variant '' \(known: thin, thick\)/)
   assert.equal(loadQuery(part, '?part=p&variant=thick', { strict: true }).variant, 'thick')
   assert.equal(loadQuery(part, '?part=p', { strict: true }).variant, 'thin')
 })

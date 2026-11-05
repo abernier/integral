@@ -34,7 +34,7 @@ test('loadVariants: a model without VARIANTS has the implicit one alone', async 
 
 test('checkedVariant: the default when none is named, the one named when known; an unknown one throws, naming the known', () => {
   assert.equal(checkedVariant(variants, null), 'cane')
-  assert.equal(checkedVariant(variants, ''), 'cane')
+  assert.throws(() => checkedVariant(variants, ''), /no variant '' \(known: cane, cushion\)/)
   assert.equal(checkedVariant(variants, 'cushion'), 'cushion')
   assert.throws(() => checkedVariant(variants, 'nope'), /no variant nope \(known: cane, cushion\)/)
 })

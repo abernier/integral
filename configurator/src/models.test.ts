@@ -160,3 +160,9 @@ test('compass-armchair: GROOVE 0 builds the cane without its splines, the rail t
   assert.equal(tenons(on).length, 4)
   assert.deepEqual(tenons(off), tenons(on))
 })
+
+test('compass-armchair: an unknown variant throws in the browser model, naming the known ones', async () => {
+  const { build } = await import('../../compass-armchair/compass-armchair.model.ts')
+  await assert.rejects(build({}, 'cushion'), /no variant cushion \(known: cane, leather\)/)
+  await assert.rejects(build({}, ''), /no variant '' \(known: cane, leather\)/)
+})

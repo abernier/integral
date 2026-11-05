@@ -23,7 +23,7 @@
 import { type Api, type Roles, created, nameSolids } from '../scripts/part.ts'
 import type { CamConfig } from '../scripts/cam.config.ts'
 import type { Values } from '../scripts/masters.ts'
-import { type MASTERS, type VARIANTS, edgeBreak, grooved } from './compass-armchair.masters.ts'
+import { type MASTERS, type VARIANTS, edgeBreak, grooved, variantOf } from './compass-armchair.masters.ts'
 
 const TEAK: [number, number, number] = [155, 106, 60] // #9b6a3c
 const CANE: [number, number, number] = [230, 210, 160] // #e6d2a0
@@ -40,9 +40,10 @@ type Variant = keyof typeof VARIANTS
  * How `pnpm cam` cuts the parts (see CamConfig): what Fusion cannot know from the STEP. What is not milled depends on
  * the variant. The cane's rattan splines are skipped whatever GROOVE: the CAM STEP has none (GROOVE's `cam` is 0), a
  * finished STEP passed with --step has them, and `pnpm cam` ignores a skip of a part its STEP lacks. The leather
- * variant's cleats and fillets are teak, milled from the top as the other boards.
+ * variant's cleats and fillets are teak, milled from the top as the other boards. An unknown variant throws.
  */
-export function CAM(_values: ChairValues, variant: string): CamConfig {
+export function CAM(_values: ChairValues, given: string): CamConfig {
+  const variant = variantOf(given)
   return {
     defaults: { material: 'teak' },
     parts: {
@@ -934,12 +935,12 @@ function color(name: string): [number, number, number] {
  * Build the chair: one part whose expressions drive every board, each board a named body in it; returns the part,
  * the boards' feature ids and their volumes.
  * @param given Every master's value: the masters are the part's first expressions (EDGE_BREAK under 1 mm taken as 0).
- * @param variant The variant's id (compass-armchair.masters.ts): cane, or leather.
+ * @param variant The variant's id (compass-armchair.masters.ts): cane, or leather; another throws, naming them.
  */
 export default async function build(api: Api, given: ChairValues, variant: string) {
   // Under 1 mm, no round (as the browser model): the part's EDGE_BREAK is the one built.
   const values = { ...given, EDGE_BREAK: edgeBreak(given.EDGE_BREAK) }
-  const id: Variant = variant === 'leather' ? 'leather' : 'cane'
+  const id: Variant = variantOf(variant)
   const part = await created(api.v1.part.create({ name: 'CompassArmchair' }))
   await api.v1.part.expression({
     id: part,

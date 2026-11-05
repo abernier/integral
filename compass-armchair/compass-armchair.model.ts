@@ -29,7 +29,7 @@ import {
   type Sketch,
 } from '@classcad/smlibwasm'
 import type { Control } from '../configurator/src/models.ts'
-import { MASTERS, VARIANTS, edgeBreak, grooved } from './compass-armchair.masters.ts'
+import { MASTERS, VARIANTS, edgeBreak, grooved, variantOf } from './compass-armchair.masters.ts'
 
 const TEAK = '#9b6a3c'
 const CANE_COLOR = '#e6d2a0'
@@ -674,13 +674,13 @@ function toGeometryData(part: Part) {
  * mm, standing on y = 0, facing +z, x = 0 its middle.
  *
  * @param values The masters to change, keyed by the names in `schema`; a missing key takes its default.
- * @param variant The variant's id (`variants`); an unknown one is the default, cane.
+ * @param variant The variant's id (`variants`), cane when omitted; an unknown one throws, naming the known ones.
  */
 export async function build(values: Record<string, number> = {}, variant = 'cane'): Promise<THREE.Object3D> {
   const p = {} as Masters
   for (const name of Object.keys(MASTERS) as (keyof Masters)[]) p[name] = values[name] ?? MASTERS[name].value
   p.EDGE_BREAK = edgeBreak(p.EDGE_BREAK) // under 1 mm, no round (as the ClassCAD part)
-  const d = derive(p, variant === 'leather' ? 'leather' : 'cane')
+  const d = derive(p, variantOf(variant))
   // The kernel's bodies are freed once their triangles are copied out; only plain arrays leave the scope.
   const bodies = scope(() => model(d).map(({ part, name, role, color }) => ({ name, role, color, ...toGeometryData(part) })))
   const chair = new THREE.Group()

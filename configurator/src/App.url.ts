@@ -123,7 +123,7 @@ export function loadQuery(part: Partial<Part>, input: LoaderInput, { strict = fa
     variant = createLoader(fixedParsers(part.variants))(link, { strict }).variant
   } catch {
     const asked = createLoader({ variant: parseAsString })(link).variant
-    throw new Error(`no variant ${asked} (known: ${Object.keys(variantsOf(part.variants)).join(', ')})`)
+    throw new Error(`no variant ${asked || "''"} (known: ${Object.keys(variantsOf(part.variants)).join(', ')})`)
   }
   return split(createLoader(queryParsers(part, variant))(link))
 }

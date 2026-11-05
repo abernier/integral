@@ -44,15 +44,15 @@ export async function loadVariants(model: string) {
 }
 
 /**
- * The variant `id` names among `variants`, the default when `id` is missing (null, undefined or empty). Throws on an
- * id that is none of them, naming the known ones: unlike the configurator (App.url.ts), which falls back, a CLI
- * asked for a variant it cannot make says so.
+ * The variant `id` names among `variants`, the default when `id` is missing (null or undefined). Throws on an id
+ * that is none of them, the empty one included (`--variant ''`, `?variant=`), naming the known ones: unlike the
+ * configurator (App.url.ts), which falls back, a CLI asked for a variant it cannot make says so.
  * @param variants The model's variants (variantsOf).
  * @param id The variant asked for: a link's `?variant=`, or `--variant`.
  */
 export function checkedVariant(variants: Variants, id: string | null | undefined) {
-  if (!id) return defaultVariant(variants)
-  if (!Object.hasOwn(variants, id)) throw new Error(`no variant ${id} (known: ${Object.keys(variants).join(', ')})`)
+  if (id === null || id === undefined) return defaultVariant(variants)
+  if (!Object.hasOwn(variants, id)) throw new Error(`no variant ${id || "''"} (known: ${Object.keys(variants).join(', ')})`)
   return id
 }
 
