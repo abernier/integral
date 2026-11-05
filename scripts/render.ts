@@ -1,7 +1,7 @@
 // `pnpm render [<model>...]`: a model's renders, several views in the site's studio style, made by Blender headless
 // on this machine (render.blender.py holds the scene: the style, the views) from the GLB the build wrote
 // (`.docs/<model>/<model>.glb`, `nr build:parts`). The files go to `<model>/renders/<model>.<view>.webp`, in git
-// like `references/`: the site shows them before the model's Intro as a slider (site.ts), from the README's image
+// like `references/`: the site shows them before the model's Intro as a strip (site.ts), from the README's image
 // lines, which this script prints when the README lacks them.
 
 import { spawnSync } from 'node:child_process'
@@ -59,7 +59,7 @@ for (const model of models) {
   if (result.status !== 0) fail(`Blender failed on ${model}:\n${lines.filter((l) => /error|Error|Traceback/.test(l)).join('\n')}`)
   console.log(`${model}: ${((performance.now() - started) / 1000).toFixed(1)} s, ${shown(out)}/`)
 
-  // The README's image lines (one per view, right before its Intro) the site makes the slider from.
+  // The README's image lines (one per view, right before its Intro) the site makes the strip from.
   const readme = readFileSync(join(ROOT, model, 'README.md'), 'utf8')
   const title = readme.match(/^# (.+)$/m)?.[1] ?? model
   const images = Object.entries(VIEWS).map(([view, said]) => `![${title}, ${said}](${PAGES_URL}/${model}/renders/${model}.${view}.webp)`)

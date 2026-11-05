@@ -4,7 +4,7 @@
 // A part is a folder at the repository root holding `<folder>/<folder>.ts`, whose default export builds it with
 // ClassCAD from its masters' values (`<folder>/<folder>.masters.ts`), and a README.md; `<folder>/references/` holds
 // the images its README's `## References` shows (a strip to scroll sideways, on the site), `<folder>/renders/` the
-// views `pnpm render` makes of it (render.ts), shown before its Intro (a slider, on the site); both served beside the
+// views `pnpm render` makes of it (render.ts), shown before its Intro (a strip, on the site); both served beside the
 // built files.
 // Building it writes `<folder>.ofb`, `<folder>.step`, `<folder>.glb` and `<folder>.png` into `.docs/<folder>/`, or
 // the folder `buildPart` is given (`pnpm cam '<link>'` builds into a temporary one);
@@ -157,17 +157,17 @@ function references(images: string) {
 }
 
 /**
- * The renders before the Intro (one markdown image per line, as `references`) as a slider: one view wide, the next
- * peeking in, snapping as the page scrolls it sideways; no script, CSS scroll snap. An MDX comment first, for
- * whoever copies the page: where the views come from.
+ * The renders before the Intro (one markdown image per line, as `references`) as a strip the page scrolls
+ * sideways, no snapping: the views at one height (10rem, Tailwind's h-40, under the references' 16rem), each as
+ * wide as its ratio makes it. An MDX comment first, for whoever copies the page: where the views come from.
  */
 function renders(part: string, images: string) {
   const views = [...images.matchAll(/^!\[([^\]]*)\]\((\S+)\)$/gm)].map(
-    ([, alt, src]) => `<img src="${src}" alt="${alt}" style={{ flex: 'none', width: '85%', scrollSnapAlign: 'start', margin: 0, borderRadius: '0.75rem' }} />`,
+    ([, alt, src]) => `<img src="${src}" alt="${alt}" style={{ flex: 'none', height: '10rem', width: 'auto', maxWidth: 'none', margin: 0, borderRadius: '0.5rem' }} />`,
   )
   return [
-    `{/* The renders: \`pnpm render ${part}\` (scripts/render.ts), Blender headless on the built GLB, scripts/render.blender.py holding the studio and the views; the files in ${part}/renders/, the slider made here from the README's image lines (\`renders\` in scripts/site.ts). */}`,
-    `<div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', scrollSnapType: 'x mandatory', scrollbarWidth: 'none', marginTop: '1.5rem' }}>`,
+    `{/* The renders: \`pnpm render ${part}\` (scripts/render.ts), Blender headless on the built GLB, scripts/render.blender.py holding the studio and the views; the files in ${part}/renders/, the strip made here from the README's image lines (\`renders\` in scripts/site.ts). */}`,
+    `<div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem', marginTop: '1.5rem' }}>`,
     ...views,
     '</div>',
   ].join('\n')
@@ -177,7 +177,7 @@ function renders(part: string, images: string) {
  * Turn a README into an MDX page: its first heading becomes the title, the line under it the description, links
  * to the site become local ones, and "Edit this page" opens the README on GitHub.
  * A part's page also gets its source, its render as the page's image, the render's tabs (`views`), its renders as a
- * slider (`renders`), and its references as a strip (`references`).
+ * strip before the Intro (`renders`), and its references as a strip (`references`).
  */
 function page(readme: string, nav: number, urls: Urls, part?: string) {
   const edit = `https://github.com/abernier/integral/edit/main/${relative(ROOT, readme)}`
