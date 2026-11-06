@@ -13,6 +13,7 @@ Real objects, designed and made with whatever tools fit: CAD, code, machines.
 | | Part |
 |---|---|
 | <a href="https://abernier.github.io/integral/things/compass-armchair"><img src="https://abernier.github.io/integral/compass-armchair/compass-armchair.png" alt="Compass armchair" width="72" /></a> | **[Compass armchair](https://abernier.github.io/integral/things/compass-armchair)**: A cane armchair on compass legs, after the 1955 Chandigarh office chair, parametric, in teak. |
+| <a href="https://abernier.github.io/integral/things/desk"><img src="https://abernier.github.io/integral/desk/desk.png" alt="Desk" width="72" /></a> | **[Desk](https://abernier.github.io/integral/things/desk)**: A mid-century writing desk, a three-drawer pedestal on turned legs, modelled in Rhino, in oak. |
 | <a href="https://abernier.github.io/integral/things/zigzag-chair"><img src="https://abernier.github.io/integral/zigzag-chair/zigzag-chair.png" alt="Zigzag chair" width="72" /></a> | **[Zigzag chair](https://abernier.github.io/integral/things/zigzag-chair)**: Rietveld's 1934 Zig-Zag chair, parametric, in cherry. |
 
 ## Build
@@ -41,6 +42,7 @@ nr build      # parts + configurator + site into dist/
 </Steps>
 
 - Part: `<folder>/<folder>.ts` + `README.md`; generated files stay out of git
+- Imported part: one modelled in another CAD system, not in code (the desk, in Rhino): its STEP of named solids is its master geometry, in git (`<folder>/<folder>.rhino.step`), and `<folder>.ts` imports it as it is (`importSolids`, `scripts/part.ts`), each solid named as in the file; its masters module exports an empty `MASTERS`, and with no `<folder>.model.ts` the configurator has no such part: its page opens on the image. The STEP is one of the part's sources for the build cache (`partSources`, `scripts/build.cache.ts`)
 - Renders: `pnpm render <folder>` (Blender on this machine, headless) draws the part from four views in a studio style into `<folder>/renders/`, in git; its README shows them before the Intro (a strip to scroll sideways, on the site), one image line per view (`pnpm render --help` lists the flags; no model: every model)
 - Build cache: a part whose sources, masters, shared build scripts and lockfile are unchanged is not built again (its key sits beside its files, `.docs/<part>/<part>.key`); `nr build:parts --force` rebuilds every part
 - Engine patch (`patches/@classcad__mcp@0.6.1.patch`): the local WASM engine runs without structure-tree patches, which it otherwise computes over the whole tree after every command, making a build quadratic in its feature count (compass-armchair: 82.9 s to 19.2 s, same geometry); the build reads the tree itself (`nameSolids` pulls it), nothing here uses the patches
@@ -59,6 +61,7 @@ From a part's code to the machine. `nr build` runs in CI; `pnpm cam` only on a m
 flowchart TD
   masters["part.masters.ts<br/>parameters: default, range, hint"] --> ts["part.ts<br/>ClassCAD"]
   masters --> model["part.model.ts<br/>browser, smlibwasm"]
+  rhino["part.rhino.step<br/>an imported part's geometry"] -->|importSolids| ts
   ts -->|nr build<br/>ClassCAD| out["STEP, OFB, GLB: finished<br/>PNG: as cut, wood only<br/>+ part.cam.step: the masters' cam values<br/>.docs/part/"]
   model -->|nr build<br/>vite| cfg["configurator<br/>.docs/configurator/"]
   out --> site["site<br/>GitHub Pages"]
