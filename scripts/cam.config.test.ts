@@ -1,8 +1,8 @@
 // A model's CAM config follows its values and its variant: the zigzag chair's Seat goes on a wedge of BACK_LEAN
 // (docs/cam.md). Loading the models' modules here also proves they import without ClassCAD (scripts/part.ts imports
-// types only): the zigzag chair's, and the compass armchair's in each of its variants.
+// types only from it): the zigzag chair's, the compass armchair's in each of its variants, and the desk's.
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -12,6 +12,7 @@ import { defaultValues, loadMasters } from './masters.ts'
 import { ROOT } from './paths.ts'
 import { configFile, loadConfig } from './cam.config.ts'
 import { loadMaterials } from './cam.machining.ts'
+import { stepSolidNames } from './step-assembly.ts'
 
 const file = configFile(ROOT, 'zigzag-chair')
 const materials = loadMaterials()
@@ -61,4 +62,18 @@ test('loadConfig: CAM is given the values and the variant', async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// The desk's parts are its Rhino STEP's solids: a solid renamed or added in Rhino and missed by the config would be
+// cut as oak.
+test('loadConfig: every solid of the desk is of one stock, oak unless plywood, its turned legs skipped', async () => {
+  const { SOURCE, STOCK } = await import('../desk/desk.ts')
+  const solids = stepSolidNames(readFileSync(SOURCE, 'utf8'))
+  const listed = Object.values(STOCK).flat()
+  assert.deepEqual([...listed].sort(), [...solids].sort())
+  const config = await loadConfig(configFile(ROOT, 'desk'), materials, {}, 'default')
+  assert.equal(config.defaults?.material, 'oak')
+  for (const name of [...STOCK.ply18, ...STOCK.ply12, ...STOCK.ply6]) assert.equal(config.parts?.[name]?.material, 'birch-ply', name)
+  for (const name of [...STOCK.oak30, ...STOCK.oak18]) assert.equal(config.parts?.[name], undefined, name)
+  for (const name of STOCK.turned) assert.equal(config.parts?.[name]?.skip, true, name)
 })

@@ -1,12 +1,13 @@
 // Every part's model file, found the way models.ts finds them (its `import.meta.glob` does not exist under node, so
 // the files are imported directly): the sliders make sense, the variants too, and the part builds from them in each.
+// A part without one (imported from a STEP, no parameters) is not in the configurator: nothing to check here.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Box3, Mesh, type Object3D } from 'three'
 
 import { loadMasters } from '../../scripts/masters.ts'
 import type { PartModule } from '../../scripts/part.ts'
-import { parts } from '../../scripts/paths.ts'
+import { hasConfigurator, parts } from '../../scripts/paths.ts'
 import { RESERVED_KEYS } from './App.url.ts'
 import type { Control, Model } from './models.ts'
 import { usedIn, variantSchema, variantsOf } from './models.variants.ts'
@@ -38,7 +39,7 @@ function meshNames(shape: Object3D) {
  */
 const bodyKey = (name: string) => name.toLowerCase().replaceAll(' ', '').replace(/(left|right)$/, '')
 
-for (const part of parts()) {
+for (const part of parts().filter(hasConfigurator)) {
   test(`${part}: every slider has its default in range, a positive step and a hint`, async () => {
     const { schema }: Model = await import(`../../${part}/${part}.model.ts`)
     assert.ok(Object.keys(schema).length > 0, 'no sliders')
@@ -170,7 +171,7 @@ test('compass-armchair: an unknown variant throws in the browser model, naming t
 
 // The other way: every body the ClassCAD part's ROLES names is a mesh of the browser model in one of its variants, so
 // that a name mistyped in ROLES (taken for wood by the build's image) fails here.
-for (const part of parts()) {
+for (const part of parts().filter(hasConfigurator)) {
   test(`${part}: every body its ROLES names is a mesh of the browser model, in some variant`, async () => {
     const { ROLES }: PartModule = await import(`../../${part}/${part}.ts`)
     const { schema, variants, build }: Model = await import(`../../${part}/${part}.model.ts`)

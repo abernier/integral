@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { stepAssembly, stepParts } from './step-assembly.ts'
+import { stepAssembly, stepParts, stepSolidNames } from './step-assembly.ts'
 
 /** A one-product STEP shaped like ClassCAD's: two named solids in the root's B-rep representation (geometry elided). */
 const STEP = `ISO-10303-21;
@@ -60,4 +60,14 @@ test('a STEP without named solids comes back unchanged', () => {
 
 test('an already rewritten STEP is refused', () => {
   assert.throws(() => stepAssembly(stepAssembly(STEP)), /expected one PRODUCT/)
+})
+
+test("stepSolidNames: every solid's name, in file order, unescaped, as ClassCAD writes them", () => {
+  assert.deepEqual(stepSolidNames(STEP), ['Seat', "Bob's leg"])
+})
+
+// Rhino's export (ST-Developer) writes its entities without spaces, and may leave a solid unnamed.
+test('stepSolidNames: reads an export without spaces around `=`; an unnamed solid is an empty name', () => {
+  const rhino = "#10=MANIFOLD_SOLID_BREP('Top_Panel',#11);\n#12=BREP_WITH_VOIDS('',#13,(#14));\n#15=MANIFOLD_SOLID_BREP('Leg',#16);\n"
+  assert.deepEqual(stepSolidNames(rhino), ['Top_Panel', '', 'Leg'])
 })

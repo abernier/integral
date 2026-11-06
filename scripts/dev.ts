@@ -4,12 +4,14 @@
 // Next.js dev server on the MDX folder, as its dev.sh does. Like its CLI, it first copies the app out of
 // node_modules (to .pmndrs-docs/dev/): Node refuses to strip the types of a next.config.mts there.
 // A README's, a `docs/*.md`'s or a part's `references/` or `renders/` change rewrites the pages, and the page follows; a
-// part's script change rebuilds that part, every variant of it (about 5 s each): reload the page for the new render.
+// change of a part's sources (its script, its masters, the STEP it imports: build.cache.ts partSources) rebuilds that
+// part, every variant of it (about 5 s each): reload the page for the new render.
 
 import { spawn } from 'node:child_process'
 import { cpSync, rmSync, watch } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
+import { partSources } from './build.cache.ts'
 import { openEngine } from './classcad.ts'
 import { MDX, PART_ASSETS, ROOT, parts } from './paths.ts'
 import { HOME, buildConfigurator, buildVariants, docsEnv, writePages } from './site.ts'
@@ -82,7 +84,7 @@ watch(ROOT, { recursive: true }, (_event, file) => {
   const ofPart = parts().includes(folder) && (name === 'README.md' || assets.includes(name))
   if (file === 'README.md' || ofPart || (folder === 'docs' && name?.endsWith('.md'))) {
     later('pages', () => void writePages(urls))
-  } else if (parts().includes(folder) && name === `${folder}.ts`) {
+  } else if (parts().includes(folder) && partSources(folder).includes(file)) {
     later(folder, async () => {
       await buildVariants(engine, folder)
     })

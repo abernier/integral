@@ -34,6 +34,20 @@ test('buildKey: changes when a source changes (the part, its masters, a shared o
   }
 })
 
+// A part imported from a STEP (scripts/part.ts importSolids) is built from that file: a new export must build it again.
+test('buildKey: changes when the geometry the part imports changes, not when its browser model or README does', () => {
+  const root = repository()
+  writeFileSync(join(root, PART, `${PART}.rhino.step`), 'ISO-10303-21;')
+  writeFileSync(join(root, PART, `${PART}.model.ts`), '// model')
+  writeFileSync(join(root, PART, 'README.md'), '# Chair')
+  const before = buildKey(PART, VALUES, { root, env: {} })
+  writeFileSync(join(root, PART, `${PART}.model.ts`), '// model, changed')
+  writeFileSync(join(root, PART, 'README.md'), '# Chair, changed')
+  assert.equal(buildKey(PART, VALUES, { root, env: {} }), before)
+  writeFileSync(join(root, PART, `${PART}.rhino.step`), 'ISO-10303-21; changed')
+  assert.notEqual(buildKey(PART, VALUES, { root, env: {} }), before)
+})
+
 test('buildKey: changes when a value changes', () => {
   const root = repository()
   assert.notEqual(buildKey(PART, VALUES, { root, env: {} }), buildKey(PART, { default: { ...VALUES.default, T: 20 } }, { root, env: {} }))
