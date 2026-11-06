@@ -33,6 +33,15 @@ export function parts() {
 }
 
 /**
+ * Whether the configurator has a part: its folder holds `<part>/<part>.model.ts` (configurator/src/models.ts). A part
+ * imported from another CAD system's STEP has no parameters, and none (scripts/part.ts importSolids).
+ * @param part The part's name (its folder).
+ */
+export function hasConfigurator(part: string) {
+  return existsSync(join(ROOT, part, `${part}.model.ts`))
+}
+
+/**
  * How a variant's outputs are named: the part's default variant keeps the part's plain names (its built files, its
  * CAM folder), so that the READMEs, the pages and the links made before the part had variants keep working; any
  * other variant is named by its id. Undefined for the default.

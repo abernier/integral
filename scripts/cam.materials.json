@@ -3,6 +3,8 @@
   "materials": {
     "hardwood": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
     "cherry": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
-    "teak": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" }
+    "teak": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
+    "oak": { "grain": true, "preset": "Hardwood", "stock": "Hardwood" },
+    "birch-ply": { "grain": true, "preset": "Hardwood", "note": "Birch plywood: its face veneer's grain kept along x; the Hardwood presets until the library has its own, and no Fusion stock material" }
   }
 }

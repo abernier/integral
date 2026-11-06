@@ -2,12 +2,26 @@
 // again. Its key (buildKey) is stored beside them as `<part>.key`. Nothing here builds or loads ClassCAD.
 
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Values } from './masters.ts'
 import { MDX, ROOT } from './paths.ts'
 
-/** The files a part's built files depend on, besides its own script and masters. */
+/**
+ * A part's own sources, relative to the repository, sorted: every `<part>/<part>.<...>` file but its browser model
+ * (`<part>.model.ts`, the configurator's): its script, its masters, and the geometry it imports, if any
+ * (`<part>.rhino.step`, scripts/part.ts importSolids).
+ * @param part The part's name (its folder).
+ * @param root The repository: ROOT by default.
+ */
+export function partSources(part: string, root = ROOT) {
+  return readdirSync(join(root, part), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.startsWith(`${part}.`) && entry.name !== `${part}.model.ts`)
+    .map((entry) => `${part}/${entry.name}`)
+    .sort()
+}
+
+/** The files a part's built files depend on, besides its own sources (partSources). */
 export const SHARED_SOURCES = [
   'scripts/part.ts',
   'scripts/classcad.ts',
@@ -33,15 +47,15 @@ export const ENGINE_ENV = ['CLASSCAD_WASM_VERSION', 'CLASSCAD_WASM_URL']
 export const FILES = ['ofb', 'step', 'glb', 'png']
 
 /**
- * What a part's built files are made from: its script and masters, the shared sources, the lockfile, the engine's
- * environment variables and the values it is built with, every variant's.
+ * What a part's built files are made from: its own sources (partSources), the shared sources, the lockfile, the
+ * engine's environment variables and the values it is built with, every variant's.
  * @param values Each variant's values, by its id.
  * @param root The repository: ROOT by default.
  * @param env The environment: process.env by default.
  */
 export function buildKey(part: string, values: Record<string, Values>, { root = ROOT, env = process.env } = {}) {
   const hash = createHash('sha256')
-  const sources = [`${part}/${part}.ts`, `${part}/${part}.masters.ts`, ...SHARED_SOURCES, LOCKFILE]
+  const sources = [...partSources(part, root), ...SHARED_SOURCES, LOCKFILE]
   for (const source of sources) {
     hash.update(source)
     hash.update(readFileSync(join(root, source)))

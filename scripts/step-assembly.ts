@@ -5,12 +5,11 @@
 // Everything already in the file stays as it is; only the root's B-rep representation loses its named solids, which
 // move to their own products. Entities are appended after the last one, numbered on from it.
 //
-// `stepParts` reads such an assembly back: its parts' names, for `pnpm cam`.
+// `stepParts` reads such an assembly back: its parts' names, for `pnpm cam`. `stepSolidNames` reads the names of a
+// one-product STEP's solids, as another CAD system (Rhino) writes them too: what a part imported from a STEP is named
+// after (scripts/part.ts importSolids).
 
 import { readFileSync } from 'node:fs'
-
-/** A named solid of the STEP: its entity id and its name, still escaped as STEP writes it (`''` for a quote). */
-type Solid = { id: number; name: string }
 
 /** Every `#<id> = <TYPE>(` entity of the file whose type is `type`, as the regex match of its first line. */
 function entities(text: string, type: string) {
@@ -30,15 +29,35 @@ function references(list: string) {
 }
 
 /**
+ * The solids of a STEP's text (`MANIFOLD_SOLID_BREP` or `BREP_WITH_VOIDS`), in the file's order, each its entity id
+ * and its name, still escaped as STEP writes it (`''` for a quote); with `named`, only those that have a name.
+ * Written `#<id> = TYPE(` (ClassCAD) or `#<id>=TYPE(` (Rhino, ST-Developer).
+ */
+function solidsOf(text: string, { named = false } = {}) {
+  const quoted = named ? "((?:[^']|'')+)" : "((?:[^']|'')*)"
+  return [...text.matchAll(new RegExp(`^#(\\d+) ?= ?(?:MANIFOLD_SOLID_BREP|BREP_WITH_VOIDS)\\('${quoted}'`, 'gm'))].map(
+    (match) => ({ id: Number(match[1]), name: match[2] }),
+  )
+}
+
+/**
+ * The name of every solid of a STEP's text, in the file's order, unescaped (`''` for a quote); an empty string for
+ * an unnamed one. ClassCAD's import reads the solids in this order and numbers them, without their names.
+ * @param text The STEP file's contents.
+ * @example stepSolidNames("#1=MANIFOLD_SOLID_BREP('Top',#2);") // ['Top']
+ */
+export function stepSolidNames(text: string) {
+  return solidsOf(text).map(({ name }) => name.replace(/''/g, "'"))
+}
+
+/**
  * Rewrite a one-product STEP (as ClassCAD writes it) as an assembly: the root product gets one component per named
  * solid (`MANIFOLD_SOLID_BREP` or `BREP_WITH_VOIDS`), named after it and holding it alone, at the identity
  * transform. CAD systems then import each solid as an occurrence of a component of that name. Unnamed solids stay in
  * the root. A STEP without named solids is returned unchanged.
  */
 export function stepAssembly(text: string) {
-  const solids: Solid[] = [...text.matchAll(/^#(\d+) = (?:MANIFOLD_SOLID_BREP|BREP_WITH_VOIDS)\('((?:[^']|'')+)'/gm)].map(
-    (match) => ({ id: Number(match[1]), name: match[2] }),
-  )
+  const solids = solidsOf(text, { named: true })
   if (!solids.length) return text
 
   const rootDefinition = single(text, 'PRODUCT_DEFINITION')[1]

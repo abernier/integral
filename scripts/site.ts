@@ -31,7 +31,7 @@ import { camValues, hasCamValues } from '../configurator/src/models.cam.ts'
 import { type Values, camStepFile, checkedVariant, defaultValues, loadMasters, loadVariants } from './masters.ts'
 import { roleOf } from '../configurator/src/models.roles.ts'
 import type { PartModule } from './part.ts'
-import { MDX, PAGES_URL, PART_ASSETS, ROOT, partFile, parts } from './paths.ts'
+import { MDX, PAGES_URL, PART_ASSETS, ROOT, hasConfigurator, partFile, parts } from './paths.ts'
 
 export const DIST = join(ROOT, 'dist')
 
@@ -204,26 +204,32 @@ export async function buildConfigurator(watch = false) {
 /**
  * A part's render, as the site shows it: tabs with its configurator (the `configurator/` app: the part rebuilt in
  * the browser as sliders move), the image, and the part open in Buerligons, in that order. On GitHub the README shows the image alone (it prints iframes as text).
+ * A part the configurator lacks (paths.ts hasConfigurator) has no Configurator tab, and opens on its image.
  */
 function views(part: string, alt: string) {
   const file = (ext: string) => `${PAGES_URL}/${part}/${part}.${ext}`
   const frame = (src: string, title: string, height: number, allow = 'fullscreen') =>
     `<iframe src="${src}" title="${title}" className="w-full rounded-lg" style={{ height: ${height}, border: 0, marginTop: 12 }} allow="${allow}" />`
+  const configurator = hasConfigurator(part)
   return [
-    // syncKey: the pick is kept in localStorage, the same on every part's page.
-    '<Tabs defaultValue="configurator" syncKey="part-view">',
+    // syncKey: the pick is kept in localStorage, the same on every part's page; a page without the picked tab shows
+    // its default.
+    `<Tabs defaultValue="${configurator ? 'configurator' : 'image'}" syncKey="part-view">`,
     '<TabsList>',
-    '<TabsTrigger value="configurator">Configurator</TabsTrigger>',
+    configurator && '<TabsTrigger value="configurator">Configurator</TabsTrigger>',
     '<TabsTrigger value="image">Image</TabsTrigger>',
     '<TabsTrigger value="buerligons">Buerligons</TabsTrigger>',
     '</TabsList>',
     // The directory URL, not index.html: Vercel's clean URLs redirect the file to its directory, and the app's
     // relative base resolves against the trailing slash on every host.
-    `<TabsContent value="configurator">${frame(queryUrl({}, { part, values: {} }, `${PAGES_URL}/configurator/`), `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
+    configurator &&
+      `<TabsContent value="configurator">${frame(queryUrl({}, { part, values: {} }, `${PAGES_URL}/configurator/`), `${alt}, configurator`, 600, 'fullscreen; clipboard-write')}</TabsContent>`,
     `<TabsContent value="image"><img src="${file('png')}" alt="${alt}" style={{ marginTop: 12 }} /></TabsContent>`,
     `<TabsContent value="buerligons">${frame(`https://buerligons.io/editor/?url=${file('ofb')}`, `${alt}, in Buerligons`, 600)}</TabsContent>`,
     '</Tabs>',
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 /**

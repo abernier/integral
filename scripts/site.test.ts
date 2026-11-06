@@ -1,5 +1,6 @@
 // A README's image lines before its Intro become the renders' strip on a part's page; a README without them, or a
-// page of no part, keeps its lines as they are.
+// page of no part, keeps its lines as they are. A part's render becomes its tabs, the configurator's only for a part
+// the configurator has.
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -56,4 +57,24 @@ test('page: two blank lines before the Intro still yield the strip', () => {
   assert.equal(count(mdx, '{/* The renders:'), 1)
   assert.equal(count(mdx, '<img src='), 4)
   assert.ok(mdx.indexOf('data-renders') < mdx.indexOf('<Intro>'))
+})
+
+/** A part's README whose render line `page` turns into the tabs. */
+const withRender = (name: string) => `# Part\n\nA part.\n\n${intro}\n![${name}, from behind](${PAGES_URL}/${name}/${name}.png)\n`
+
+test('page: the render of a part the configurator has opens on its configurator', () => {
+  const mdx = pageOf(withRender('zigzag-chair'), 'zigzag-chair')
+  assert.ok(mdx.includes('<Tabs defaultValue="configurator"'))
+  assert.equal(count(mdx, '<TabsTrigger value="configurator">'), 1)
+  assert.equal(count(mdx, 'configurator/?part=zigzag-chair'), 1)
+})
+
+// The desk is imported from Rhino's STEP: no parameters, no desk.model.ts.
+test('page: the render of a part without a configurator opens on its image, with no configurator tab', () => {
+  const mdx = pageOf(withRender('desk'), 'desk')
+  assert.ok(mdx.includes('<Tabs defaultValue="image"'))
+  assert.equal(count(mdx, 'value="configurator"'), 0)
+  assert.equal(count(mdx, '/configurator/'), 0)
+  assert.equal(count(mdx, '<TabsTrigger value="image">'), 1)
+  assert.equal(count(mdx, '<TabsTrigger value="buerligons">'), 1)
 })
