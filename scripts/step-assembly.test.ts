@@ -72,9 +72,11 @@ test('stepSolidNames: reads an export without spaces around `=`; an unnamed soli
   assert.deepEqual(stepSolidNames(rhino), ['Top_Panel', '', 'Leg'])
 })
 
-// The phone stand's STEP is written by its Rhino script: a part renamed there, or a reference body (the servo, the
-// phone) exported by mistake, would no longer match the parts phone-stand.ts names.
-test("stepSolidNames: the phone stand's Rhino STEP holds its printed parts, each once, and nothing else", async () => {
-  const { SOURCE, PARTS } = await import('../phone-stand/phone-stand.ts')
-  assert.deepEqual(stepSolidNames(readFileSync(SOURCE, 'utf8')).sort(), [...PARTS].sort())
-})
+// The phone stands' STEPs are written by their Rhino scripts: a part renamed there, or a reference body (a servo, the
+// phone) exported by mistake, would no longer match the parts their module names.
+for (const stand of ['phone-stand', 'phone-stand-pan-tilt']) {
+  test(`stepSolidNames: ${stand}'s Rhino STEP holds its printed parts, each once, and nothing else`, async () => {
+    const { SOURCE, PARTS } = await import(`../${stand}/${stand}.ts`)
+    assert.deepEqual(stepSolidNames(readFileSync(SOURCE, 'utf8')).sort(), [...PARTS].sort())
+  })
+}
