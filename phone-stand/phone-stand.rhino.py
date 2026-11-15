@@ -21,37 +21,46 @@ parallel to Y through (X=0, Z=AXIS_Z).
 
 Design: after the Braun product language of the 1960s and 70s (Dieter Rams,
 Dietrich Lubs): circles and cylinders only, one body colour and one accent on
-the one functional detail, here the orientation index. A low disc base, a slim
-column with a flat back, a drum that encloses the servo; the turning plate is a
+the one functional detail, here the orientation index. Three primitives: a low
+disc base, a column, a drum that encloses the servo; the turning plate is a
 dial set flush in the drum's face behind a thin shadow gap, its orange index
-pointing at one of two notches in the rim (portrait, landscape). Proportions:
-base diameter : drum diameter = drum diameter : visible column = phi; column
-width = drum diameter / pi; the support under the drum is one drum diameter
-tall, the socket collar half one wide. No fastener shows from the front or the
-sides: the column is screwed from inside the base's bay, the lid from below,
-the servo behind the plate, the ball under the drum's belly; the one control,
-the joint's knob, and the one cable leave at the back.
+pointing at one of two notches in the rim (portrait, landscape). The column is
+the ball's socket, one plain cylinder from the base to the rim, no collar; the
+same 0.75 mm shadow gap rings the dial in the drum, the column in the base and
+the ball's flange in the drum's belly. Proportions: base diameter = phi x drum
+diameter; column diameter = drum diameter / 2 (as wide as the socket, the shoe
+and the knob's insert need); the height is not chosen but found, the lowest
+axis that keeps the phone CLEAR_MARGIN above the base at the forward stop, and
+lands at sqrt(phi) x the base's diameter. No fastener shows from the front or
+the sides: the column is screwed from inside the base's bay, the lid from
+below, the servo behind the plate, the ball under the drum's belly; the one
+control, the joint's knob, and the one cable leave at the back.
 
 Ball joint: under the servo, between the column and the drum, so the whole drum
 (servo, dial, head, phone) aims about the ball's centre while the servo still
 turns the phone about the normal to its screen (a joint between dial and head
 would swing the phone off-axis between portrait and landscape). A hollow ball
-hangs from the drum's belly on a neck; the column's collar is the socket. One
-knob at the back drives an M4 screw (heat-set insert in the collar) onto a
+hangs from the drum's belly on a neck; the column's top is the socket. One
+knob at the back drives an M4 screw (heat-set insert in the column) onto a
 printed shoe, which presses the ball against the socket's front: a friction
-lock on all three axes. The neck meeting the socket's rim stops the tilt at
-TILT_MAX in every direction; swivel is free. The servo lead runs through the
-drum's belly, the hollow ball and a 45 deg cone into the column's channel.
+lock on all three axes. The neck meeting the socket's rim stops the tilt; the
+neck sits NECK_E ahead of the ball's centre, so its front meets the rim at
+TILT_STOP[0] forward and its back at TILT_STOP[1] back. The offset turns with
+the drum, so the asymmetric stop holds at any swivel; swivel is free. A
+symmetric stop wide enough for the back tilt would let the phone swing as far
+forward, and the axis would have to rise by about 17 mm to keep it off the
+base. The servo lead runs through the drum's belly, the hollow ball and a 45
+deg cone into the column's channel.
 
 Parts (layers):
   SERVO_REF          reference only, MG996R-class servo + round horn
   DRUM               printed - holds the servo by its flange on a bulkhead
                      inside, carries the stop block; the ball screws under it
-  COLUMN             printed - column + socket collar; screwed onto the base
-                     from below
+  COLUMN             printed - the column, the socket in its top; screwed onto
+                     the base from below
   BALL               printed - hollow ball, neck and flange (2 x M3 into the drum)
   SHOE               printed - pad between the knob's screw and the ball
-  KNOB               printed - knurled knob, an M4 hex head pressed in
+  KNOB               printed - fluted knob, an M4 hex head pressed in
   PLATE              printed - the dial: turning disc bolted to the servo horn,
                      flush in the drum face, carries the stop tabs
   INDEX              printed - accent key pressed into the dial face
@@ -64,7 +73,7 @@ Parts (layers):
 
 Print orientations used for STL export (no supports anywhere):
   base upside down (top face on bed), drum on its flat back face, column upside
-  down (collar top face on bed: the socket narrows away from the bed at 45 deg at
+  down (its top face on bed: the socket narrows away from the bed at 45 deg at
   most), ball upright on its flat bottom (the flat is cut where the sphere would
   overhang past 45 deg, the flange rises from the neck on a 45 deg cone), shoe
   and knob on their backs, plate dial face down, index on its side, lid flat, head lug
@@ -127,13 +136,14 @@ P = dict(
 
     # base: a low disc (Y=0 is the stand's back reference)
     BASE_R=71.0,              # 142 = 88 * phi (drum diameter)
-    BASE_CY=70.0,             # disc centre (Y)
+    BASE_CY=66.0,             # disc centre (Y): the column's foot stays inside the top chamfer
     BASE_H=22.0,
     BASE_TOP_CHAMFER=3.0,     # 45 deg, prints on the bed (no overhang, unlike a round)
     BASE_FOOT_CHAMFER=1.0,
     BASE_TOP_SKIN=4.0,
     BASE_WALL=3.0,
-    AXIS_ABOVE_BASE=132.0,    # axis height above base top: the support under the drum shows 88, the drum's diameter
+    AXIS_ABOVE_BASE=115.0,    # axis height above base top: the lowest that keeps the phone CLEAR_MARGIN above the
+                              # base at the forward stop (see the report), rounded up to the mm
 
     # electronics bay (open to the bottom, at the back of the disc)
     BAY_X=(-34.0, 34.0), BAY_Y_MAX=62.0,
@@ -170,54 +180,60 @@ P = dict(
 
     # body: column + drum
     DRUM_D=88.0,              # holds the servo with its flange (corner at R 38.9)
-    DRUM_BACK_Y=8.0,          # flat back of drum and column, the body's print face
+    DRUM_BACK_Y=8.0,          # flat back of the drum, its print face
     DRUM_FRONT_ROUND=2.0,     # outer front edge of the drum
     BULKHEAD_FRONT_Y=38.0,    # flange seat: the servo goes in from the front
     BORE_R=40.0,              # the drum's front opening, servo and flange pass through
-    COLUMN_W=28.0,            # D section: flat back, half-round front (88 / pi)
     COLUMN_RECESS=1.0,        # column foot sunk into a socket in the base top
+    COLUMN_TOP_CHAMFER=1.0,   # 45 deg, the column's top edge (prints on the bed)
     SERVO_SCREW_PILOT=3.4,    # M4 self-tapping pilot (or M3 + nut)
     SERVO_SCREW_DEPTH=12.0,
-    COLUMN_INSERTS=[(-9.0, 13.0), (9.0, 13.0), (0.0, 32.0)],
-    CABLE_X=10.0, CABLE_Y=(18.0, 28.0),     # the servo lead's channel down the column, into the bay
+    COLUMN_INSERT_R=15.0, COLUMN_INSERT_ANGLES=(270.0, 30.0, 150.0),   # about the column's axis, from +X
+    CABLE_D=10.0,             # the servo lead's channel down the column's axis, into the bay
     DRUM_CABLE_D=10.5,        # the lead's hole from the servo pocket down through the drum's belly
 
     # ball joint, under the drum: the ball hangs from the drum, the socket caps the
     # column, so the whole drum (servo, dial, head, phone) aims about the ball's
     # centre and the servo still turns the phone about the screen's normal.
-    PIVOT_Y=23.0,             # ball centre (X=0); its height follows from the drum: AXIS_Z - DRUM_R - NECK_TO_DRUM
+    PIVOT_Y=22.0,             # ball centre (X=0), the column's axis; its height follows from the drum:
+                              # AXIS_Z - DRUM_R - NECK_TO_DRUM. The ball's flange must stay behind the
+                              # bulkhead (the bore below the servo leaves no wall to screw it to).
     NECK_TO_DRUM=24.0,        # ball centre to the drum's lowest line
     BALL_D=24.0,
     BALL_CLR=0.15,            # socket radius over the ball's: a friction joint, close fitting
     BALL_FLAT_LAT=45.0,       # the ball's bottom is cut flat at this latitude: prints upright without support
     BALL_BORE=10.5,           # hollow ball: the servo lead's JR plug (about 15 x 7.6 x 3.9) passes lengthwise
-    NECK_D=14.0,              # its contact with the socket rim is the tilt stop
-    BALL_FLANGE_D=26.0,       # neck flange, set in a recess in the drum's belly
+    NECK_D=16.0,              # its contact with the socket rim is the tilt stop
+    # asymmetric stop: the neck (and the bore through it) sits NECK_E ahead of the ball's
+    # centre, toward the screen, so its front meets the rim sooner than its back; the rim
+    # height and NECK_E follow from the two stops. The offset turns with the drum, so the
+    # stops hold whatever the swivel.
+    TILT_STOP=(15.5, 31.0),   # physical stops, forward / back (deg); sideways about 23 falls out
+    BALL_FLANGE_D=26.0,       # neck flange, set in a recess in the drum's belly behind a shadow gap
     BALL_FLANGE_T=3.0,        # flange depth into the drum
-    BALL_FLANGE_CONE=6.0,     # 45 deg cone from the neck out to the flange (no overhang upright)
-    BALL_SCREW_R=9.75,        # 2 x M3 from below, through the flange into inserts in the drum
-    BALL_SCREW_CB_D=6.0,
-    COLLAR_D=44.0,            # socket collar on the column top, half the drum's diameter
-    COLLAR_DOWN=13.0,         # collar below the ball centre
-    COLLAR_UP=7.0,            # collar above the ball centre
-    TILT_MAX=31.0,            # physical tilt limit, any direction: sets the rim height (neck on rim)
-    RIM_FLARE=40.0,           # the socket mouth flares above the rim (deg from vertical), > TILT_MAX
+    BALL_FLANGE_CONE=5.0,     # 45 deg cone from the neck out to the flange (no overhang upright)
+    BALL_SCREW_R=10.0,        # 2 x M3 from below, through the flange into inserts in the drum
+    BALL_SCREW_CB_D=5.6,
+    COLUMN_D=44.0,            # the column is the socket: one cylinder from the base to the rim, half the
+                              # drum's diameter, as wide as the ball, the shoe and the knob's insert need
+    COLUMN_UP=9.5,            # the column's top above the ball centre
+    RIM_FLARE=40.0,           # the socket mouth flares above the rim (deg from vertical), > the back stop
     CABLE_CONE_FLOOR=11.0,    # the lead's 45 deg cone under the ball, down to the column channel
-    # lock: one knob at the back; its M4 screw, in a heat-set insert in the collar's back
+    # lock: one knob at the back; its M4 screw, in a heat-set insert in the column's back
     # wall, pushes a printed shoe onto the ball (the shoe sits above the ball's equator:
     # it also keeps the ball in the socket when the knob is loose)
     SHOE_Z=1.5,               # shoe axis above the ball centre
     SHOE_D=7.4, SHOE_BORE=7.6, SHOE_TRAVEL=0.35,
     KNOB_INSERT_D=5.6, KNOB_INSERT_DEPTH=5.0,   # M4 heat-set insert
-    KNOB_D=12.0, KNOB_L=9.0, KNOB_GAP=1.0, KNOB_FLUTES=12, KNOB_FLUTE_R=0.9,
+    KNOB_D=16.0, KNOB_L=6.0, KNOB_GAP=1.0, KNOB_FLUTES=30, KNOB_FLUTE_R=0.55, KNOB_CHAMFER=0.8,
     KNOB_HEX_AF=7.15, KNOB_HEX_DEPTH=3.0,      # M4 x 6 hex head screw pressed into the knob
     # holding torque estimate (assumptions)
     MU_PETG=0.3,              # PETG on PETG, dry, static (conservative)
-    KNOB_TORQUE=0.25,         # N m, a finger-tight turn of a 12 mm knob
+    KNOB_TORQUE=0.25,         # N m, a finger-tight turn of a 16 mm knob
     SCREW_K=0.2,              # nut factor, steel screw in a brass insert
     SCREW_D=4.0,
     TAP_N=3.0,                # a firm tap on the screen, at the phone's top edge
-    # required range (the physical cone is TILT_MAX all round, swivel is free)
+    # required range (the physical range is TILT_STOP, swivel is free)
     TILT_SPEC=(-15.0, 30.0),  # pitch: + leans the screen back
     SWIVEL_SPEC=45.0,
     TIP_MARGIN_MIN=10.0,      # CoM to the base rim, at worst, inside the required range
@@ -294,32 +310,33 @@ PIVOT = Point3d(0, P["PIVOT_Y"], PIVOT_Z)
 BALL_R = P["BALL_D"] / 2.0
 SOCKET_R = BALL_R + P["BALL_CLR"]
 BALL_FLAT_Z = PIVOT_Z - BALL_R * math.sin(math.radians(P["BALL_FLAT_LAT"]))
-COLLAR_R = P["COLLAR_D"] / 2.0
-COLLAR_BACK_Y = P["PIVOT_Y"] - COLLAR_R
+COLUMN_R = P["COLUMN_D"] / 2.0
+COLUMN_BACK_Y = P["PIVOT_Y"] - COLUMN_R
+COLUMN_TOP_Z = None   # set below, once the ball centre is known
 SHOE_ZC = PIVOT_Z + P["SHOE_Z"]
+NECK_R = P["NECK_D"] / 2.0
 
 
-def rim_height():
-    """Height of the socket rim above the ball centre at which the neck meets it at TILT_MAX.
+def stop_geometry():
+    """The rim's height above the ball centre and the neck's offset toward the screen, from the two stops.
 
-    The rim edge is the circle (SOCKET_R, h); the neck a cylinder of radius
-    NECK_D/2 about the tilted axis. Contact when the edge point's distance to
-    the axis, rho sin(phi - theta), equals the neck's radius (phi the edge's
-    angle from vertical, rho its distance to the centre).
+    The rim's edge is the circle (SOCKET_R, h); the neck a cylinder of radius
+    NECK_R whose axis sits e ahead of the ball's centre. Pitched by theta, the
+    edge point's distance to the neck's axis is SOCKET_R cos(theta) - h sin(theta)
+    minus or plus e: leaning forward, the neck's front (NECK_R + e from the
+    centre's line) meets the front edge; leaning back, its back (NECK_R - e).
+    Two stops, two unknowns.
     """
-    rn, th = P["NECK_D"] / 2.0, math.radians(P["TILT_MAX"])
-    lo, hi = 0.0, SOCKET_R
-    for _ in range(60):
-        h = (lo + hi) / 2.0
-        rho, phi = math.hypot(SOCKET_R, h), math.atan2(SOCKET_R, h)
-        if rho * math.sin(phi - th) > rn:   # still free at TILT_MAX: the rim may rise
-            lo = h
-        else:
-            hi = h
-    return (lo + hi) / 2.0
+    tf, tb = (math.radians(a) for a in P["TILT_STOP"])
+    rs, rn = SOCKET_R, NECK_R
+    h = (rs * (math.cos(tb) + math.cos(tf)) - 2.0 * rn) / (math.sin(tb) + math.sin(tf))
+    e = (rs * (math.cos(tf) - math.cos(tb)) - h * (math.sin(tf) - math.sin(tb))) / 2.0
+    return h, e
 
 
-RIM_H = rim_height()
+RIM_H, NECK_E = stop_geometry()
+NECK_Y = P["PIVOT_Y"] + NECK_E                     # the neck's axis, the bore's and the flange's
+COLUMN_TOP_Z = PIVOT_Z + P["COLUMN_UP"]
 
 AX = Point3d(0, 0, AXIS_Z)
 ROT_AXIS = Vector3d(0, -1, 0)   # positive angle: +X rotates toward +Z (phi increases)
@@ -408,16 +425,6 @@ def fillet_points(p_prev, p, p_next, r):
     s = (p[0] + ax * d, p[1] + ay * d)
     e = (p[0] + bx * d, p[1] + by * d)
     return s, e, (-ax, -ay)
-
-
-def d_section(hw, y0, z, grow=0.0):
-    """Closed D curve in the XY plane at height z: flat back at y0, half-round front of radius hw."""
-    w = hw + grow
-    yb = y0 - grow
-    yc = y0 + hw
-    back = PolylineCurve([Point3d(-w, yc, z), Point3d(-w, yb, z), Point3d(w, yb, z), Point3d(w, yc, z)])
-    front = ArcCurve(Arc(Point3d(w, yc, z), Point3d(0, yc + w, z), Point3d(-w, yc, z)))
-    return Curve.JoinCurves([back, front])[0]
 
 
 def hex_prism_z(cx, cy, af, z0, z1):
@@ -519,9 +526,10 @@ def build_drum():
                    lambda u, v: Point3d(u, v, AXIS_Z), Point3d(0, 0, AXIS_Z), Point3d(0, 1, AXIS_Z))
 
     cutters = []
-    # the ball's neck flange: a round recess in the belly, its 2 inserts, the lead's hole
-    py, zb = P["PIVOT_Y"], DRUM_BOTTOM_Z
-    cutters.append(cyl_z(0, py, P["BALL_FLANGE_D"] / 2.0 + c, zb - 6.0, zb + P["BALL_FLANGE_T"]))
+    # the ball's neck flange: a round recess in the belly (the flange sits in it behind the
+    # shadow gap), its 2 inserts, the lead's hole
+    py, zb = NECK_Y, DRUM_BOTTOM_Z
+    cutters.append(cyl_z(0, py, P["BALL_FLANGE_D"] / 2.0 + P["SHADOW_GAP"], zb - 6.0, zb + P["BALL_FLANGE_T"]))
     for sx in (-1, 1):
         cutters.append(cyl_z(sx * P["BALL_SCREW_R"], py, P["M3_INSERT"] / 2.0,
                              zb, zb + P["BALL_FLANGE_T"] + P["M3_INSERT_DEPTH"]))
@@ -549,7 +557,7 @@ def build_drum():
 
 
 # --------------------------------------------------------------------------
-# 2b. BALL JOINT: column + socket collar, ball + neck, shoe, knob
+# 2b. BALL JOINT: column (the socket), ball + neck, shoe, knob
 # --------------------------------------------------------------------------
 def revolve_z(corners):
     """Solid of revolution about the vertical through the ball centre: corners [(r, z, round)]."""
@@ -562,18 +570,15 @@ def sphere(c, r):
 
 
 def build_column():
-    """The column, its foot in the base, capped by the socket collar.
+    """The column, its foot in the base: one cylinder, the ball's socket sunk in its top.
 
-    Printed upside down, the collar's top face on the bed: the socket's sphere
-    narrows away from the bed (no overhang past 45 deg), the lead's cone widens
-    away from it, and the collar overhangs nothing.
+    Printed upside down, its top face on the bed: the socket's sphere narrows
+    away from the bed (no overhang past 45 deg), the lead's cone widens away
+    from it, and the column overhangs nothing.
     """
-    c = P["CLR"]
-    py, pz = P["PIVOT_Y"], PIVOT_Z
-    zb, zt = pz - P["COLLAR_DOWN"], pz + P["COLLAR_UP"]
-    column = extrude_z(d_section(P["COLUMN_W"] / 2.0, P["DRUM_BACK_Y"], 0), COLUMN_BOTTOM_Z, zb + 1.0)
-    collar = revolve_z([(0, zb, 0), (COLLAR_R, zb, 1.5), (COLLAR_R, zt - 1.0, 0), (COLLAR_R - 1.0, zt, 0), (0, zt, 0)])
-    col = union([column, collar], "column + collar")
+    py, pz, zt = P["PIVOT_Y"], PIVOT_Z, COLUMN_TOP_Z
+    rc, ch = COLUMN_R, P["COLUMN_TOP_CHAMFER"]
+    col = revolve_z([(0, COLUMN_BOTTOM_Z, 0), (rc, COLUMN_BOTTOM_Z, 0), (rc, zt - ch, 0), (rc - ch, zt, 0), (0, zt, 0)])
 
     rs, h = SOCKET_R, RIM_H
     flare_top = rs + (zt - (pz + h)) * math.tan(math.radians(P["RIM_FLARE"]))
@@ -583,58 +588,68 @@ def build_column():
         # the socket's wall rises straight from the equator to the rim, then flares
         revolve_z([(0, pz, 0), (rs, pz, 0), (rs, pz + h, 0), (flare_top, zt + 0.01, 0),
                    (flare_top + 2.0, zt + 2.0, 0), (0, zt + 2.0, 0)]),
-        # the lead's cone under the ball (apex on the ball centre), then the channel
+        # the lead's cone under the ball (apex on the ball centre), then the channel down the axis
         revolve_z([(0, pz, 0), (fl, pz - fl, 0), (0, pz - fl, 0)]),
+        cyl_z(0, py, P["CABLE_D"] / 2.0, COLUMN_BOTTOM_Z - 1, pz - fl + 0.5),
     ]
-    cx = P["CABLE_X"] / 2.0
-    cutters.append(box(-cx, cx, P["CABLE_Y"][0], P["CABLE_Y"][1], COLUMN_BOTTOM_Z - 1, pz - fl + 0.5))
     # heat-set inserts in the column foot (screws from inside the base bay)
-    for (x, y) in P["COLUMN_INSERTS"]:
+    for (x, y) in column_insert_positions():
         cutters.append(cyl_z(x, y, P["M3_INSERT"] / 2.0, COLUMN_BOTTOM_Z - 1,
                              COLUMN_BOTTOM_Z + P["M3_INSERT_DEPTH"]))
-    # the lock: M4 insert from the collar's back, the shoe's bore on into the socket
-    y_ins = COLLAR_BACK_Y + P["KNOB_INSERT_DEPTH"]
-    cutters.append(cyl_y(0, SHOE_ZC, P["KNOB_INSERT_D"] / 2.0, COLLAR_BACK_Y - 1.0, y_ins + 0.01))
+    # the lock: M4 insert from the column's back, the shoe's bore on into the socket
+    y_ins = COLUMN_BACK_Y + P["KNOB_INSERT_DEPTH"]
+    cutters.append(cyl_y(0, SHOE_ZC, P["KNOB_INSERT_D"] / 2.0, COLUMN_BACK_Y - 1.0, y_ins + 0.01))
     cutters.append(cyl_y(0, SHOE_ZC, P["SHOE_BORE"] / 2.0, y_ins, py))
     return diff(col, cutters, "column cuts")
+
+
+def column_insert_positions():
+    r = P["COLUMN_INSERT_R"]
+    return [(r * math.cos(math.radians(a)), P["PIVOT_Y"] + r * math.sin(math.radians(a)))
+            for a in P["COLUMN_INSERT_ANGLES"]]
 
 
 def build_ball():
     """Ball, neck and flange, one part printed upright on the ball's flat bottom."""
     py, pz, zb = P["PIVOT_Y"], PIVOT_Z, DRUM_BOTTOM_Z
-    rn, rf, ft, fc = P["NECK_D"] / 2.0, P["BALL_FLANGE_D"] / 2.0, P["BALL_FLANGE_T"], P["BALL_FLANGE_CONE"]
+    rn, rf, ft, fc = NECK_R, P["BALL_FLANGE_D"] / 2.0, P["BALL_FLANGE_T"], P["BALL_FLANGE_CONE"]
     ball = inter(sphere(PIVOT, BALL_R), box(-BALL_R - 1, BALL_R + 1, py - BALL_R - 1, py + BALL_R + 1,
                                             BALL_FLAT_Z, pz + BALL_R + 1), "ball flat")
-    neck = revolve_z([(0, pz + 5.0, 0), (rn, pz + 5.0, 0), (rn, zb - (rf - rn), 0), (rf, zb, 0),
-                      (rf, zb + ft, 0), (0, zb + ft, 0)])
+    # the neck, its flange and the bore: about the neck's axis, NECK_E ahead of the ball's centre
+    neck = revolve([(0, pz + 5.0, 0), (rn, pz + 5.0, 0), (rn, zb - (rf - rn), 0), (rf, zb, 0),
+                    (rf, zb + ft, 0), (0, zb + ft, 0)],
+                   lambda u, v: Point3d(u, NECK_Y, v), Point3d(0, NECK_Y, 0), Point3d(0, NECK_Y, 1))
     if rf - rn != fc:
         raise RuntimeError("BALL_FLANGE_CONE must equal the flange's overhang (45 deg)")
     part = union([ball, neck], "ball + neck")
-    cutters = [cyl_z(0, py, P["BALL_BORE"] / 2.0, BALL_FLAT_Z - 1, zb + ft + 1)]
+    cutters = [cyl_z(0, NECK_Y, P["BALL_BORE"] / 2.0, BALL_FLAT_Z - 1, zb + ft + 1)]
     for sx in (-1, 1):
         x = sx * P["BALL_SCREW_R"]
-        cutters.append(cyl_z(x, py, P["M3_CLEAR"] / 2.0, zb - 8.0, zb + ft + 1))
-        cutters.append(cyl_z(x, py, P["BALL_SCREW_CB_D"] / 2.0, zb - fc, zb + 0.5))
+        cutters.append(cyl_z(x, NECK_Y, P["M3_CLEAR"] / 2.0, zb - 8.0, zb + ft + 1))
+        cutters.append(cyl_z(x, NECK_Y, P["BALL_SCREW_CB_D"] / 2.0, zb - fc, zb + 0.5))
     return diff(part, cutters, "ball cuts")
 
 
 def build_shoe():
     """The pad the knob's screw pushes onto the ball: its face is the socket's sphere."""
-    y0 = COLLAR_BACK_Y + P["KNOB_INSERT_DEPTH"] + P["SHOE_TRAVEL"]
+    y0 = COLUMN_BACK_Y + P["KNOB_INSERT_DEPTH"] + P["SHOE_TRAVEL"]
     pad = cyl_y(0, SHOE_ZC, P["SHOE_D"] / 2.0, y0, P["PIVOT_Y"] - 4.0)
-    # relief for the neck: above the cone it sweeps up to the tilt stop (apex on the ball
-    # centre, half-angle TILT_MAX + 1.5 + the neck's angular radius at the socket)
-    a = math.radians(P["TILT_MAX"] + 1.5) + math.asin(P["NECK_D"] / 2.0 / SOCKET_R)
-    r1 = 2.0 * COLLAR_R
+    # relief for the neck: above the cone it sweeps up to, whatever the swivel (apex on the
+    # ball centre; half-angle the stop plus the angular radius at the socket of the neck's
+    # side that leans toward the shoe, the wider of front and back, plus 1.5)
+    tf, tb = P["TILT_STOP"]
+    a = math.radians(1.5) + max(math.radians(tf) + math.asin((NECK_R + NECK_E) / SOCKET_R),
+                                math.radians(tb) + math.asin((NECK_R - NECK_E) / SOCKET_R))
+    r1 = 2.0 * COLUMN_R
     relief = revolve_z([(0, PIVOT_Z, 0), (r1, PIVOT_Z + r1 / math.tan(a), 0), (0, PIVOT_Z + r1 / math.tan(a), 0)])
     return diff(pad, [sphere(PIVOT, SOCKET_R), relief], "shoe face")
 
 
 def build_knob():
-    """Knurled knob behind the collar, an M4 hex head pressed into its front face."""
-    r, y1 = P["KNOB_D"] / 2.0, COLLAR_BACK_Y - P["KNOB_GAP"]
+    """Fluted knob behind the column, a short cylinder with chamfered ends, an M4 hex head pressed into its front."""
+    r, y1, ch = P["KNOB_D"] / 2.0, COLUMN_BACK_Y - P["KNOB_GAP"], P["KNOB_CHAMFER"]
     y0 = y1 - P["KNOB_L"]
-    knob = revolve([(0, y0, 0), (r - 0.6, y0, 0), (r, y0 + 0.6, 0), (r, y1 - 0.4, 0), (r - 0.4, y1, 0), (0, y1, 0)],
+    knob = revolve([(0, y0, 0), (r - ch, y0, 0), (r, y0 + ch, 0), (r, y1 - ch, 0), (r - ch, y1, 0), (0, y1, 0)],
                    lambda u, v: Point3d(u, v, SHOE_ZC), Point3d(0, 0, SHOE_ZC), Point3d(0, 1, SHOE_ZC))
     cutters = [hex_prism_y(0, SHOE_ZC, P["KNOB_HEX_AF"], y1 - P["KNOB_HEX_DEPTH"], y1 + 1.0)]
     for k in range(P["KNOB_FLUTES"]):
@@ -753,14 +768,10 @@ def build_base(tripod_y):
     for (x, y) in lid_screw_positions():
         cutters.append(cyl_z(x, y, P["M3_INSERT"] / 2.0, lid_t - 0.5, lid_t + P["M3_INSERT_DEPTH"]))
     # column socket (a shadow gap all round the column foot), screw holes, cable passage
-    sock = extrude_z(d_section(P["COLUMN_W"] / 2.0, P["DRUM_BACK_Y"], 0, P["SHADOW_GAP"]),
-                     COLUMN_BOTTOM_Z, H + 1)
-    cutters.append(sock)
-    for (x, y) in P["COLUMN_INSERTS"]:
+    cutters.append(cyl_z(0, P["PIVOT_Y"], COLUMN_R + P["SHADOW_GAP"], COLUMN_BOTTOM_Z, H + 1))
+    for (x, y) in column_insert_positions():
         cutters.append(cyl_z(x, y, P["M3_CLEAR"] / 2.0, CAVITY_TOP_Z - 1, H + 1))
-    cx = P["CABLE_X"] / 2 + P["CLR"]
-    cutters.append(box(-cx, cx, P["CABLE_Y"][0] - P["CLR"], P["CABLE_Y"][1] + P["CLR"],
-                       CAVITY_TOP_Z - 1, H + 1))
+    cutters.append(cyl_z(0, P["PIVOT_Y"], P["CABLE_D"] / 2.0 + P["CLR"], CAVITY_TOP_Z - 1, H + 1))
     # rubber feet recesses
     for deg in P["FOOT_ANGLES"]:
         x, y = base_pt(P["FOOT_R"], deg)
@@ -998,12 +1009,43 @@ def moved(geom, xf):
     return g
 
 
-def cone_poses(theta, step=15.0):
-    """Every direction at tilt theta: psi over half a turn, both signs."""
+def neck_clearance(xf, n=180):
+    """Least distance from the socket rim's edge to the neck's surface, the drum posed by xf (< 0: they overlap)."""
+    p0 = moved(Point3d(0, NECK_Y, PIVOT_Z), xf)
+    d = Vector3d(0, 0, 1)
+    d.Transform(xf)
+    m = 1e9
+    for k in range(n):
+        a = 2 * math.pi * k / n
+        q = Point3d(SOCKET_R * math.cos(a), P["PIVOT_Y"] + SOCKET_R * math.sin(a), PIVOT_Z + RIM_H)
+        v = q - p0
+        m = min(m, Vector3d.CrossProduct(v, d).Length - NECK_R)
+    return m
+
+
+def stop_angle(psi):
+    """The tilt at which the neck meets the rim, leaning in the direction psi (pose's frame, the drum's)."""
+    lo, hi = 0.0, 60.0
+    for _ in range(40):
+        mid = (lo + hi) / 2.0
+        if neck_clearance(pose(mid, psi)) > 0:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
+STOPS = {}
+
+
+def stop_poses(step=15.0, scale=1.0, extra=0.0):
+    """Poses on the edge of the physical range, every step degrees of direction: (tilt, psi)."""
     out = []
     psi = 0.0
-    while psi < 180.0 - 1e-9:
-        out += [(theta, psi), (-theta, psi)]
+    while psi < 360.0 - 1e-9:
+        if psi not in STOPS:
+            STOPS[psi] = stop_angle(psi)
+        out.append((STOPS[psi] * scale + extra, psi))
         psi += step
     return out
 
@@ -1020,9 +1062,9 @@ def phone_disc_points(n=72):
 
 def cable_pipe(xf):
     """The servo lead's envelope from the servo pocket, down the ball's bore (posed), into the column."""
-    a = moved(Point3d(0, P["PIVOT_Y"], DRUM_BOTTOM_Z + 12.0), xf)
-    b = moved(Point3d(0, P["PIVOT_Y"], BALL_FLAT_Z + 1.0), xf)
-    ch_y = 0.5 * (P["CABLE_Y"][0] + P["CABLE_Y"][1])
+    a = moved(Point3d(0, NECK_Y, DRUM_BOTTOM_Z + 12.0), xf)
+    b = moved(Point3d(0, NECK_Y, BALL_FLAT_Z + 1.0), xf)
+    ch_y = P["PIVOT_Y"]
     c = Point3d(0, ch_y, PIVOT_Z - P["CABLE_CONE_FLOOR"] - 6.0)
     d = Point3d(0, ch_y, PIVOT_Z - P["CABLE_CONE_FLOOR"] - 30.0)
     crv = PolylineCurve([a, b, c, d])
@@ -1178,24 +1220,30 @@ def main():
         if intersects(a, b)]
     if joint_rest:
         failures.append("joint parts overlap at rest: " + ", ".join(n for n, _, _ in joint_rest))
-    # the tilt stop: the neck meets the rim at TILT_MAX, in every direction
-    stop_dirs = [(1.0, psi) for psi in range(0, 360, 45)]
-    tilt_early = [psi for (_, psi) in stop_dirs
-                  if any(intersects(moved(ball, pose(P["TILT_MAX"] - 0.5, psi)), g) for g in (column, shoe))]
-    tilt_unstopped = [psi for (_, psi) in stop_dirs
-                      if not intersects(moved(ball, pose(P["TILT_MAX"] + 1.0, psi)), column)]
+    # the tilt stop: the neck meets the rim at the stops; forward and back as designed
+    stops = stop_poses(45.0)
+    th_back, th_fwd = STOPS[0.0], STOPS[180.0]
+    th_side = min(STOPS[90.0], STOPS[270.0])
+    if abs(th_back - P["TILT_STOP"][1]) > 0.1 or abs(th_fwd - P["TILT_STOP"][0]) > 0.1:
+        failures.append("stop geometry")
+    if th_back < P["TILT_SPEC"][1] or th_fwd < -P["TILT_SPEC"][0]:
+        failures.append("stops inside the required tilt")
+    tilt_early = [psi for (th, psi) in stops if intersects(moved(ball, pose(th - 0.5, psi)), column)]
+    # the shoe is fixed at the back and the neck is not round about the ball: every swivel
+    tilt_early += [(psi, sw) for (th, psi) in stops for sw in (0.0, 90.0, 180.0, 270.0)
+                   if intersects(moved(ball, pose(th - 0.5, psi, sw)), shoe)]
+    tilt_unstopped = [psi for (th, psi) in stops if not intersects(moved(ball, pose(th + 1.0, psi)), column)]
     if tilt_early or tilt_unstopped:
         failures.append("tilt stop")
-    # nothing else on the drum's side touches the column or the knob before the neck stops
-    poses_max = cone_poses(P["TILT_MAX"] + 1.0)
-    drum_hits = [(th, psi) for (th, psi) in poses_max
-                 if any(intersects(moved(drum, pose(th, psi)), g) for g in (column, knob))]
+    # nothing else on the drum's side touches the column or the knob before the neck stops, whatever the swivel
+    drum_hits = [(th, psi, sw) for (th, psi) in stop_poses(30.0, extra=1.0) for sw in (0.0, 90.0, 180.0, 270.0)
+                 if any(intersects(moved(drum, pose(th, psi, sw)), g) for g in (column, knob))]
     if drum_hits:
         failures.append("drum hits the column or knob when tilted")
-    # the phone's swept disc (every servo angle) over the whole physical cone: above the base top
+    # the phone's swept disc (every servo angle) over the whole physical range: above the base top
     disc = phone_disc_points()
     gaps = []
-    for (th, psi) in [(0.0, 0.0)] + cone_poses(P["TILT_MAX"]) + cone_poses(P["TILT_MAX"] / 2.0):
+    for (th, psi) in [(0.0, 0.0)] + stop_poses(15.0) + stop_poses(15.0, 0.5):
         xf = pose(th, psi)
         gaps.append((min(moved(p, xf).Z for p in disc) - BASE_TOP, th, psi))
     gap_min = min(gaps)
@@ -1205,15 +1253,15 @@ def main():
         spec_gaps.append((min(moved(p, xf).Z for p in disc) - BASE_TOP, th))
     if gap_min[0] < P["CLEAR_MARGIN"]:
         failures.append("phone too close to the base when tilted")
-    # the swept disc against the column and the knob, at the cardinal extremes
+    # the swept disc against the column, the knob and the base, at the stops, front, back and sideways
     slab = cyl_y(0, AXIS_Z, SWEPT_R, PHONE_Y0, PHONE_Y1)
-    slab_hits = [(th, psi) for (th, psi) in cone_poses(P["TILT_MAX"], 90.0)
-                 if any(intersects(moved(slab, pose(th, psi)), g) for g in (column, knob, base))]
+    slab_hits = [(th, psi, sw) for (th, psi) in stop_poses(90.0) for sw in (0.0, 90.0, 180.0)
+                 if any(intersects(moved(slab, pose(th, psi, sw)), g) for g in (column, knob, base))]
     if slab_hits:
         failures.append("phone hits the column, knob or base")
     # the servo lead: a pipe of CABLE_ENV_D through the drum, the ball's bore and the column, unpinched
     pinched = []
-    for (th, psi) in [(0.0, 0.0)] + [(P["TILT_MAX"], a) for a in range(0, 360, 45)]:
+    for (th, psi) in [(0.0, 0.0)] + stops:
         xf = pose(th, psi)
         pipe = cable_pipe(xf)
         if intersects(pipe, moved(ball, xf)) or intersects(pipe, moved(drum, xf)) or intersects(pipe, column):
@@ -1224,18 +1272,16 @@ def main():
     # holding torque and tip-over over the envelope
     g = 9.81e-3   # N per g, moments in N m with mm -> m below
     rows = []
-    for th in (0.0, P["TILT_MAX"] / 2.0, P["TILT_MAX"]):
-        psis = [0.0] if th == 0 else [float(a) for a in range(0, 360, 15)]
-        for psi in psis:
-            for sw in range(-180, 181, 15):
-                xf = pose(th, psi, sw)
-                mov = [(m, moved(c, xf)) for m, c in moving]
-                mx = sum(m * (c.Y - PIVOT.Y) for m, c in mov)   # moment about X ~ m g y
-                my = sum(m * (c.X - PIVOT.X) for m, c in mov)
-                moment = g * math.hypot(mx, my) / 1000.0
-                _, cm = com_of(mov + fixed)
-                dist = math.hypot(cm.X, cm.Y - P["BASE_CY"])
-                rows.append((th, psi, sw, moment, P["BASE_R"] - dist, feet_hull_margin(cm.X, cm.Y), cm))
+    for (th, psi) in [(0.0, 0.0)] + stop_poses(15.0) + stop_poses(15.0, 0.5):
+        for sw in range(-180, 181, 15):
+            xf = pose(th, psi, sw)
+            mov = [(m, moved(c, xf)) for m, c in moving]
+            mx = sum(m * (c.Y - PIVOT.Y) for m, c in mov)   # moment about X ~ m g y
+            my = sum(m * (c.X - PIVOT.X) for m, c in mov)
+            moment = g * math.hypot(mx, my) / 1000.0
+            _, cm = com_of(mov + fixed)
+            dist = math.hypot(cm.X, cm.Y - P["BASE_CY"])
+            rows.append((th, psi, sw, moment, P["BASE_R"] - dist, feet_hull_margin(cm.X, cm.Y), cm))
     # inside the required range: pitch over TILT_SPEC (psi 0 with theta of either sign), swivel <= SWIVEL_SPEC
     spec_rows = []
     for th in (P["TILT_SPEC"][0], 0.0, P["TILT_SPEC"][1]):
@@ -1279,9 +1325,9 @@ def main():
         "Y stack: drum back %.1f, bulkhead/flange %.1f, servo top %.1f, horn top %.1f, plate %.1f..%.1f (drum face), head ..%.1f, phone %.1f..%.1f"
         % (P["DRUM_BACK_Y"], FLANGE_BACK_Y, SERVO_TOP_Y, HORN_TOP_Y, PLATE_BACK_Y, PLATE_FRONT_Y,
            HEAD_FRONT_Y, PHONE_Y0, PHONE_Y1),
-        "proportions: base D %.0f / drum D %.0f = %.3f (phi 1.618); support under the drum %.1f (drum D %.0f); drum D / column W = %.2f (pi 3.14); collar D %.0f; height %.1f"
-        % (2 * P["BASE_R"], P["DRUM_D"], 2 * P["BASE_R"] / P["DRUM_D"], DRUM_BOTTOM_Z - BASE_TOP, P["DRUM_D"],
-           P["DRUM_D"] / P["COLUMN_W"], P["COLLAR_D"], AXIS_Z + DRUM_R),
+        "proportions: base D %.0f / drum D %.0f = %.3f (phi 1.618); drum D / column D = %.2f (2); height %.1f, height / base D = %.3f (sqrt phi 1.272); column %.1f tall above the base, gap column to drum %.1f"
+        % (2 * P["BASE_R"], P["DRUM_D"], 2 * P["BASE_R"] / P["DRUM_D"], P["DRUM_D"] / P["COLUMN_D"],
+           AXIS_Z + DRUM_R, (AXIS_Z + DRUM_R) / (2 * P["BASE_R"]), COLUMN_TOP_Z - BASE_TOP, DRUM_BOTTOM_Z - COLUMN_TOP_Z),
         "servo: flange corner R %.2f in bore R %.1f (margin %.2f), servo vs drum overlap=%s"
         % (FLANGE_CORNER_R, P["BORE_R"], flange_pass, servo_drum),
         "tabs at plate-local phi=%.1f / %.1f deg; stop clash inside travel: %s; not blocked beyond overtravel: %s; tab-to-servo gap %.2f mm"
@@ -1292,27 +1338,29 @@ def main():
         "head front to phone gap %.2f, sleeve flange to plate %.2f mm (free travel)"
         % (head_plate_clash, pins_in_holes, head_drum_clash or "none", head_phone_gap, sleeve_travel),
         "index: flush and seated=%s, %.1f mm outside the head" % (index_flush, index_clear_of_head),
-        "ball joint: centre Y=%.1f Z=%.1f (%.1f under the drum), ball D %.0f in socket D %.2f, bore D %.1f, neck D %.0f; "
-        "rim %.2f above the centre -> tilt stop %.1f deg all round; overlap at rest: %s"
-        % (PIVOT.Y, PIVOT_Z, P["NECK_TO_DRUM"], P["BALL_D"], 2 * SOCKET_R, P["BALL_BORE"], P["NECK_D"],
-           RIM_H, P["TILT_MAX"], [n for n, _, _ in joint_rest] or "none"),
-        "tilt stop: touches before TILT_MAX-0.5 at psi %s; not stopped at TILT_MAX+1 at psi %s; drum vs column/knob up to TILT_MAX+1: %s"
+        "ball joint: centre Y=%.1f Z=%.1f (%.1f under the drum), ball D %.0f in socket D %.2f, bore D %.1f, neck D %.0f %.2f ahead of the centre; "
+        "rim %.2f above the centre; overlap at rest: %s"
+        % (PIVOT.Y, PIVOT_Z, P["NECK_TO_DRUM"], P["BALL_D"], 2 * SOCKET_R, P["BALL_BORE"], P["NECK_D"], NECK_E,
+           RIM_H, [n for n, _, _ in joint_rest] or "none"),
+        "tilt stops: back %.2f, forward %.2f, sideways %.2f deg (required back %.0f, forward %.0f); swivel free all round"
+        % (th_back, th_fwd, th_side, P["TILT_SPEC"][1], -P["TILT_SPEC"][0]),
+        "tilt stop: touches before the stop-0.5 at %s; not stopped at the stop+1 at psi %s; drum vs column/knob up to the stop+1, any swivel: %s"
         % (tilt_early or "none", tilt_unstopped or "none", drum_hits or "none"),
-        "phone disc to the base top: at rest %.1f; required pitch %+.0f / 0 / %+.0f: %s; worst over the whole cone %.1f at tilt %+.1f psi %.0f (required %.1f); disc vs column/knob/base: %s"
+        "phone disc to the base top: at rest %.1f; required pitch %+.0f / 0 / %+.0f: %s; worst over the whole range %.1f at tilt %+.1f psi %.0f (required %.1f); disc vs column/knob/base: %s"
         % (gap_base, P["TILT_SPEC"][0], P["TILT_SPEC"][1], " / ".join("%.1f" % gq for gq, _ in spec_gaps),
            gap_min[0], gap_min[1], gap_min[2], P["CLEAR_MARGIN"], slab_hits or "none"),
         "servo lead (D %.0f envelope) pinched at: %s" % (P["CABLE_ENV_D"], pinched or "none"),
-        "gravity moment on the ball: required range max %.3f N m; whole cone max %.3f N m (tilt %+.1f psi %.0f); a %.0f N tap on the phone's top %.3f N m"
+        "gravity moment on the ball: required range max %.3f N m; whole range max %.3f N m (tilt %+.1f psi %.0f); a %.0f N tap on the phone's top %.3f N m"
         % (spec_moment[3], worst_moment[3], worst_moment[0], worst_moment[1], P["TAP_N"], t_tap),
         "clamp: knob %.2f N m -> screw %.0f N, holding torque mu %.2f x 2F x R = %.2f N m (x%.1f the worst gravity moment)"
         % (P["KNOB_TORQUE"], f_screw, P["MU_PETG"], t_hold, t_hold / worst_moment[3]),
         "CoM at rest (ballast %.0f g, total %.0f g): X=%.1f Y=%.1f Z=%.1f; tripod nut at Y=%.1f; base Y %.0f..%.0f"
         % (P["BALLAST_G"], m_tot, com_rest.X, com_rest.Y, com_rest.Z, tripod_y, P["BASE_CY"] - P["BASE_R"], base_front),
         "tip-over, CoM to the base rim: required range (pitch %+.0f..%+.0f, swivel +-%.0f) worst %.1f mm at pitch %+.0f swivel %+.0f (min %.0f); "
-        "whole cone and any swivel worst %.1f mm at tilt %+.1f psi %.0f swivel %+.0f"
+        "whole range and any swivel worst %.1f mm at tilt %+.1f psi %.0f swivel %+.0f"
         % (P["TILT_SPEC"][0], P["TILT_SPEC"][1], P["SWIVEL_SPEC"], spec_tip[4], spec_tip[0], spec_tip[2],
            P["TIP_MARGIN_MIN"], worst_tip[4], worst_tip[0], worst_tip[1], worst_tip[2]),
-        "tip-over, CoM to the feet's polygon: required range worst %.1f mm; whole cone and any swivel worst %.1f mm"
+        "tip-over, CoM to the feet's polygon: required range worst %.1f mm; whole range and any swivel worst %.1f mm"
         % (spec_feet[5], worst_feet[5]),
     ]
 
@@ -1324,7 +1372,7 @@ def main():
         rx = lambda deg: Transform.Rotation(math.radians(deg), Vector3d(1, 0, 0), Point3d.Origin)
         ry = lambda deg: Transform.Rotation(math.radians(deg), Vector3d(0, 1, 0), Point3d.Origin)
         exports = [("base.stl", base, rx(180)),     # top face on the bed
-                   ("column.stl", column, rx(180)),  # upside down, the collar's top face on the bed
+                   ("column.stl", column, rx(180)),  # upside down, its top face on the bed
                    ("drum.stl", drum, rx(90)),      # flat back face on the bed
                    ("ball.stl", ball, Transform.Identity),  # upright, on the ball's flat bottom
                    ("shoe.stl", shoe, rx(90)),      # flat back on the bed, concave face up
