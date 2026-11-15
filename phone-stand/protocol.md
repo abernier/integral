@@ -9,6 +9,7 @@ How an app drives the [phone stand](README.md): one custom GATT service on its E
 - 0 degrees: portrait, upright.
 - 90 degrees: landscape, after a counter-clockwise quarter turn as seen by the user.
 - Integer degrees, 0 to 90. The mechanical stops sit 5 degrees beyond each end.
+- On the stand, the orange index on the dial points at the notch at the top of the drum's rim at 0, and at the one on the user's left at 90.
 
 ## Device
 
