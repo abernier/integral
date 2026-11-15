@@ -763,6 +763,9 @@ def write_step(path, solids):
             hd.Objects.AddBrep(b, attr)
         if not hd.Export(path):
             raise RuntimeError("STEP export failed: %s" % path)
+        # Rhino keeps the file it overwrote as <path>bak: not a source, drop it.
+        if os.path.exists(path + "bak"):
+            os.remove(path + "bak")
     finally:
         hd.Dispose()
 
