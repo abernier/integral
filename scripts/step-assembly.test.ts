@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -70,4 +70,11 @@ test("stepSolidNames: every solid's name, in file order, unescaped, as ClassCAD 
 test('stepSolidNames: reads an export without spaces around `=`; an unnamed solid is an empty name', () => {
   const rhino = "#10=MANIFOLD_SOLID_BREP('Top_Panel',#11);\n#12=BREP_WITH_VOIDS('',#13,(#14));\n#15=MANIFOLD_SOLID_BREP('Leg',#16);\n"
   assert.deepEqual(stepSolidNames(rhino), ['Top_Panel', '', 'Leg'])
+})
+
+// The phone stand's STEP is written by its Rhino script: a part renamed there, or a reference body (the servo, the
+// phone) exported by mistake, would no longer match the parts phone-stand.ts names.
+test("stepSolidNames: the phone stand's Rhino STEP holds its printed parts, each once, and nothing else", async () => {
+  const { SOURCE, PARTS } = await import('../phone-stand/phone-stand.ts')
+  assert.deepEqual(stepSolidNames(readFileSync(SOURCE, 'utf8')).sort(), [...PARTS].sort())
 })
