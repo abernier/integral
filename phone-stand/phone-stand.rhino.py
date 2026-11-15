@@ -276,6 +276,10 @@ P = dict(
     PRINT_FILL=0.45,          # effective solid fraction (walls + infill)
     PHONE_G=250.0,
 )
+# A script that builds on this one (the pan-tilt variant, ../phone-stand-pan-tilt/) runs it as a library: it sets
+# PHONE_STAND_OVERRIDES (parameters it changes) and PHONE_STAND_LIBRARY (build nothing, only define the builders)
+# in the globals it runs this file in. Run on its own, neither is set and nothing changes.
+P.update(globals().get("PHONE_STAND_OVERRIDES", {}))
 
 TOL = doc.ModelAbsoluteTolerance
 
@@ -518,7 +522,8 @@ def stop_block(y0):
                AXIS_Z + P["STOP_R"][0], AXIS_Z + P["STOP_R"][1])
 
 
-def build_drum():
+def build_drum(belly=True):
+    """The drum; belly=False leaves out the ball's flange recess, its inserts and the lead's hole (the pan-tilt drum)."""
     c = P["CLR"]
     yb, yf, R = P["DRUM_BACK_Y"], DRUM_FRONT_Y, DRUM_R
     # drum: revolved about the axis, its outer front edge rounded
@@ -528,12 +533,13 @@ def build_drum():
     cutters = []
     # the ball's neck flange: a round recess in the belly (the flange sits in it behind the
     # shadow gap), its 2 inserts, the lead's hole
-    py, zb = NECK_Y, DRUM_BOTTOM_Z
-    cutters.append(cyl_z(0, py, P["BALL_FLANGE_D"] / 2.0 + P["SHADOW_GAP"], zb - 6.0, zb + P["BALL_FLANGE_T"]))
-    for sx in (-1, 1):
-        cutters.append(cyl_z(sx * P["BALL_SCREW_R"], py, P["M3_INSERT"] / 2.0,
-                             zb, zb + P["BALL_FLANGE_T"] + P["M3_INSERT_DEPTH"]))
-    cutters.append(cyl_z(0, py, P["DRUM_CABLE_D"] / 2.0, zb - 1.0, SERVO_BOT_Z))
+    if belly:
+        py, zb = NECK_Y, DRUM_BOTTOM_Z
+        cutters.append(cyl_z(0, py, P["BALL_FLANGE_D"] / 2.0 + P["SHADOW_GAP"], zb - 6.0, zb + P["BALL_FLANGE_T"]))
+        for sx in (-1, 1):
+            cutters.append(cyl_z(sx * P["BALL_SCREW_R"], py, P["M3_INSERT"] / 2.0,
+                                 zb, zb + P["BALL_FLANGE_T"] + P["M3_INSERT_DEPTH"]))
+        cutters.append(cyl_z(0, py, P["DRUM_CABLE_D"] / 2.0, zb - 1.0, SERVO_BOT_Z))
     # front bore down to the bulkhead (servo and flange go in from the front)
     cutters.append(cyl_y(0, AXIS_Z, P["BORE_R"], FLANGE_BACK_Y, yf + 1))
     # servo body pocket, behind the bulkhead face
@@ -1423,4 +1429,5 @@ def write_step(path, solids):
         hd.Dispose()
 
 
-main()
+if not globals().get("PHONE_STAND_LIBRARY"):
+    main()
