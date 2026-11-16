@@ -8,11 +8,11 @@ Run inside Rhino 8/9 (CPython 3, RhinoCommon):
 Re-runnable: it wipes the objects on its own layers (all prefixed PT_) and
 rebuilds everything. With EXPORT on, it writes, next to this file:
 
-  phone-stand-pan-tilt.rhino.step  the thirteen printed parts as named solids
-                          (Base, Lid, Column, YokeLeft, YokeRight, CoverLeft,
-                          CoverRight, Plug, Drum, Axle, Plate, Index, Head), the part's
-                          master geometry, in git; turned half a turn about Z so
-                          the phone faces -Y, the repository's front
+  phone-stand-pan-tilt.rhino.step  the eleven printed parts as named solids
+                          (Base, Lid, Column, Arm, Cover, Plug, Drum, Trunnion,
+                          Plate, Index, Head), the part's master geometry, in git;
+                          turned half a turn about Z so the phone faces -Y, the
+                          repository's front
   stl/<part>.stl          print-ready meshes in print orientation, out of git
 
 With POSE_DIR set (a folder outside the repository), it also writes posed
@@ -30,19 +30,19 @@ script that must still run on its own in Rhino; importing it keeps that script
 unchanged but for three lines.
 
 Frame: the base script's. mm, Z up, desk at Z=0, phone faces +Y (user at +Y).
-The three axes meet in one point, (0, TILT_Y, AXIS_Z): roll along Y (the
-servo in the drum, as in the base stand), tilt along X, pan along Z.
+The roll and tilt axes meet in one point, (0, TILT_Y, AXIS_Z): roll along Y
+(the servo in the drum, as in the base stand), tilt along X; the pan axis is
+vertical, PAN_BACK behind it.
 
 Design: the Braun language of the base stand (Rams, Lubs): circles and
 cylinders, one body colour, one orange accent on the dial's index, shadow gaps
-where parts meet, no fastener visible from the front or the sides. The ball
-gives way to a fork: the drum hangs between two arms on a horizontal axis
-through the centre of mass of everything that tilts (drum, roll servo, dial,
-head, phone); the fork turns on a short column over the pan servo, in the base.
-One section everywhere in the fork: the arms are 44 deep and 44 thick, the bar
-and the column 44 across, half the drum's diameter, as the base stand's column.
-The fork is wider than the base: the drum is a lamp on its stirrup, and the
-base stays phi times the drum.
+where parts meet, no fastener visible from the front or the sides. One arm, on
+one side, as on a handheld gimbal: the joints are the design (the column over
+the pan servo, the housing round the tilt servo, both cylinders coaxial with
+their axes, both 44 across, half the drum), and the segments between them are
+slim connectors (the bar and the upright, 32 across). The drum hangs from a
+single trunnion in the housing, carried by two bearings, so the tilt servo
+only turns it: its output carries the torque, never the overhung weight.
 
 Parts (layers):
   PT_BASE      printed - low disc, the pan servo hangs under its top skin; bay
@@ -51,21 +51,23 @@ Parts (layers):
   PT_LID       printed - ballast lid (the base stand's builder)
   PT_COLUMN    printed - turns on the pan servo's horn; the cable's arc slot in
                its floor, a cradle in its top for the bar
-  PT_YOKE      printed - two halves, each an arm and half the bar; the left arm
-               holds the tilt servo, the right the 6802 bearing
-  PT_COVER     printed - the arms' outer faces, behind a shadow gap
-  PT_DRUM      printed - the base stand's drum without the ball's belly, two
-               trunnions on its sides (the left screws to the tilt horn)
-  PT_AXLE      printed - the right trunnion's hollow axle, in the bearing
+  PT_ARM       printed - the L: the bar from the column, the upright, the tilt
+               housing (two 6704 bearings, the tilt servo's pocket); the plug
+               over the bar's one screw
+  PT_COVER     printed - the arm's outer face, behind a shadow gap
+  PT_DRUM      printed - the base stand's drum without the ball's belly; a
+               socket in its side for the trunnion
+  PT_TRUNNION  printed - the tube the drum hangs from, in the two bearings;
+               the tilt horn's dogs drive its end; the roll lead in its bore
   PT_PLATE, PT_INDEX, PT_HEAD   the base stand's dial, index and head, unchanged
-  PT_SERVO_REF reference - MG996R (roll), 2 x STS3215 (pan, tilt), bearing
+  PT_SERVO_REF reference - MG996R (roll), 2 x STS3215 (pan, tilt), bearings
   PT_PHONE     reference - phone envelope
 
 Print orientations (no supports; the script checks every downward face):
-  base upside down, lid flat, column upright, yoke halves on their seam face
-  (the bar up), covers on their outer face, drum on its back (the trunnions'
-  undersides are 45 degree roofs, hidden in the arms), axle upright, plate
-  dial face down, index on its side, head lug face down (vendor, not checked).
+  base upside down, lid flat, column upright, arm on its outer face (the bar
+  up), cover on its outer face, drum on its back, trunnion upright on its
+  horn end, plug upright, plate dial face down, index on its side, head lug
+  face down (vendor, not checked).
 """
 
 import math
@@ -95,36 +97,56 @@ P = dict(
     POSE_DIR="",              # set to a folder (outside the repository) to write the posed meshes for the renders
 
     # the roll and tilt axes meet at X=0, Y=TILT_Y, Z=AXIS_Z. TILT_Y as close to the centre of mass of what tilts as
-    # the drum allows: the trunnions must land on the drum's side wall, behind the dial's edge (checked)
+    # the drum allows: the trunnion's socket must stay in the drum's side wall, behind its front face (checked)
     TILT_Y=54.0,
-    # the pan axis (the column, the bar, the base's centre) sits PAN_BACK behind the tilt axis: tilted forward, the
-    # phone's lower edge swings back under the drum, where a bar under the tilt axis would be; the arms lean back
+    # the pan axis (the column, the base's centre) sits PAN_BACK behind the tilt axis: tilted forward, the phone's
+    # lower edge swings back under the drum, where a bar under the tilt axis would be; the upright leans back to it
     PAN_BACK=24.0,
 
-    # fork: one section, DRUM_D / 2, everywhere
-    ARM_GAP=1.5,              # drum to arm (the drum turns past the arm's inner face)
-    ARM_T=44.0,               # arm thickness along X (yoke and cover)
-    ARM_R=22.0,               # arm half depth (Y): its top and bottom are half circles of this radius
-    ARM_WALL=2.0,             # the arm's inner wall
+    # the arm: joints 44 across (the column, the tilt housing), connectors 32 (the bar, the upright)
+    ARM_GAP=0.75,             # the drum's widest point to the housing's face: a shadow gap
+    HOUSING_R=22.0,           # the tilt housing, a cylinder on the tilt axis
+    ARM_R=16.0,               # the upright's half depth: its ends are half circles of this radius
+    BAR_R=16.0,               # the bar from the column to the upright, a cylinder along X
+    BAR_DROP=80.0,            # tilt axis to the bar's axis: the drum's back edge clears the bar at the back tilt
+    BAR_BORE=14.0,            # the bar's bore: the cables, the cover screws' driver
+    BAR_BORE_X=(-12.0, 85.0), # the bore's ends: closed at the column's far side, into the upright
+    UPRIGHT_WALL=4.0,         # the upright's inner wall, to the tilt servo's case
     COVER_T=8.0,
-    BAR_R=22.0,               # the bar between the arms, a cylinder along X
-    BAR_DROP=86.0,            # tilt axis to the bar's axis: the drum's back edge clears the bar at the back tilt
-    BAR_BORE=24.0,            # the bar's bore: the cables, the cover screws' driver
-    BAR_BORE_END=66.0,        # the bore runs into the arm's lower half up to this X
+    COVER_WALL=2.0,           # the cover's wall over the servo's case end
     COLUMN_SHOW=10.0,         # the column seen between the base's top and the bar
     COLUMN_BORE=38.0,         # the column's bore: the cable's loop, the bar's screw
     COLUMN_FLOOR=6.0,
-    # one M4 down the pan axis, from the bar's top (hidden under the drum, its head across the halves' joint) into an
-    # insert in the column's floor: it clamps both halves of the bar in the column's cradle
+    # one M4 down the pan axis, from the bar's top (hidden under the drum) into an insert in the column's floor
     BAR_SCREW_CB=8.5, BAR_SCREW_CB_DEPTH=7.0, M4_INSERT=5.6, M4_INSERT_DEPTH=4.5,
     PLUG_T=3.0,               # a printed plug over the screw's head, flush with the bar: no fastener shows
     PAN_SKIN=2.0,             # the base's top skin over the pan servo
-    COVER_SCREW_DY=7.0,       # 2 x M3 per arm, from inside the bar's bore, into inserts in the cover
+    COVER_SCREW_DY=7.0,       # 2 x M3, from inside the bar's bore, into inserts in the cover
+    BAR_CABLE_X=9.0,          # the cable's hole from the column's bore up into the bar's, beside the screw
+    BAR_CABLE_D=9.0,
 
-    # trunnions on the drum's sides: a round top and a 45 degree roof toward the drum's back (its print bed)
-    TRUNNION_R=11.0, TRUNNION_FLAT=12.5,
-    TRUNNION_X0=40.25,        # they start in the drum's wall (the bore is R 40), never in the dial's way
-    TRUNNION_CLR=0.75,        # shadow gap round them in the arms
+    # the single trunnion: a printed tube in two bearings, its inner end in a socket in the drum's side
+    TRUN_D=20.0, TRUN_BORE=11.0,   # the bore: the roll servo's lead, its JR plug first (8.5 across)
+    TRUN_RING_D=23.0,         # the ring between the journals spaces the bearings' inner races
+    TRUN_FIT=0.05,            # on the radius, in the drum's socket
+    SOCKET_X0=41.0,           # the socket's floor in the drum's side wall (the bore is R 40, the drum R 44)
+    TRUN_SCREW_R=7.75,        # 3 x M3 from inside the drum's bore into inserts in the trunnion's end
+    TRUN_SCREW_ANGLES=(120.0, 180.0, 240.0),   # about the tilt axis, from +Y toward +Z: all behind the dial's tabs
+    PAD=(36.5, 38.0, 54.5, 11.0),  # the boss inside the bore under the screws' heads: X0, Y0, Y1, half height
+    LIP_T=1.0, LIP_D=21.5,    # the housing's lip, the inner bearing's outer race against it
+    # 6704-2RS thin section bearing, 20 x 27 x 4, two of them, BRG_SPAN apart (centre to centre)
+    BRG_OD=27.0, BRG_ID=20.0, BRG_W=4.0, BRG_G=5.0,
+    BRG_C0=730.0,             # N, static radial rating (unverified: catalogue value of a generic 6704)
+    BRG_SEAT=0.05,            # on the radius, the seat over the bearing (bonded)
+    RING_L=6.0,               # the ring's length: the bearings' spacing is RING_L + BRG_W
+    CHAMBER_R=13.75,          # the coupling's chamber, from the outer bearing to the cover: the bearings go in this way
+    # the coupling: two pins in the horn (M3 shoulders, unverified) in a slot across the trunnion's end; a groove
+    # beside them lets the roll lead out of the bore. Torque passes, the overhung moment does not
+    DOG_W=3.2, DOG_DEPTH=3.0, PIN_D=3.0, PIN_L=2.5,
+    LEAD_GROOVE=(4.0, 2.5),   # width, depth
+    LEAD_CHANNEL_D=4.5,       # the roll lead from the chamber down the upright to the bar's bore
+    BUS_CHANNEL_D=8.0,        # the bus cable from the bar's bore up to the tilt servo
+
     # Feetech STS3215 serial bus servo (7.4 V, 1:345, 12-bit magnetic encoder): case L along the shaft's
     # end-to-end line, W across, H along the shaft (case and output boss); horn: the servo's round metal horn
     STS_L=45.2, STS_W=24.7, STS_H=35.0,
@@ -135,16 +157,10 @@ P = dict(
     STS_STALL=1.9,            # N m at 7.4 V (19.5 kg cm)
     STS_SCREW_D=2.2,          # the pan servo's 4 x M2 from above, into its case's top face (unverified pattern)
     STS_SCREWS=((7.0, 9.0), (7.0, -9.0), (-17.0, 9.0), (-17.0, -9.0)),
-    # 6802-2RS bearing (15 x 24 x 5) in the right arm, the axle in it
-    BRG_OD=24.0, BRG_ID=15.0, BRG_W=5.0, BRG_G=6.0,
-    AXLE_BORE=10.0,           # the roll servo's lead, JR plug first (15 x 7.6 x 3.9, 8.5 across)
-    AXLE_FIT=0.05,            # on the radius, in the drum's hole (pressed and glued)
-    LIP_D=17.0,
-    LEAD_D=10.0,              # the lead's hole through the drum's right wall
 
     # ranges
     TILT_SPEC=(-15.0, 30.0),  # + leans the screen back
-    TILT_EXTRA=5.0,           # the fork must stay clear this far beyond the range (the servo's limits are software)
+    TILT_EXTRA=5.0,           # the arm must stay clear this far beyond the range (the servo's limits are software)
     PAN_SPEC=90.0,            # at least +-90
     PAN_LIMIT=135.0,          # software and servo angle limits: the cable's loop allows this much
     # the cable through the pan axis: 5 conductors (bus V+, GND, data; roll servo 6 V, PWM), in a loop
@@ -168,10 +184,17 @@ P = dict(
     BRIDGE_MAX=26.0,          # a downward face is printable as a bridge up to this width
     PART_MAX=220.0,
     BEARING_LOAD_MAX=40.0,    # N, axial on the pan servo's output, at most (unverified rating)
+
+    # the cantilever: printed PETG, assumptions (not measured)
+    PETG_E=1800.0,            # MPa, printed (2.0 to 2.1 GPa moulded)
+    PETG_G=640.0,             # MPa, E / (2 (1 + 0.4))
+    PETG_ALLOW=10.0,          # MPa: about 50 tensile, halved across layers, over 2.5 for creep and fatigue
+    DEFLECT_MAX=0.5,          # mm, at the phone's top, gravity and a tap together
+    BRG_FACTOR=5.0,           # the bearings' static rating over their worst load, at least
 )
 
 # What the variant changes in the base stand's parameters. The base: 40 high (the pan servo stands in it), centred on
-# the pan axis; the column turns in its socket; the bay and the ballast cavity make room for the servo.
+# the pan axis; the column turns over it; the bay and the ballast cavity make room for the servo.
 COLUMN_SHOW, BAR_R, BAR_DROP = P["COLUMN_SHOW"], P["BAR_R"], P["BAR_DROP"]
 PAN_Y = P["TILT_Y"] - P["PAN_BACK"]
 BASE_OVERRIDES = dict(
@@ -209,18 +232,22 @@ CLR = BP["CLR"]
 CENTER = Point3d(0, TY, AXIS_Z)
 PAN_C = Point3d(0, PAN_Y, AXIS_Z)
 Z_BAR = AXIS_Z - BAR_DROP
-LEAN = math.atan2(P["PAN_BACK"], BAR_DROP)          # the arms lean back by this, from the tilt axis to the bar
-ARM_IN = DRUM_R + P["ARM_GAP"]
-ARM_OUT = ARM_IN + P["ARM_T"]
-SEAM_X = ARM_OUT - P["COVER_T"]
-YOKE_X1 = SEAM_X - GAP / 2.0
-COVER_X0 = SEAM_X + GAP / 2.0
+LEAN = math.atan2(P["PAN_BACK"], BAR_DROP)          # the upright leans back by this, from the tilt axis to the bar
 COLUMN_R = BP["COLUMN_D"] / 2.0
 COLUMN_Z0 = BASE_TOP + GAP                          # the column floats over the base
-# tilt servo: horn against the left trunnion's face, case outward
-HORN_X0 = ARM_IN + P["ARM_WALL"] + 0.5
+# the X stack on the tilt axis, from the drum outward: shadow gap, lip, bearing, ring, bearing, coupling, servo, cover
+ARM_IN = DRUM_R + P["ARM_GAP"]                      # the housing's face
+BRG_A = (ARM_IN + P["LIP_T"], ARM_IN + P["LIP_T"] + P["BRG_W"])
+BRG_B = (BRG_A[1] + P["RING_L"], BRG_A[1] + P["RING_L"] + P["BRG_W"])
+TRUN_X1 = BRG_B[1] + 0.25                           # the trunnion's end, its dogs' slot
+HORN_X0 = TRUN_X1 + 0.25
 STS_X0 = HORN_X0 + P["STS_HORN_T"] + P["STS_BOSS"]  # the case's shaft face
 STS_X1 = STS_X0 + P["STS_H"]
+ARM_OUT = STS_X1 + P["COVER_WALL"]
+SEAM_X = ARM_OUT - P["COVER_T"]
+ARM_X1 = SEAM_X - GAP / 2.0
+COVER_X0 = SEAM_X + GAP / 2.0
+UP_X0 = STS_X0 - CLR - P["UPRIGHT_WALL"]            # the upright's inner face
 STS_Z1 = AXIS_Z + P["STS_SHAFT_FROM_END"]
 STS_Z0 = STS_Z1 - P["STS_L"]
 # pan servo: case under the base's top skin, shaft up on the pan axis, its length toward -X
@@ -253,12 +280,6 @@ def prism_z(pts_xy, z0, z1):
     return solid(srf.ToBrep().CapPlanarHoles(TOL))
 
 
-def mirrored(brep):
-    b = brep.DuplicateBrep()
-    b.Transform(Transform.Mirror(Plane(Point3d(0, 0, 0), Vector3d(1, 0, 0))))
-    return solid(b)
-
-
 def moved(geom, xf):
     if isinstance(geom, Point3d):
         return xf * geom
@@ -268,16 +289,21 @@ def moved(geom, xf):
 
 
 def stadium_x(x0, x1):
-    """An arm's outline (YZ): half circles of ARM_R about the tilt axis and the bar's axis, joined; along X."""
+    """The upright's outline (YZ): half circles of ARM_R about the tilt axis and the bar's axis, joined; along X."""
     r = P["ARM_R"]
-    ny, nz = math.cos(LEAN), -math.sin(LEAN)        # normal to the arm's centre line (toward the front)
+    ny, nz = math.cos(LEAN), -math.sin(LEAN)        # normal to the upright's centre line (toward the front)
     quad = [(TY + r * ny, AXIS_Z + r * nz), (PAN_Y + r * ny, Z_BAR + r * nz),
             (PAN_Y - r * ny, Z_BAR - r * nz), (TY - r * ny, AXIS_Z - r * nz)]
-    return union([cyl_x(TY, AXIS_Z, r, x0, x1), cyl_x(PAN_Y, Z_BAR, r, x0, x1), prism_x(quad, x0, x1)], "arm outline")
+    return union([cyl_x(TY, AXIS_Z, r, x0, x1), cyl_x(PAN_Y, Z_BAR, r, x0, x1), prism_x(quad, x0, x1)], "upright")
+
+
+def arm_outline(x0, x1, upright_x0):
+    """The arm's silhouette along X: the housing on the tilt axis from x0, the upright from upright_x0."""
+    return union([cyl_x(TY, AXIS_Z, P["HOUSING_R"], x0, x1), stadium_x(upright_x0, x1)], "arm outline")
 
 
 def lean_xf():
-    """The tilt servo's case leans with the arm: turned about the tilt axis."""
+    """The tilt servo's case leans with the upright: turned about the tilt axis."""
     return Transform.Rotation(-LEAN, Vector3d(1, 0, 0), CENTER)
 
 
@@ -286,37 +312,31 @@ def cyl_between(a, b, r):
     return Cylinder(Circle(pl, r), (b - a).Length).ToBrep(True, True)
 
 
-def trunnion_profile():
-    """The trunnion's section (Y, Z): a circle, and a 45 degree roof toward -Y (down on the print bed), cut flat."""
-    r, f = P["TRUNNION_R"], P["TRUNNION_FLAT"]
-    t = r / math.sqrt(2.0)                 # tangent points of the 45 degree lines
-    s = f - t                              # run of the roof's lines to the flat
-    return [(TY, AXIS_Z), (TY - t, AXIS_Z + t), (TY - f, AXIS_Z + t - s), (TY - f, AXIS_Z - t + s), (TY - t, AXIS_Z - t)]
-
-
-def trunnion_rmax():
-    r, f = P["TRUNNION_R"], P["TRUNNION_FLAT"]
-    t = r / math.sqrt(2.0)
-    return math.hypot(f, t - (f - t))
-
-
-TRUNNION_RMAX = trunnion_rmax()
-
-
-def trunnion(x0, x1):
-    return union([cyl_x(TY, AXIS_Z, P["TRUNNION_R"], x0, x1), prism_x(trunnion_profile(), x0, x1)], "trunnion")
+def polar_yz(r, deg):
+    """A point about the tilt axis, the angle from +Y toward +Z."""
+    a = math.radians(deg)
+    return TY + r * math.cos(a), AXIS_Z + r * math.sin(a)
 
 
 # --------------------------------------------------------------------------
-# References: servos, bearing, phone
+# References: servos, bearings, phone
 # --------------------------------------------------------------------------
-def build_tilt_servo():
+def build_tilt_case():
+    """The STS3215's case and output boss: what stays with the arm when the drum tilts."""
     hw = P["STS_W"] / 2.0
     case = box(STS_X0, STS_X1, TY - hw, TY + hw, STS_Z0, STS_Z1)
     case.Transform(lean_xf())
     boss = cyl_x(TY, AXIS_Z, 5.0, HORN_X0 + P["STS_HORN_T"] - 0.2, STS_X0 + 0.2)
+    return union([case, boss], "tilt servo case")
+
+
+def build_tilt_servo():
+    """The STS3215 in the housing, its horn on the axis, two pins (the coupling's dogs) toward the trunnion."""
+    case = build_tilt_case()
     horn = cyl_x(TY, AXIS_Z, P["STS_HORN_D"] / 2.0, HORN_X0, HORN_X0 + P["STS_HORN_T"])
-    return union([case, boss, horn], "tilt servo")
+    pins = [cyl_x(TY, AXIS_Z + s * P["STS_HORN_HOLE_R"], P["PIN_D"] / 2.0, HORN_X0 - P["PIN_L"], HORN_X0 + 0.2)
+            for s in (-1, 1)]
+    return union([case, horn] + pins, "tilt servo")
 
 
 def build_pan_servo():
@@ -327,10 +347,9 @@ def build_pan_servo():
     return union([case, boss, horn], "pan servo")
 
 
-def build_bearing():
-    x0 = ARM_IN + P["ARM_WALL"]
+def build_bearing(x0):
     ring = cyl_x(TY, AXIS_Z, P["BRG_OD"] / 2.0, x0, x0 + P["BRG_W"])
-    return mirrored(diff(ring, [cyl_x(TY, AXIS_Z, P["BRG_ID"] / 2.0, x0 - 1, x0 + P["BRG_W"] + 1)], "bearing"))
+    return diff(ring, [cyl_x(TY, AXIS_Z, P["BRG_ID"] / 2.0, x0 - 1, x0 + P["BRG_W"] + 1)], "bearing")
 
 
 def build_phone():
@@ -341,39 +360,49 @@ def build_phone():
 # --------------------------------------------------------------------------
 # Printed parts
 # --------------------------------------------------------------------------
-def build_drum():
-    """The base stand's drum, without the ball's belly, with a trunnion on each side.
+def trunnion_screws():
+    return [polar_yz(P["TRUN_SCREW_R"], a) for a in P["TRUN_SCREW_ANGLES"]]
 
-    Left (+X): screwed to the tilt servo's horn (4 pilots), a hole on the axis for the
-    horn's centre screw (a short hex key from the front, before the dial goes on).
-    Right (-X): a shoulder in the gap, the axle pressed in, the roll servo's lead
-    through the wall and the axle's bore.
+
+def build_drum():
+    """The base stand's drum, without the ball's belly, with the trunnion's socket in its +X side.
+
+    The socket's floor is the drum's wall, thickened inside the bore by a pad
+    behind the dial's tabs; 3 x M3 from inside the bore (before the dial goes
+    on) through the pad into the trunnion's end; the roll servo's lead through
+    the floor on the tilt axis. The -X side stays a plain cylinder.
     """
     drum = B.build_drum(belly=False)
-    x0 = P["TRUNNION_X0"]
-    left = trunnion(x0, HORN_X0)
-    right = mirrored(trunnion(x0, ARM_IN - 0.5))
-    drum = union([drum, left, right], "drum + trunnions")
-    cutters = [cyl_x(TY, AXIS_Z, 3.0, 30.0, HORN_X0 + 1)]   # the horn's centre screw
-    for k in range(P["STS_HORN_HOLES"]):
-        a = 2 * math.pi * (k + 0.5) / P["STS_HORN_HOLES"]
-        rr = P["STS_HORN_HOLE_R"]
-        cutters.append(cyl_x(TY + rr * math.cos(a), AXIS_Z + rr * math.sin(a), 1.25, HORN_X0 - 6.0, HORN_X0 + 1))
-    # right: the axle's hole and the lead's
-    ra = P["BRG_ID"] / 2.0 + P["AXLE_FIT"]
-    cutters.append(cyl_x(TY, AXIS_Z, ra, -(ARM_IN + 1), -(x0 + 0.25)))
-    cutters.append(cyl_x(TY, AXIS_Z, P["LEAD_D"] / 2.0, -(ARM_IN + 1), -30.0))
-    return diff(drum, cutters, "drum trunnion cuts")
+    x0, y0, y1, hz = P["PAD"]
+    pad = box(x0, P["SOCKET_X0"], y0, y1, AXIS_Z - hz, AXIS_Z + hz)
+    drum = union([drum, pad], "drum + pad")
+    rs = P["TRUN_D"] / 2.0 + P["TRUN_FIT"]
+    cutters = [cyl_x(TY, AXIS_Z, rs, P["SOCKET_X0"], DRUM_R + 1.0),
+               cyl_x(TY, AXIS_Z, P["TRUN_BORE"] / 2.0, x0 - 1.0, P["SOCKET_X0"] + 0.5)]
+    for (y, z) in trunnion_screws():
+        cutters.append(cyl_x(y, z, BP["M3_CLEAR"] / 2.0, x0 - 1.0, P["SOCKET_X0"] + 0.5))
+    return diff(drum, cutters, "drum socket")
 
 
-def build_axle():
-    x0, x1 = x_axle()
-    tube = cyl_x(TY, AXIS_Z, P["BRG_ID"] / 2.0, x0, x1)
-    return mirrored(diff(tube, [cyl_x(TY, AXIS_Z, P["AXLE_BORE"] / 2.0, x0 - 1, x1 + 1)], "axle"))
+def build_trunnion():
+    """The tube the drum hangs from: journals for the two bearings, the ring between them, the coupling's slot.
 
-
-def x_axle():
-    return P["TRUNNION_X0"] + 0.25, ARM_IN + P["ARM_WALL"] + P["BRG_W"]
+    Inner end in the drum's socket (3 inserts in its end face), outer end a slot
+    across it for the horn's two pins and a groove beside them for the roll
+    lead, which runs out of the drum along the bore.
+    """
+    x0, x1 = P["SOCKET_X0"] + 0.1, TRUN_X1
+    tube = union([cyl_x(TY, AXIS_Z, P["TRUN_D"] / 2.0, x0, x1),
+                  cyl_x(TY, AXIS_Z, P["TRUN_RING_D"] / 2.0, BRG_A[1], BRG_B[0])], "trunnion")
+    cutters = [cyl_x(TY, AXIS_Z, P["TRUN_BORE"] / 2.0, x0 - 1, x1 + 1)]
+    for (y, z) in trunnion_screws():
+        cutters.append(cyl_x(y, z, BP["M3_INSERT"] / 2.0, x0 - 1, x0 + BP["M3_INSERT_DEPTH"]))
+    r = P["TRUN_D"] / 2.0 + 1.0
+    hw = P["DOG_W"] / 2.0
+    cutters.append(box(x1 - P["DOG_DEPTH"], x1 + 1, TY - hw, TY + hw, AXIS_Z - r, AXIS_Z + r))
+    gw, gd = P["LEAD_GROOVE"]
+    cutters.append(box(x1 - gd, x1 + 1, TY - r, TY, AXIS_Z - gw / 2.0, AXIS_Z + gw / 2.0))
+    return diff(tube, cutters, "trunnion cuts")
 
 
 def pocket_box(x0, x1):
@@ -383,35 +412,37 @@ def pocket_box(x0, x1):
     return b
 
 
-def build_yoke(servo):
-    """One half of the fork, built on the +X side: the arm (to the seam) and half the bar.
+def build_arm():
+    """The L in one print: the bar from the column's cradle, the upright, the tilt housing (to the seam).
 
-    servo=True: the tilt servo's pocket, open toward the cover, the horn's cavity and the
-    trunnion's hole. servo=False: the same cavity, a lip, the bearing's seat (the right
-    half is this one mirrored).
+    The housing holds the two bearings (the inner one against the lip), the
+    coupling's chamber and the tilt servo's pocket, all open toward the cover:
+    the trunnion with its bearings goes in from that side, then the servo.
     """
-    arm = stadium_x(ARM_IN, YOKE_X1)
-    bar = cyl_x(PAN_Y, Z_BAR, BAR_R, GAP / 2.0, ARM_IN + 1.0)
-    part = union([arm, bar], "yoke")
-    w0 = ARM_IN + P["ARM_WALL"]
-    hole = TRUNNION_RMAX + P["TRUNNION_CLR"]
-    cutters = []
-    if servo:
-        cutters += [cyl_x(TY, AXIS_Z, hole, ARM_IN - 1, STS_X0), pocket_box(STS_X0 - CLR, YOKE_X1 + 1)]
-    else:
-        cutters += [cyl_x(TY, AXIS_Z, P["LIP_D"] / 2.0, ARM_IN - 1, w0 + 0.01),
-                    cyl_x(TY, AXIS_Z, P["BRG_OD"] / 2.0 + 0.05, w0, w0 + P["BRG_W"] + 0.01),
-                    pocket_box(w0 + P["BRG_W"], YOKE_X1 + 1)]
-    # the bar's bore, into the arm; the cable's channel up the arm's centre line to the pocket
-    cutters.append(cyl_x(PAN_Y, Z_BAR, P["BAR_BORE"] / 2.0, 0.0, P["BAR_BORE_END"]))
-    top = lean_xf() * Point3d(60.0, TY, STS_Z0 + 1.0)
-    cutters.append(cyl_between(Point3d(60.0, PAN_Y, Z_BAR), top, 4.0))
+    arm = arm_outline(ARM_IN, ARM_X1, UP_X0)
+    bar = cyl_x(PAN_Y, Z_BAR, BAR_R, -COLUMN_R, UP_X0 + 1.0)
+    part = union([arm, bar], "arm")
+    cutters = [cyl_x(TY, AXIS_Z, P["LIP_D"] / 2.0, ARM_IN - 1, BRG_A[0] + 0.01),
+               cyl_x(TY, AXIS_Z, P["BRG_OD"] / 2.0 + P["BRG_SEAT"], BRG_A[0], BRG_B[1] + 0.01),
+               cyl_x(TY, AXIS_Z, P["CHAMBER_R"], BRG_B[1], ARM_X1 + 1),
+               pocket_box(STS_X0 - CLR, ARM_X1 + 1)]
+    # the bar's bore; the cable's hole from the column's bore; the bus cable's channel up the upright to the pocket's
+    # far end; the roll lead's channel from the coupling's chamber down to the bar's bore
+    bx0, bx1 = P["BAR_BORE_X"]
+    cutters.append(cyl_x(PAN_Y, Z_BAR, P["BAR_BORE"] / 2.0, bx0, bx1))
+    cutters.append(cyl_z(P["BAR_CABLE_X"], PAN_Y, P["BAR_CABLE_D"] / 2.0, Z_BAR - BAR_R - 2, Z_BAR))
+    xm = (STS_X0 + ARM_X1) / 2.0
+    top = lean_xf() * Point3d(xm, TY, STS_Z0 + 1.0)
+    cutters.append(cyl_between(Point3d(xm, PAN_Y, Z_BAR), top, P["BUS_CHANNEL_D"] / 2.0))
+    xl = UP_X0 + P["LEAD_CHANNEL_D"] / 2.0 + 0.6
+    lead_top = lean_xf() * Point3d(xl, TY, AXIS_Z - (P["CHAMBER_R"] - 1.0))
+    cutters.append(cyl_between(lead_top, Point3d(xl + 4.0, PAN_Y, Z_BAR), P["LEAD_CHANNEL_D"] / 2.0))
     # the cover's 2 screws, from the bore's end face; the bar's M4 down the pan axis, counterbored from the top
     for sy in (-1, 1):
-        cutters.append(cyl_x(PAN_Y + sy * P["COVER_SCREW_DY"], Z_BAR, 1.6, P["BAR_BORE_END"] - 1, YOKE_X1 + 1))
+        cutters.append(cyl_x(PAN_Y + sy * P["COVER_SCREW_DY"], Z_BAR, 1.6, bx1 - 1, ARM_X1 + 1))
     cutters.append(cyl_z(0, PAN_Y, 2.2, Z_BAR - BAR_R - 2, Z_BAR + BAR_R + 2))
     cutters.append(cyl_z(0, PAN_Y, P["BAR_SCREW_CB"] / 2.0, Z_BAR + BAR_R - P["BAR_SCREW_CB_DEPTH"], Z_BAR + BAR_R + 2))
-    return diff(part, cutters, "yoke cuts")
+    return diff(part, cutters, "arm cuts")
 
 
 def build_plug():
@@ -422,9 +453,9 @@ def build_plug():
 
 
 def build_cover():
-    """An arm's outer face, behind the seam's shadow gap: the servo case's end, 2 inserts (built on +X)."""
-    cover = stadium_x(COVER_X0, ARM_OUT)
-    cutters = [pocket_box(COVER_X0 - 1, STS_X1 + CLR)]
+    """The arm's outer face, behind the seam's shadow gap: the servo case's end, 2 inserts."""
+    cover = arm_outline(COVER_X0, ARM_OUT, COVER_X0)
+    cutters = [pocket_box(COVER_X0 - 1, STS_X1 + CLR), cyl_x(TY, AXIS_Z, P["CHAMBER_R"], COVER_X0 - 1, STS_X1 + CLR)]
     for sy in (-1, 1):
         cutters.append(cyl_x(PAN_Y + sy * P["COVER_SCREW_DY"], Z_BAR, BP["M3_INSERT"] / 2.0, COVER_X0 - 1,
                              COVER_X0 + BP["M3_INSERT_DEPTH"]))
@@ -497,6 +528,23 @@ def pan_xf(p):
 
 
 # --------------------------------------------------------------------------
+# The cantilever: section properties and the load path, in N and mm
+# --------------------------------------------------------------------------
+def rect_I(rects, axis):
+    """Second moment of a section of rectangles (u0, u1, v0, v1) about its centroid, bending with u as the depth."""
+    a = sum((u1 - u0) * (v1 - v0) for u0, u1, v0, v1 in rects)
+    uc = sum((u1 - u0) * (v1 - v0) * (u0 + u1) / 2.0 for u0, u1, v0, v1 in rects) / a
+    i = sum((v1 - v0) * (u1 - u0) ** 3 / 12.0 + (u1 - u0) * (v1 - v0) * ((u0 + u1) / 2.0 - uc) ** 2
+            for u0, u1, v0, v1 in rects)
+    c = max(max(abs(u0 - uc), abs(u1 - uc)) for u0, u1, v0, v1 in rects)
+    return i, c
+
+
+def tube_I(d, di):
+    return math.pi / 64.0 * (d ** 4 - di ** 4)
+
+
+# --------------------------------------------------------------------------
 # Print checks
 # --------------------------------------------------------------------------
 def print_mesh(brep, xform):
@@ -549,10 +597,11 @@ def overhangs(mesh):
 # --------------------------------------------------------------------------
 LAYERS = {
     "PT_BASE": (200, 200, 200), "PT_LID": (120, 120, 120), "PT_COLUMN": (230, 227, 220),
-    "PT_YOKE": (230, 227, 220), "PT_COVER": (215, 212, 205), "PT_DRUM": (230, 227, 220),
-    "PT_AXLE": (150, 150, 150), "PT_PLATE": (210, 207, 200), "PT_INDEX": (226, 83, 31),
+    "PT_ARM": (230, 227, 220), "PT_COVER": (215, 212, 205), "PT_DRUM": (230, 227, 220),
+    "PT_TRUNNION": (150, 150, 150), "PT_PLATE": (210, 207, 200), "PT_INDEX": (226, 83, 31),
     "PT_HEAD": (190, 187, 180), "PT_SERVO_REF": (90, 90, 200), "PT_PHONE": (60, 160, 230),
 }
+FORMER_LAYERS = ("PT_YOKE", "PT_AXLE")      # the fork's, wiped too when rebuilding over an older run
 
 
 def layer_index(name):
@@ -568,7 +617,7 @@ def layer_index(name):
 
 
 def clear_layers():
-    for name in LAYERS:
+    for name in list(LAYERS) + list(FORMER_LAYERS):
         lay = doc.Layers.FindName(name)
         if lay is None:
             continue
@@ -608,6 +657,9 @@ def write_world_stl(brep, path):
 
 
 # --------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------
 # Build
 # --------------------------------------------------------------------------
 def main():
@@ -617,17 +669,17 @@ def main():
 
     roll_servo = B.build_servo()
     tilt_servo = build_tilt_servo()
+    tilt_case = build_tilt_case()
     pan_servo = build_pan_servo()
-    bearing = build_bearing()
+    bearing_a = build_bearing(BRG_A[0])
+    bearing_b = build_bearing(BRG_B[0])
     drum = build_drum()
-    axle = build_axle()
+    trunnion = build_trunnion()
     plate = B.build_plate()
     index = B.build_index()
     head = B.build_head()
-    yoke_l = build_yoke(True)
-    yoke_r = mirrored(build_yoke(False))
-    cover_l = build_cover()
-    cover_r = mirrored(build_cover())
+    arm = build_arm()
+    cover = build_cover()
     column = build_column()
     plug = build_plug()
     phone = build_phone()
@@ -644,11 +696,12 @@ def main():
                           sum(q * c.Z for q, c in masses) / m)
 
     # the masses that tilt (and roll, the phone), those that pan, those that stay
-    tilting = [printed(drum), printed(axle), printed(plate), printed(index),
+    tilting = [printed(drum), printed(trunnion), printed(plate), printed(index),
                (BP["SERVO_G"], B.volume_centroid(roll_servo)[1]), (BP["HEAD_G"], B.volume_centroid(head)[1])]
     phone_m = (BP["PHONE_G"], Point3d(0, (B.PHONE_Y0 + B.PHONE_Y1) / 2.0, AXIS_Z))
-    panning = [printed(yoke_l), printed(yoke_r), printed(cover_l), printed(cover_r), printed(column), printed(plug),
-               (P["STS_G"], B.volume_centroid(tilt_servo)[1]), (P["BRG_G"], B.volume_centroid(bearing)[1])]
+    panning = [printed(arm), printed(cover), printed(column), printed(plug),
+               (P["STS_G"], B.volume_centroid(tilt_servo)[1]),
+               (P["BRG_G"], B.volume_centroid(bearing_a)[1]), (P["BRG_G"], B.volume_centroid(bearing_b)[1])]
     m_tilt, c_tilt = com_of(tilting + [phone_m])
     pre_base = build_base(BP["BALLAST_CY"])
     lid0 = B.build_lid(BP["BALLAST_CY"])
@@ -663,13 +716,12 @@ def main():
              (BP["BALLAST_G"], Point3d(0, BP["BALLAST_CY"], BP["LID_T"] + 8.0))]
 
     parts = [("PT_BASE", "Base", base), ("PT_LID", "Lid", lid), ("PT_COLUMN", "Column", column),
-             ("PT_YOKE", "YokeLeft", yoke_l), ("PT_YOKE", "YokeRight", yoke_r),
-             ("PT_COVER", "CoverLeft", cover_l), ("PT_COVER", "CoverRight", cover_r), ("PT_YOKE", "Plug", plug),
-             ("PT_DRUM", "Drum", drum), ("PT_AXLE", "Axle", axle), ("PT_PLATE", "Plate", plate),
+             ("PT_ARM", "Arm", arm), ("PT_COVER", "Cover", cover), ("PT_ARM", "Plug", plug),
+             ("PT_DRUM", "Drum", drum), ("PT_TRUNNION", "Trunnion", trunnion), ("PT_PLATE", "Plate", plate),
              ("PT_INDEX", "Index", index), ("PT_HEAD", "Head", head)]
     refs = [("PT_SERVO_REF", "roll_servo_mg996r", roll_servo), ("PT_SERVO_REF", "tilt_servo_sts3215", tilt_servo),
-            ("PT_SERVO_REF", "pan_servo_sts3215", pan_servo), ("PT_SERVO_REF", "bearing_6802", bearing),
-            ("PT_PHONE", "phone", phone)]
+            ("PT_SERVO_REF", "pan_servo_sts3215", pan_servo), ("PT_SERVO_REF", "bearing_6704_inner", bearing_a),
+            ("PT_SERVO_REF", "bearing_6704_outer", bearing_b), ("PT_PHONE", "phone", phone)]
     for layer, name, brep in parts + refs:
         add(brep, layer, name)
         report.append("%-19s solid=%s valid=%s  %s" % (name, brep.IsSolid, brep.IsValid, B.bbox_str(brep)))
@@ -692,21 +744,18 @@ def main():
     report.append("roll (MG996R, the base stand's dial): stops clash inside travel %s, free beyond %s, plate vs drum %s, servo vs drum %s"
                   % (roll_free or "none", roll_blocked or "none", plate_drum or "none", roll_servo_drum))
 
-    # ---- assembled at rest: nothing overlaps; the servos and the bearing in their seats ----------------------
+    # ---- assembled at rest: nothing overlaps; the servos and the bearings in their seats ---------------------
     named = dict((n, b) for _, n, b in parts)
-    pairs = [("Base", "Column"), ("Base", "Lid"), ("Column", "YokeLeft"), ("Column", "YokeRight"),
-             ("YokeLeft", "YokeRight"), ("YokeLeft", "CoverLeft"), ("YokeRight", "CoverRight"),
-             ("Drum", "YokeLeft"), ("Drum", "YokeRight"), ("Drum", "CoverLeft"), ("Drum", "Column"),
-             ("Drum", "Plate"), ("Axle", "YokeRight"), ("Axle", "Drum"), ("Plate", "YokeLeft"),
-             ("Plug", "YokeLeft"), ("Plug", "YokeRight"), ("Plug", "Drum")]
+    pairs = [("Base", "Column"), ("Base", "Lid"), ("Column", "Arm"), ("Arm", "Cover"), ("Drum", "Arm"),
+             ("Drum", "Cover"), ("Drum", "Column"), ("Drum", "Plate"), ("Trunnion", "Arm"), ("Trunnion", "Drum"),
+             ("Trunnion", "Cover"), ("Plate", "Arm"), ("Plug", "Arm"), ("Plug", "Drum"), ("Plug", "Column")]
     rest = ["%s/%s" % (a, b) for (a, b) in pairs if intersects(named[a], named[b])]
-    seats = [("tilt servo", tilt_servo, (yoke_l, cover_l, drum)), ("pan servo", pan_servo, (base, column)),
-             ("bearing", bearing, (yoke_r, drum, cover_r))]
+    seats = [("tilt servo", tilt_servo, (arm, cover, drum, trunnion)), ("pan servo", pan_servo, (base, column)),
+             ("inner bearing", bearing_a, (arm, drum, cover)), ("outer bearing", bearing_b, (arm, drum, cover))]
     seat_hits = ["%s" % n for (n, s, others) in seats if any(intersects(s, o) for o in others)]
-    # the bearing must sit on the axle: its bore on the axle's diameter
     if rest or seat_hits:
         failures.append("overlap at rest: %s" % ", ".join(rest + seat_hits))
-    report.append("at rest, overlaps: %s; servos and bearing clear of their seats: %s"
+    report.append("at rest, overlaps: %s; servos and bearings clear of their seats: %s"
                   % (rest or "none", seat_hits or "yes"))
     # electronics in the bay
     def rel(b):
@@ -718,11 +767,14 @@ def main():
         failures.append("electronics do not fit the bay: %s" % elec_hits)
     report.append("electronics (ESP32 56x29x15, power board 50x17x12, PD trigger 26x11x6) clear of the base: %s"
                   % (elec_hits or "yes"))
-    # the trunnions land on the drum's wall, never in the dial's way
-    trunnion_y_max = TY + P["TRUNNION_R"]
-    dial_gap = B.PLATE_BACK_Y - B.P["TAB_LEN"] - trunnion_y_max
-    report.append("trunnions: R %.1f (roof to %.2f), from X %.2f (bore R %.1f); front edge Y %.1f, the dial's tabs from Y %.1f"
-                  % (P["TRUNNION_R"], TRUNNION_RMAX, P["TRUNNION_X0"], BP["BORE_R"], trunnion_y_max,
+    # the socket stays in the drum's side, behind its front face and the dial's tabs
+    sock_front = TY + P["TRUN_D"] / 2.0 + P["TRUN_FIT"]
+    pad_tabs = B.PLATE_BACK_Y - BP["TAB_LEN"] - P["PAD"][2]
+    screw_y = max(y for y, _ in trunnion_screws()) + 2.75
+    if sock_front > B.DRUM_FRONT_Y - 1.0 or pad_tabs < 0.5 or screw_y > B.PLATE_BACK_Y - BP["TAB_LEN"] - 0.5:
+        failures.append("the trunnion's socket in the dial's way")
+    report.append("trunnion's socket: D %.1f, its front edge Y %.1f (the drum's face %.1f); pad and screw heads behind Y %.1f, the dial's tabs from Y %.1f"
+                  % (2 * (P["TRUN_D"] / 2.0 + P["TRUN_FIT"]), sock_front, B.DRUM_FRONT_Y, max(P["PAD"][2], screw_y),
                      B.PLATE_BACK_Y - BP["TAB_LEN"]))
 
     # ---- the tilt envelope: everything that tilts against everything that pans --------------------------------
@@ -730,13 +782,14 @@ def main():
     ex = P["TILT_EXTRA"]
     tilts = [t0 - ex, t0, t0 / 2.0, 0.0, t1 / 2.0, t1, t1 + ex]
     rolls = [0.0, -15.0, -30.0, -45.0, -60.0, -75.0, -90.0]
-    fork = [("YokeLeft", yoke_l), ("YokeRight", yoke_r), ("CoverLeft", cover_l), ("CoverRight", cover_r),
-            ("Column", column)]
+    fork = [("Arm", arm), ("Cover", cover), ("Column", column), ("Plug", plug)]
     hits = []
     for t in tilts:
         xt = tilt_xf(t)
-        for nm, g in (("Drum", drum), ("Axle", axle)):
+        for nm, g in (("Drum", drum), ("Trunnion", trunnion)):
             hits += ["%s@%+.1f/%s" % (nm, t, fn) for fn, f in fork if intersects(moved(g, xt), f)]
+        if intersects(moved(trunnion, xt), tilt_case):     # the horn and its pins turn with the trunnion
+            hits.append("Trunnion@%+.1f/servo case" % t)
         for r in rolls:
             xf = xt * roll_xf(r)
             for nm, g in (("Plate", plate), ("Head", head), ("Phone", phone)):
@@ -745,7 +798,7 @@ def main():
                 hits += ["%s@%+.1f,%.0f/%s" % (nm, t, r, fn) for fn, f in fork if intersects(moved(g, xf), f)]
     if hits:
         failures.append("tilt envelope: " + ", ".join(hits[:8]))
-    report.append("tilt %+.0f..%+.0f (checked %+.0f..%+.0f), roll 0..90 every 15: drum, axle, plate, head, phone clear of the fork and the column: %s"
+    report.append("tilt %+.0f..%+.0f (checked %+.0f..%+.0f), roll 0..90 every 15: drum, trunnion, plate, head, phone clear of the arm, the cover and the column: %s"
                   % (t0, t1, t0 - ex, t1 + ex, hits or "yes"))
 
     # the phone above the base's top (pan turns everything about the base's own centre: it changes nothing)
@@ -772,7 +825,7 @@ def main():
                   % (spec_low[0], spec_low[1], -spec_low[2], P["CLEAR_MARGIN"], all_low[0], all_low[1], ex,
                      spec_low[0] + BASE_TOP))
     # the bar's drop: the drum's back edge over the bar at the back tilt
-    bar_top = cyl_x(PAN_Y, Z_BAR, BAR_R + 2.0, -ARM_IN, ARM_IN)
+    bar_top = cyl_x(PAN_Y, Z_BAR, BAR_R + 2.0, -DRUM_R - 1, DRUM_R + 1)
     drum_bar = [t for t in tilts if intersects(moved(drum, tilt_xf(t)), bar_top)]
     if drum_bar:
         failures.append("drum within 2 mm of the bar at %s" % drum_bar)
@@ -796,22 +849,95 @@ def main():
     for n, mg in (("tilt", margin_tilt), ("pan", margin_pan), ("roll", margin_roll)):
         if mg < P["TORQUE_FACTOR"]:
             failures.append("%s torque margin %.1f" % (n, mg))
-    axial = (m_pan + 0.0) * 9.81e-3
+    axial = m_pan * 9.81e-3
     if axial > P["BEARING_LOAD_MAX"]:
         failures.append("pan servo's axial load")
+    _, c_pan = com_of(tilting + [phone_m] + panning)
+    pan_offset = math.hypot(c_pan.X, c_pan.Y - PAN_Y)
     report += [
-        "tilting mass %.0f g (phone %.0f), its CoM Y=%.1f Z=%.1f: %.1f mm ahead of the tilt axis, %.1f below"
-        % (m_tilt, BP["PHONE_G"], c_tilt.Y, c_tilt.Z, c_tilt.Y - TY, AXIS_Z - c_tilt.Z),
+        "tilting mass %.0f g (phone %.0f), its CoM X=%.1f Y=%.1f Z=%.1f: %.1f mm ahead of the tilt axis, %.1f below"
+        % (m_tilt, BP["PHONE_G"], c_tilt.X, c_tilt.Y, c_tilt.Z, c_tilt.Y - TY, AXIS_Z - c_tilt.Z),
         "tilt (STS3215, stall %.1f N m): gravity at most %.3f N m (tilt %+.0f), a %.0f N tap at the phone's top %.3f: %.2f N m, margin x%.1f (required x%.0f)"
         % (P["STS_STALL"], grav_max[0], grav_max[1], P["TAP_N"], tap_tilt, tilt_load, margin_tilt, P["TORQUE_FACTOR"]),
-        "pan (STS3215): no gravity on a vertical axis; a tap at a landscape end %.3f N m, margin x%.1f; axial load on its output %.1f N (%.0f g)"
-        % (tap_pan, margin_pan, axial, m_pan),
+        "pan (STS3215): no gravity on a vertical axis; a tap at a landscape end %.3f N m, margin x%.1f; on its output %.1f N (%.0f g) axially, its CoM %.1f mm off the axis: %.3f N m overhung"
+        % (tap_pan, margin_pan, axial, m_pan, pan_offset, axial * pan_offset / 1000.0),
         "roll (MG996R, stall %.2f N m at 6 V): the phone on its axis; a tap along a landscape end %.3f N m, margin x%.1f"
         % (P["MG996R_STALL"], tap_roll, margin_roll),
     ]
 
+    # ---- the cantilever: the trunnion, the bearings, the arm -----------------------------------------------
+    # Loads: the tilting weight W at its CoM, and the tap F at the phone's top (horizontal, along -Y), both carried
+    # from the drum's side to the housing by the trunnion, then down the upright and along the bar to the column.
+    # Elastic, small deflections, the parts as beams; the bearings' play and the gearbox's backlash not included.
+    E, G, allow = P["PETG_E"], P["PETG_G"], P["PETG_ALLOW"]
+    W, F = m_tilt * g, P["TAP_N"]
+    h_tap = l2                                     # the tap's height over the tilt axis (portrait)
+    xa, xb = sum(BRG_A) / 2.0, sum(BRG_B) / 2.0
+    span = xb - xa
+    a = xa - c_tilt.X                              # the overhang, from the load to the inner bearing
+    load = math.hypot(W, F)
+    r_a, r_b = load * (a + span) / span, load * a / span
+    brg_factor = P["BRG_C0"] / r_a
+    # the trunnion at the inner bearing: bending (both loads) and torsion (the tilt servo's worst load)
+    i_t = tube_I(P["TRUN_D"], P["TRUN_BORE"])
+    m_t = load * a
+    sig_t = m_t * (P["TRUN_D"] / 2.0) / i_t
+    tau_t = tilt_load * 1000.0 * (P["TRUN_D"] / 2.0) / (2.0 * i_t)
+    vm_t = math.hypot(sig_t, math.sqrt(3.0) * tau_t)
+    a_s = xa - P["SOCKET_X0"]
+    d_t = load * a_s ** 3 / (3 * E * i_t) + load * (a - a_s) * a_s ** 2 / (2 * E * i_t)   # the socket's drop
+    # the 3 screws into the trunnion's end: the moment at the socket, carried on their circle
+    m_s = load * (P["SOCKET_X0"] - c_tilt.X)
+    screw_n = m_s / (1.5 * P["TRUN_SCREW_R"])
+    # the upright (U section where the pocket is: its back wall and two flanges) and the bar (a tube)
+    x_up = (UP_X0 + ARM_X1) / 2.0
+    lu = AXIS_Z - Z_BAR
+    lb = x_up
+    hw = P["STS_W"] / 2.0 + CLR
+    px0 = STS_X0 - CLR
+    u_x = [(UP_X0, px0, -P["ARM_R"], P["ARM_R"]), (px0, ARM_X1, hw, P["ARM_R"]), (px0, ARM_X1, -P["ARM_R"], -hw)]
+    i_uy, c_uy = rect_I(u_x, "x")                  # bending in XZ (gravity's overhang): X is the depth
+    i_ux, c_ux = rect_I([(v0, v1, u0, u1) for (u0, u1, v0, v1) in u_x], "y")   # bending in YZ (the tap): Y the depth
+    i_b = tube_I(2 * BAR_R, P["BAR_BORE"])
+    j_b = 2 * i_b
+    m_uy = W * (x_up - c_tilt.X)                   # the overhang's moment, constant up the upright
+    m_ux = F * (lu + h_tap)                        # the tap's, at the upright's foot
+    sig_u = m_uy * c_uy / i_uy + m_ux * c_ux / i_ux
+    m_b = W * lb + m_uy                            # at the bar's root, in the column's cradle (conservative)
+    t_b = F * (lu + h_tap)                         # the tap twists the bar
+    sig_b = math.hypot(m_b * BAR_R / i_b, math.sqrt(3.0) * t_b * BAR_R / j_b)
+    # gravity: the phone's drop. The bar bends under W and the overhang's moment, the upright under the moment,
+    # and both turn the drum about Y: the drop is their rotation times the overhang, plus the bar's own sag
+    th_b = (W * lb ** 2 / 2.0 + m_uy * lb) / (E * i_b)
+    th_u = m_uy * lu / (E * i_uy)
+    sag = W * lb ** 3 / (3 * E * i_b) + m_uy * lb ** 2 / (2 * E * i_b) + (th_b + th_u) * (x_up - c_tilt.X) + d_t
+    # the tap: the upright bends in YZ, the bar twists, the trunnion's share is in d_t
+    d_up = F * lu ** 3 / (3 * E * i_ux) + F * h_tap * lu ** 2 / (2 * E * i_ux)
+    th_up = F * lu ** 2 / (2 * E * i_ux) + F * h_tap * lu / (E * i_ux)
+    phi_b = t_b * lb / (G * j_b)
+    push = d_up + th_up * h_tap + phi_b * (lu + h_tap)
+    sig_max = max(vm_t, sig_u, sig_b)
+    if sig_max > allow:
+        failures.append("arm stress %.2f MPa" % sig_max)
+    if sag + push > P["DEFLECT_MAX"]:
+        failures.append("arm deflection %.2f mm" % (sag + push))
+    if brg_factor < P["BRG_FACTOR"]:
+        failures.append("bearing load")
+    report += [
+        "cantilever (PETG E %.0f MPa, G %.0f, allowable %.0f MPa; tilting weight %.2f N at X %.1f, a %.0f N tap at the phone's top):"
+        % (E, G, allow, W, c_tilt.X, F),
+        "  bearings 6704 at X %.2f and %.2f, %.1f apart, the load %.1f mm outboard: inner %.1f N, outer %.1f N; static rating %.0f N, x%.0f (required x%.0f)"
+        % (xa, xb, span, a, r_a, r_b, P["BRG_C0"], brg_factor, P["BRG_FACTOR"]),
+        "  trunnion D %.0f/%.0f at the inner bearing: %.0f N mm bending, %.2f MPa, with the tilt torque %.2f MPa von Mises; the socket drops %.4f mm; the 3 screws %.1f N each"
+        % (P["TRUN_D"], P["TRUN_BORE"], m_t, sig_t, vm_t, d_t, screw_n),
+        "  upright (U section, I %.0f / %.0f mm4): %.0f N mm overhang, %.0f N mm tap, %.2f MPa; bar D %.0f/%.0f at the column: %.2f MPa"
+        % (i_uy, i_ux, m_uy, m_ux, sig_u, 2 * BAR_R, P["BAR_BORE"], sig_b),
+        "  deflection: the drum's centre sags %.3f mm under gravity, a tap pushes the phone's top %.3f mm: %.3f mm (max %.1f); worst stress %.2f MPa, x%.0f under allowable"
+        % (sag, push, sag + push, P["DEFLECT_MAX"], sig_max, allow / sig_max),
+    ]
+
     # ---- centre of mass and tip-over over every aim --------------------------------------------------------
-    m_all = m_tilt + m_pan + sum(q for q, _ in fixed)
+    m_all = m_tilt + sum(q for q, _ in panning) + sum(q for q, _ in fixed)
     rows = []
     pans = range(-int(P["PAN_LIMIT"]), int(P["PAN_LIMIT"]) + 1, 15)
     for p in pans:
@@ -825,8 +951,8 @@ def main():
             top = max((xt * pt for pt in corners), key=lambda q: q.Z)
             u = Vector3d(0, -1, 0)
             u.Transform(xp)
-            arm = BP["BASE_R"] - (u.X * cm.X + u.Y * (cm.Y - BP["BASE_CY"]))
-            ratio = (m_all * 9.81e-3 * arm) / (P["TAP_N"] * top.Z)
+            lever = BP["BASE_R"] - (u.X * cm.X + u.Y * (cm.Y - BP["BASE_CY"]))
+            ratio = (m_all * 9.81e-3 * lever) / (P["TAP_N"] * top.Z)
             rows.append((BP["BASE_R"] - dist, B.feet_hull_margin(cm.X, cm.Y), ratio, p, t, cm))
     worst_rim = min(rows, key=lambda r: r[0])
     worst_feet = min(rows, key=lambda r: r[1])
@@ -845,7 +971,7 @@ def main():
         % (P["TAP_N"], worst_tap[2], worst_tap[3], worst_tap[4], P["TAP_TIP_MIN"]),
     ]
 
-    # ---- the cable: the pan axis's loop, the tilt axis's axle ---------------------------------------------
+    # ---- the cable: the pan axis's loop, the tilt axis's trunnion ------------------------------------------
     cable = cyl_z(0, PAN_Y - P["CABLE_HOLE_R"], P["CABLE_ENV_D"] / 2.0, COLUMN_Z0 - 2.0, COLUMN_Z0 + P["COLUMN_FLOOR"] + 2.0)
     pinch = [p for p in range(-int(P["PAN_LIMIT"]), int(P["PAN_LIMIT"]) + 1, 15) if intersects(cable, moved(column, pan_xf(p)))]
     pinch += [p for p in (-P["PAN_LIMIT"], P["PAN_LIMIT"]) if intersects(cable, moved(column, pan_xf(p)))]
@@ -861,37 +987,42 @@ def main():
         failures.append("pan cable pinched within the limits: %s" % pinch)
     loop = math.radians(2 * lim) * P["CABLE_HOLE_R"]
     jr_plug = math.hypot(7.6, 3.9)
-    if P["AXLE_BORE"] < jr_plug + 1.0:
-        failures.append("the roll servo's plug does not pass the axle")
-    # the bus cable down the left arm, the roll lead down the right one: the channels reach the bar's bore
+    if P["TRUN_BORE"] < jr_plug + 1.0:
+        failures.append("the roll servo's plug does not pass the trunnion")
+    # the lead's way out of the trunnion: its groove turns with the tilt inside the chamber, never against the pocket
+    sweep = math.radians((t1 + ex) - (t0 - ex)) * (P["TRUN_D"] / 2.0)
     report += [
         "pan: required +-%.0f, limits +-%.0f (software and the servo's angle limits); the cable (D %.0f) free in the column's slot over the limits: %s; it would meet the slot's end at %s deg; its loop needs about %.0f mm of slack in the column's bore (D %.0f)"
         % (P["PAN_SPEC"], lim, P["CABLE_ENV_D"], pinch or "yes", hit_at, loop, P["COLUMN_BORE"]),
-        "tilt: the roll servo's lead crosses on the axis, through the axle's bore (D %.1f, its plug %.1f across): it twists, never bends"
-        % (P["AXLE_BORE"], jr_plug),
+        "tilt: the roll servo's lead runs out of the drum on the axis, through the trunnion's bore (D %.1f, its plug %.1f across), out of its groove into the chamber (the groove's mouth sweeps %.0f mm over the tilt), down the upright's channel (D %.1f) to the bar"
+        % (P["TRUN_BORE"], jr_plug, sweep, P["LEAD_CHANNEL_D"]),
     ]
 
     # ---- sizes and proportions ------------------------------------------------------------------------------
     bb_all = BoundingBox.Empty
     for _, _, b in parts:
         bb_all.Union(b.GetBoundingBox(True))
+    vol_parts = sum(B.volume_centroid(b)[0] for _, _, b in parts)
+    vol_arm = sum(B.volume_centroid(named[n])[0] for n in ("Column", "Arm", "Cover", "Plug", "Trunnion"))
     report += [
-        "roll and tilt axes meet at Y=%.1f Z=%.2f (%.2f above the base's top); pan axis Y=%.1f (%.0f behind); arms lean %.1f deg; bar axis Z=%.2f; column %.2f..%.2f, %.1f seen"
+        "roll and tilt axes meet at Y=%.1f Z=%.2f (%.2f above the base's top); pan axis Y=%.1f (%.0f behind); upright leans %.1f deg; bar axis Z=%.2f; column %.2f..%.2f, %.1f seen"
         % (TY, AXIS_Z, AXIS_Z - BASE_TOP, PAN_Y, P["PAN_BACK"], math.degrees(LEAN), Z_BAR, COLUMN_Z0, Z_BAR, COLUMN_SHOW),
-        "overall %.1f wide (X), %.1f deep (Y), %.1f high (drum's top); base D %.0f x %.0f; drum D %.0f; fork section %.0f"
-        % (bb_all.Max.X - bb_all.Min.X, bb_all.Max.Y - bb_all.Min.Y, AXIS_Z + DRUM_R, 2 * BP["BASE_R"], BASE_TOP,
-           BP["DRUM_D"], 2 * P["ARM_R"]),
-        "X stack: drum %.1f, arm %.1f..%.1f (seam %.2f, cover %.2f..%.1f), horn %.1f, tilt servo %.1f..%.1f"
-        % (DRUM_R, ARM_IN, YOKE_X1, SEAM_X, COVER_X0, ARM_OUT, HORN_X0, STS_X0, STS_X1),
+        "overall %.1f wide (X %.1f..%.1f), %.1f deep (Y), %.1f high (drum's top); base D %.0f x %.0f; drum D %.0f; joints D %.0f, connectors %.0f"
+        % (bb_all.Max.X - bb_all.Min.X, bb_all.Min.X, bb_all.Max.X, bb_all.Max.Y - bb_all.Min.Y, AXIS_Z + DRUM_R,
+           2 * BP["BASE_R"], BASE_TOP, BP["DRUM_D"], 2 * P["HOUSING_R"], 2 * P["ARM_R"]),
+        "volume: printed parts %.0f cm3, of which the arm (column, arm, cover, plug, trunnion) %.0f cm3"
+        % (vol_parts / 1000.0, vol_arm / 1000.0),
+        "X stack: drum %.1f, housing %.2f, lip to %.2f, bearings %.2f..%.2f and %.2f..%.2f, trunnion to %.2f, horn %.2f, tilt servo %.2f..%.2f, seam %.2f, cover to %.2f; upright from %.2f"
+        % (DRUM_R, ARM_IN, BRG_A[0], BRG_A[0], BRG_A[1], BRG_B[0], BRG_B[1], TRUN_X1, HORN_X0, STS_X0, STS_X1, SEAM_X,
+           ARM_OUT, UP_X0),
     ]
 
     # ---- print: every part under PART_MAX, no overhang past 45 degrees but bridges ---------------------------
     rx = lambda deg: Transform.Rotation(math.radians(deg), Vector3d(1, 0, 0), Point3d.Origin)
     ry = lambda deg: Transform.Rotation(math.radians(deg), Vector3d(0, 1, 0), Point3d.Origin)
     orient = [("Base", base, rx(180)), ("Lid", lid, Transform.Identity), ("Column", column, Transform.Identity),
-              ("YokeLeft", yoke_l, ry(90)), ("YokeRight", yoke_r, ry(-90)),
-              ("CoverLeft", cover_l, ry(90)), ("CoverRight", cover_r, ry(-90)), ("Plug", plug, Transform.Identity),
-              ("Drum", drum, rx(90)), ("Axle", axle, ry(90)), ("Plate", plate, rx(-90)),
+              ("Arm", arm, ry(90)), ("Cover", cover, ry(90)), ("Plug", plug, Transform.Identity),
+              ("Drum", drum, rx(90)), ("Trunnion", trunnion, ry(90)), ("Plate", plate, rx(-90)),
               ("Index", index, ry(90)), ("Head", head, rx(-90))]
     bad_print = []
     for name, brep, xf in orient:
@@ -916,11 +1047,17 @@ def main():
         failures.append("needs support: %s" % ", ".join(bad_print))
 
     if P["EXPORT"]:
+        stl_dir = os.path.join(P["OUT_DIR"], "stl")
+        names = set(n.lower() + ".stl" for _, n, _ in parts)
+        for f in os.listdir(stl_dir):
+            if f.endswith(".stl") and f not in names:
+                os.remove(os.path.join(stl_dir, f))      # a part that no longer exists
         B.write_step(os.path.join(P["OUT_DIR"], "phone-stand-pan-tilt.rhino.step"), [(n, b) for _, n, b in parts])
         report.append("phone-stand-pan-tilt.rhino.step written")
 
     if P["POSE_DIR"]:
-        write_poses(dict(named), dict(roll=roll_servo, tilt=tilt_servo, pan=pan_servo, bearing=bearing, phone=phone))
+        write_poses(dict(named), dict(roll=roll_servo, tilt=tilt_servo, pan=pan_servo, bearing_a=bearing_a,
+                                      bearing_b=bearing_b, phone=phone))
         report.append("poses written to %s" % P["POSE_DIR"])
 
     report.append("checks: %s" % ("all passed" if not failures else "FAILED: " + ", ".join(failures)))
@@ -928,9 +1065,9 @@ def main():
     print("\n".join(report))
 
 
-TILTING = ("Drum", "Axle")
+TILTING = ("Drum", "Trunnion")
 ROLLING = ("Plate", "Index", "Head")
-PANNING = ("Column", "YokeLeft", "YokeRight", "CoverLeft", "CoverRight", "Plug")
+PANNING = ("Column", "Arm", "Cover", "Plug")
 
 
 def write_poses(parts, refs):
@@ -952,14 +1089,14 @@ def write_poses(parts, refs):
             write_world_stl(moved(b, xf), os.path.join(out, n + ".stl"))
         if with_phone:
             write_world_stl(moved(refs["phone"], xp * xt * xr), os.path.join(out, "Phone.stl"))
-    # exploded: every part moved off along its own axis, the servos shown
+    # exploded: every part moved off along its own axis, the servos and bearings shown
     out = os.path.join(P["POSE_DIR"], "exploded")
     os.makedirs(out, exist_ok=True)
-    off = {"Base": (0, 0, -60), "Lid": (0, 0, -95), "Column": (0, 0, -25), "YokeLeft": (55, 0, 0),
-           "YokeRight": (-55, 0, 0), "CoverLeft": (115, 0, 0), "CoverRight": (-115, 0, 0), "Plug": (0, 0, 20), "Drum": (0, 0, 45),
-           "Axle": (-30, 0, 45), "Plate": (0, 60, 45), "Index": (0, 80, 45), "Head": (0, 105, 45)}
-    ref_off = {"ServoTilt": ("tilt", (85, 0, 0)), "ServoPan": ("pan", (0, 0, -35)), "ServoRoll": ("roll", (0, 0, 45)),
-               "Bearing": ("bearing", (-75, 0, 0))}
+    off = {"Base": (0, 0, -60), "Lid": (0, 0, -95), "Column": (0, 0, -25), "Arm": (40, 0, 0), "Cover": (110, 0, 0),
+           "Plug": (0, 0, 20), "Drum": (-30, 0, 0), "Trunnion": (5, 0, 0), "Plate": (-30, 60, 0),
+           "Index": (-30, 80, 0), "Head": (-30, 105, 0)}
+    ref_off = {"ServoTilt": ("tilt", (80, 0, 0)), "ServoPan": ("pan", (0, 0, -35)), "ServoRoll": ("roll", (-30, 0, 0)),
+               "BearingInner": ("bearing_a", (15, 0, 0)), "BearingOuter": ("bearing_b", (25, 0, 0))}
     for n, b in parts.items():
         write_world_stl(moved(b, Transform.Translation(*off[n])), os.path.join(out, n + ".stl"))
     for n, (key, o) in ref_off.items():
@@ -970,7 +1107,8 @@ def write_poses(parts, refs):
     zc = Z_BAR + BAR_R + 1.0
     keep = union([box(-200, 200, -100, PAN_Y, -10, zc + 0.5), box(-200, 200, -100, TY, zc, 300)], "section keep")
     items = list(parts.items()) + [("ServoTilt", refs["tilt"]), ("ServoPan", refs["pan"]),
-                                   ("ServoRoll", refs["roll"]), ("Bearing", refs["bearing"])]
+                                   ("ServoRoll", refs["roll"]), ("BearingInner", refs["bearing_a"]),
+                                   ("BearingOuter", refs["bearing_b"])]
     for n, b in items:
         res = Brep.CreateBooleanIntersection(b, keep, TOL)
         if not res:
